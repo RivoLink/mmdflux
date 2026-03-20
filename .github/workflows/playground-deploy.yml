@@ -2,6 +2,8 @@ name: Playground Deploy
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -65,8 +67,10 @@ jobs:
       - name: Determine deploy branch
         id: branch
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            # v1.3.1 → v1-3-1
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "name=main" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # v2.0.0 → v2-0-0
             echo "name=${GITHUB_REF_NAME//\./-}" >> "$GITHUB_OUTPUT"
           else
             echo "name=head" >> "$GITHUB_OUTPUT"
