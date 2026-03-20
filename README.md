@@ -139,6 +139,12 @@ mmdflux diagram.mmd
 # Read Mermaid from stdin
 printf 'graph LR\nA-->B\n' | mmdflux
 
+# Disable ANSI color for text/ascii output
+NO_COLOR=1 mmdflux --format text diagram.mmd
+
+# Override NO_COLOR for a single invocation
+NO_COLOR=1 mmdflux --format text --color always diagram.mmd
+
 # SVG output
 mmdflux --format svg diagram.mmd -o diagram.svg
 

@@ -626,10 +626,10 @@ impl NotifyEventSource {
             }
 
             // Check if an external NotifyDirty arrived via socket.
-            if let Some(flag) = &self.external_dirty {
-                if flag.swap(false, Ordering::SeqCst) {
-                    return Ok(Some(WatchEvent::Changes(Vec::new())));
-                }
+            if let Some(flag) = &self.external_dirty
+                && flag.swap(false, Ordering::SeqCst)
+            {
+                return Ok(Some(WatchEvent::Changes(Vec::new())));
             }
 
             let wait = deadline

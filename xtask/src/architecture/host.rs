@@ -140,15 +140,15 @@ impl HostEntry {
         if !is_pid_alive(self.pid) {
             return false;
         }
-        if self.state == HostState::Warming {
-            if let Ok(started) = self.started_at.parse::<u64>() {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                if now.saturating_sub(started) > WARMUP_TIMEOUT_SECS {
-                    return false;
-                }
+        if self.state == HostState::Warming
+            && let Ok(started) = self.started_at.parse::<u64>()
+        {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            if now.saturating_sub(started) > WARMUP_TIMEOUT_SECS {
+                return false;
             }
         }
         true
@@ -810,12 +810,12 @@ pub(crate) fn try_request_check(
         };
 
         // Don't try the socket if the leader is still warming up.
-        if let Some(leader) = &loaded.cluster.leader {
-            if leader.state == HostState::Warming {
-                return HostCheckResult::RetryLocally {
-                    reason: format!("host (pid {}) is warming up", leader.pid),
-                };
-            }
+        if let Some(leader) = &loaded.cluster.leader
+            && leader.state == HostState::Warming
+        {
+            return HostCheckResult::RetryLocally {
+                reason: format!("host (pid {}) is warming up", leader.pid),
+            };
         }
 
         match send_request(&loaded.cluster, &request) {
@@ -940,12 +940,12 @@ pub(crate) fn query_status(repo_root: &Path) -> HostStatusResult {
     };
 
     // If the leader is still warming up, don't try the socket — it won't be bound yet.
-    if let Some(leader) = &loaded.cluster.leader {
-        if leader.state == HostState::Warming {
-            return HostStatusResult::Unavailable {
-                reason: format!("host (pid {}) is warming up", leader.pid),
-            };
-        }
+    if let Some(leader) = &loaded.cluster.leader
+        && leader.state == HostState::Warming
+    {
+        return HostStatusResult::Unavailable {
+            reason: format!("host (pid {}) is warming up", leader.pid),
+        };
     }
 
     match send_request(&loaded.cluster, &HostRequest::Status) {
