@@ -1,10 +1,19 @@
 # mmdflux
 
-Render diagrams as Unicode text, ASCII text, SVG, or JSON. Supports Mermaid syntax.
+[![Crates.io](https://img.shields.io/crates/v/mmdflux)](https://crates.io/crates/mmdflux)
+[![docs.rs](https://img.shields.io/docsrs/mmdflux)](https://docs.rs/mmdflux)
+[![CI](https://github.com/kevinswiber/mmdflux/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinswiber/mmdflux/actions/workflows/ci.yml)
 
-`mmdflux` is built for diagram-as-code pipelines: fast rendering, terminal-friendly output, linting, and machine-readable graph data for tooling and agents.
+Render Mermaid diagrams as terminal text, SVG, and structured JSON.
 
-[Playground](https://play.mmdflux.com) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [MMDS Spec](docs/mmds.md)
+mmdflux is a diagram rendering toolkit built in Rust. It ships as a CLI, a
+Rust library, and a WebAssembly package — all from the same codebase. It
+includes its own graph layout engine with native orthogonal routing, a
+character-grid renderer for terminal output, and
+[MMDS](docs/mmds.md) — a structured JSON format designed for tooling, adapters,
+and LLM/agent pipelines.
+
+[Playground](https://play.mmdflux.com) · [Releases](https://github.com/kevinswiber/mmdflux/releases) · [Gallery](docs/gallery.md) · [MMDS Spec](docs/mmds.md)
 
 ## At a glance
 
@@ -66,45 +75,41 @@ graph TD
 
 ## Why mmdflux
 
-- Terminal-native output that still preserves structure and readability
-- SVG and MMDS JSON output for web tooling, automation, and data pipelines
-- Native `flux-layered` engine with deterministic routing policies
-- Compatibility `mermaid-layered` engine when Mermaid-style behavior is preferred
+**No runtime dependencies.** A single compiled binary. No Node.js, no
+headless browser, no Puppeteer.
 
-## Flux Layered (Native Engine)
+**Terminal text is a first-class output.** Text rendering isn't a
+secondary mode — it has its own grid layout system, orthogonal edge routing,
+and Unicode box-drawing characters designed to be readable in a terminal.
 
-`flux-layered` is the default graph engine for flowchart/class SVG and MMDS output.
-It keeps the layered (Sugiyama) foundation but adds a native routing contract and
-policy-driven geometry decisions that are hard to get from layout-only engines.
+**Native orthogonal routing.** The `flux-layered` engine treats layout and
+routing as one solve contract. Edges follow right-angle paths with
+deterministic fan-in/fan-out policies and shape-aware attachment points —
+addressing one of the most common complaints about Mermaid's rendering.
 
-### What makes it distinct
+**Structured JSON for tooling and agents.** MMDS (Machine-Mediated Diagram
+Specification) outputs positioned graph data — node coordinates, routed edge
+paths, subgraph bounds — so downstream tools can consume diagram geometry
+without parsing SVG or scraping pixels.
 
-- Layered layout + routing are treated as one solve contract (not disconnected phases)
-- Rank-annotated waypoint metadata is preserved for downstream routing decisions
-- Float-space orthogonal routing with deterministic fan-in/fan-out overflow policies
-- Explicit backward-edge channel/face precedence rules
-- Per-node effective direction in subgraphs and cross-boundary routing behavior
-- Shape-aware attachment and clipping for non-rectangular nodes (for example, diamond/hexagon)
-- Self-edge loops are emitted as explicit multi-point orthogonal paths
-- The same graph model feeds text, SVG, and MMDS pipelines
+**Compound graph layout.** Subgraphs are laid out as part of a single
+compound graph, not rendered recursively. This produces globally optimized
+positioning and consistent cross-boundary edge routing.
 
-### Engine snapshot
+**Multiple engines for graph-family diagrams.** The default `flux-layered`
+engine handles flowchart/class text, SVG, and MMDS output. Switch to
+`mermaid-layered` for Mermaid-compatible graph output.
 
-| Capability           | `flux-layered`                       | `mermaid-layered`                    |
-| -------------------- | ------------------------------------ | ------------------------------------ |
-| Route ownership      | Native                               | Hint-driven                          |
-| Routing styles       | `direct`, `orthogonal`, `polyline`   | `polyline`                           |
-| Default SVG behavior | Orthogonal topology + basis curve    | Mermaid-compatible polyline defaults |
-| Subgraph support     | Yes                                  | Yes                                  |
-| Best fit             | Deterministic routed SVG/MMDS output | Mermaid-style compatibility output   |
+## Ecosystem
 
-Routing semantics note:
-`--edge-preset straight` now maps to direct routing (`Direct + linear-sharp`).
-Direct routing prefers a single segment when unobstructed, and falls back to
-node-avoidance geometry when a direct segment would cross node interiors.
-Use `--edge-preset polyline` for the old straight/passthrough behavior.
-Curve treatment is controlled independently via
-`--curve basis|linear|linear-sharp|linear-rounded`.
+| Package | Description |
+| ------- | ----------- |
+| [`mmdflux`](https://crates.io/crates/mmdflux) | CLI and Rust library (crates.io) |
+| [`@mmds/wasm`](https://www.npmjs.com/package/@mmds/wasm) | WebAssembly bindings (npm) |
+| [`@mmds/core`](https://www.npmjs.com/package/@mmds/core) | MMDS normalization, traversal, and validation utilities (npm) |
+| [`@mmds/excalidraw`](https://www.npmjs.com/package/@mmds/excalidraw) | MMDS to Excalidraw `.excalidraw` JSON (npm) |
+| [`@mmds/tldraw`](https://www.npmjs.com/package/@mmds/tldraw) | MMDS to tldraw `.tldr` JSON (npm) |
+| [Playground](https://play.mmdflux.com) | Interactive browser editor (WASM-powered) |
 
 ## Install
 
@@ -134,48 +139,65 @@ mmdflux diagram.mmd
 # Read Mermaid from stdin
 printf 'graph LR\nA-->B\n' | mmdflux
 
-# Text output (default)
-mmdflux --format text diagram.mmd
-
-# Disable ANSI color by default for styled text/ascii output
-NO_COLOR=1 mmdflux --format text diagram.mmd
-
-# Explicit CLI policy overrides NO_COLOR for a single invocation
-NO_COLOR=1 mmdflux --format text --color always diagram.mmd
-
-# SVG output (flowchart/class, defaults to smooth-step on flux-layered)
+# SVG output
 mmdflux --format svg diagram.mmd -o diagram.svg
 
-# Native flux layered (default) SVG with smooth orthogonal corners
-mmdflux --format svg --layout-engine flux-layered --edge-preset smooth-step diagram.mmd -o diagram.svg
-
-# Native flux layered SVG with curved orthogonal basis paths
-mmdflux --format svg --layout-engine flux-layered --edge-preset curved-step diagram.mmd -o diagram.svg
-
-# SVG with explicit curve contract
-mmdflux --format svg --layout-engine flux-layered --curve linear-rounded diagram.mmd -o diagram.svg
-
 # MMDS JSON output with routed geometry detail
-mmdflux --format mmds --layout-engine flux-layered --geometry-level routed --path-detail compact diagram.mmd
+mmdflux --format mmds --geometry-level routed diagram.mmd
 
 # Lint mode (validate input and print diagnostics)
 mmdflux --lint diagram.mmd
 ```
 
+See more examples in the sections below.
+
 ## What It Supports
 
-- Flowchart rendering in Unicode/ASCII/SVG/MMDS
-- Class diagram rendering in Unicode/ASCII/SVG/MMDS
-- Mermaid-to-MMDS and MMDS-to-Mermaid conversion
-- Layout directions: `TD`, `BT`, `LR`, `RL`
-- Edge styles: solid, dotted, thick, invisible, cross-arrow, circle-arrow
-- Engine selection: `flux-layered`, `mermaid-layered` (ELK engines available when built with `engine-elk`)
+- **Diagram types:** flowchart, class, sequence
+- **Output formats:** Unicode text, ASCII text, SVG, MMDS JSON
+- **Layout directions:** `TD`, `BT`, `LR`, `RL` (with per-subgraph overrides)
+- **Edge styles:** solid, dotted, thick, invisible, cross-arrow, circle-arrow
+- **Routing:** orthogonal, polyline, direct (with curve options: basis, linear, linear-rounded, linear-sharp)
+- **Round-trip conversion:** Mermaid to MMDS and MMDS back to Mermaid
+
+## Graph-Family Engines
+
+| | `flux-layered` | `mermaid-layered` |
+| --- | --- | --- |
+| Applies to | Flowchart/class text, SVG, MMDS | Flowchart/class SVG, MMDS |
+| Routing | Orthogonal, polyline, direct | Polyline |
+| Subgraphs | Compound graph (global layout) | Compound graph |
+| Best fit | Deterministic routed output | Mermaid-compatible output |
+
+Sequence diagrams use a separate timeline renderer, currently support text/ascii
+output only, and do not accept `--layout-engine`.
+
+### SVG edge presets
+
+| Preset | Routing | Curve |
+| --- | --- | --- |
+| `smooth-step` (default) | Orthogonal | Rounded arcs |
+| `curved-step` | Orthogonal | Basis spline |
+| `step` | Orthogonal | Sharp corners |
+| `polyline` | Polyline | Sharp corners |
+| `straight` | Direct | Sharp corners |
+
+```bash
+# Smooth orthogonal corners (default)
+mmdflux --format svg diagram.mmd -o diagram.svg
+
+# Curved orthogonal basis paths
+mmdflux --format svg --edge-preset curved-step diagram.mmd -o diagram.svg
+
+# Explicit curve control
+mmdflux --format svg --curve linear-rounded diagram.mmd -o diagram.svg
+```
 
 ## Documentation
 
-- [Gallery](docs/gallery.md)
-- [MMDS specification](docs/mmds.md)
-- [Edge routing design](docs/edge-routing-heuristics.md)
+- [Gallery](docs/gallery.md) — rendered output for 110 fixtures
+- [MMDS specification](docs/mmds.md) — structured JSON format
+- [Edge routing design](docs/edge-routing-heuristics.md) — routing internals
 
 ## Rust API Surface
 
@@ -198,24 +220,16 @@ The rest of the crate tree (`diagrams`, `engines`, `graph`, `render`,
 `mermaid`, and `timeline`) consists of internal implementation modules and is
 not part of the supported public contract.
 
-## Rust Library Examples
+### Examples
 
-- [`examples/high_level_render.rs`](examples/high_level_render.rs) shows the
-  top-level `render_diagram` workflow.
-- [`examples/registry_adapter.rs`](examples/registry_adapter.rs) shows explicit
-  registry-driven detection and preparation with
-  `mmdflux::builtins::default_registry()`.
-- [`examples/mmds_replay.rs`](examples/mmds_replay.rs) shows MMDS profile
-  negotiation, replay, and Mermaid regeneration.
-- Verify the examples compile with `cargo test --examples`.
+- [`examples/high_level_render.rs`](examples/high_level_render.rs) — top-level
+  `render_diagram` workflow
+- [`examples/registry_adapter.rs`](examples/registry_adapter.rs) — explicit
+  registry-driven detection and preparation
+- [`examples/mmds_replay.rs`](examples/mmds_replay.rs) — MMDS profile
+  negotiation, replay, and Mermaid regeneration
 
-## Adapter Packages
-
-- `@mmds/excalidraw` — MMDS to Excalidraw `.excalidraw` JSON.
-- `@mmds/tldraw` — MMDS to tldraw `.tldr` JSON.
-
-Adapter fidelity note:
-MMDS routed polylines can include many waypoints, while tldraw arrows use native arc/elbow models. The tldraw adapter preserves endpoints and label intent, then applies deterministic best-fit arrow geometry.
+Verify the examples compile with `cargo test --examples`.
 
 ## License
 
