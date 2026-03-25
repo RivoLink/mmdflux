@@ -52,6 +52,17 @@ pub(super) fn ensure_terminal_face_support(
         .all(|segment| point_segment_is_axis_aligned(segment[0], segment[1]))
     {
         *segments = polyline_points_to_segments(&points);
+        return;
+    }
+
+    // The simple anchor adjustment created a non-axis-aligned segment.
+    // Try a diversion: find the last point on a different primary-axis
+    // coordinate from `end`, then route from there through support.y/x
+    // to create a proper L-shaped approach.
+    if let Some(diverted) =
+        divert_terminal_through_support(&original_points, end, support, target_face)
+    {
+        *segments = polyline_points_to_segments(&diverted);
     } else {
         *segments = polyline_points_to_segments(&original_points);
     }
@@ -160,6 +171,66 @@ pub(super) fn polyline_points_to_segments(points: &[Point]) -> Vec<Segment> {
 
 pub(super) fn point_segment_is_axis_aligned(start: Point, end: Point) -> bool {
     start.x == end.x || start.y == end.y
+}
+
+/// When the simple anchor adjustment in `ensure_terminal_face_support` fails
+/// (creates non-axis-aligned segments), try an L-shaped diversion: find the
+/// last point on a different primary-axis coordinate from `end`, then route
+/// from there through support.y/x so the final segment approaches from the
+/// correct face direction.
+///
+/// For example, Bottom face with end=(413,24), support=(413,25):
+///   points: ..., (382,23), (413,23), (413,24)
+///   diversion at (382,23): → (382,25), (413,25), (413,24)
+///   after normalize: ..., (382,25), (413,25), (413,24)  — approach from below ✓
+fn divert_terminal_through_support(
+    points: &[Point],
+    end: Point,
+    support: Point,
+    target_face: NodeFace,
+) -> Option<Vec<Point>> {
+    if points.len() < 3 {
+        return None;
+    }
+
+    let pre_end_idx = points.len() - 2;
+
+    // Find the last point whose primary-axis coordinate differs from end's.
+    let diversion_idx = match target_face {
+        NodeFace::Top | NodeFace::Bottom => (0..=pre_end_idx).rev().find(|&i| points[i].x != end.x),
+        NodeFace::Left | NodeFace::Right => (0..=pre_end_idx).rev().find(|&i| points[i].y != end.y),
+    }?;
+
+    let diversion = points[diversion_idx];
+
+    // Build new tail: diversion → corner at support level → support → end
+    let mut result: Vec<Point> = points[..=diversion_idx].to_vec();
+    match target_face {
+        NodeFace::Top | NodeFace::Bottom => {
+            result.push(Point::new(diversion.x, support.y));
+            if diversion.x != end.x {
+                result.push(Point::new(end.x, support.y));
+            }
+        }
+        NodeFace::Left | NodeFace::Right => {
+            result.push(Point::new(support.x, diversion.y));
+            if diversion.y != end.y {
+                result.push(Point::new(support.x, end.y));
+            }
+        }
+    }
+    result.push(end);
+
+    normalize_polyline_points(&mut result);
+    if result
+        .windows(2)
+        .all(|seg| point_segment_is_axis_aligned(seg[0], seg[1]))
+        && terminal_support_matches_face(&result, target_face)
+    {
+        Some(result)
+    } else {
+        None
+    }
 }
 
 fn terminal_support_matches_face(points: &[Point], target_face: NodeFace) -> bool {
