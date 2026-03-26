@@ -48,20 +48,23 @@ pub(super) fn render_defs(writer: &mut SvgWriter, scale: f64) {
     writer.push_line(&path);
     writer.end_tag("</marker>");
 
-    // Circle marker (filled circle)
-    let circle_size = 10.0;
-    let circle_marker_size = 11.0 * scale;
+    // Circle marker (hollow circle for lollipop interfaces)
+    // ViewBox 12x12 with circle r=5 centered at (6,6) leaves room for the stroke.
+    // refX at the circle's right edge (cx+r=11) so the edge line terminates
+    // at the circle boundary rather than penetrating into it.
+    let circle_vb = 12.0;
+    let circle_marker_size = 12.0 * scale;
     let marker = format!(
         "<marker id=\"circlehead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
-        size = fmt_f64(circle_size),
+        size = fmt_f64(circle_vb),
         ref_x = fmt_f64(11.0),
-        ref_y = fmt_f64(5.0),
+        ref_y = fmt_f64(6.0),
         mw = fmt_f64(circle_marker_size),
         mh = fmt_f64(circle_marker_size)
     );
     writer.start_tag(&marker);
     let circle = format!(
-        "<circle cx=\"5\" cy=\"5\" r=\"5\" stroke=\"{color}\" stroke-width=\"1\" fill=\"{color}\" />",
+        "<circle cx=\"6\" cy=\"6\" r=\"5\" stroke=\"{color}\" stroke-width=\"1\" fill=\"white\" />",
         color = STROKE_COLOR
     );
     writer.push_line(&circle);

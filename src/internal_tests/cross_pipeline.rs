@@ -1282,8 +1282,8 @@ mod arrow_types {
         assert!(output.contains('A'));
         assert!(output.contains('B'));
         assert!(
-            output.contains('o') || output.contains('O'),
-            "Circle arrow should render o/O character:\n{output}"
+            output.contains('○') || output.contains('o') || output.contains('O'),
+            "Circle arrow should render ○/o/O character:\n{output}"
         );
     }
 

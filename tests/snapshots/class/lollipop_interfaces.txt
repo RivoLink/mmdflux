@@ -1,14 +1,14 @@
-                ┌────────┐
-InterfaceB      │ Client │
-                └────────┘
-     o               │
-     │               │
-     │               o
-┌─────────┐
-│ Service │      InterfaceA
+               ┌────────┐
+InterfaceB     │ Client │
+     ○         └────────┘
+     │              │
+     │              │
+     │              │
+┌─────────┐         ○
+│ Service │    InterfaceA
 └─────────┘
      │
      │
-     o
-
+     │
+     ○
 InterfaceA

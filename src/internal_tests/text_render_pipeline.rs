@@ -984,8 +984,8 @@ mod edge_rendering_regression {
 
         let output = render_diagram_to_text(&diagram);
         assert!(
-            output.contains('o'),
-            "Output should contain 'o' for circle arrow:\n{output}"
+            output.contains('○'),
+            "Output should contain '○' for circle arrow:\n{output}"
         );
         assert!(
             !output.contains('\u{25BC}'),

@@ -95,6 +95,15 @@ pub fn grid_node_dimensions(node: &Node, direction: Direction) -> (usize, usize)
         .map(|l| l.chars().count())
         .max()
         .unwrap_or(0);
+
+    // TextBlock nodes are borderless labels (e.g. lollipop interface names).
+    // Minimal dimensions keep the label tightly adjacent to the edge marker.
+    if node.shape == Shape::TextBlock {
+        let w = max_line_len.max(1);
+        let h = lines.len().max(1);
+        return (w, h);
+    }
+
     let (w, h) = (max_line_len + 4, lines.len() + 2);
 
     if node.shape == Shape::ForkJoin
@@ -198,6 +207,7 @@ pub fn proportional_node_dimensions(
         Shape::SmallCircle => (14.0, 14.0),
         Shape::FramedCircle => (28.0, 28.0),
         Shape::CrossedCircle => (60.0, 60.0),
+        Shape::TextBlock => (label_w, label_h),
         _ => (
             label_w + metrics.node_padding_x * 2.0,
             label_h + metrics.node_padding_y * 2.0,

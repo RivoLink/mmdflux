@@ -1495,7 +1495,7 @@ mod tests {
             Arrow::Circle,
         );
         let cell = canvas.get(5, 5).unwrap();
-        assert_eq!(cell.ch, 'o', "Circle arrow should render as 'o'");
+        assert_eq!(cell.ch, '○', "Circle arrow should render as '○'");
     }
 
     #[test]
