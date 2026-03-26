@@ -53,6 +53,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          PLAN_FILE="${RUNNER_TEMP}/release-plan.md"
+
+          # Write to both step summary and artifact file
+          out() { tee -a "$PLAN_FILE" >> "$GITHUB_STEP_SUMMARY"; }
+
           # Package definitions: name:tag_prefix
           PACKAGES="mmdflux:mmdflux-v mmds-core:mmds-core-v mmds-excalidraw:mmds-excalidraw-v mmds-tldraw:mmds-tldraw-v"
 
@@ -73,20 +78,20 @@ jobs:
             echo ""
             echo "| Workflow | Status | Commit |"
             echo "|----------|--------|--------|"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | out
 
           # Show only the most recent run per workflow name
           gh run list --branch "${BRANCH}" --limit 20 \
             --json name,conclusion,headSha,status \
             --jq '[group_by(.name)[] | sort_by(.headSha) | last] | sort_by(.name)[] | "| \(.name) | \(if .conclusion != "" and .conclusion != null then .conclusion else .status end) | `\(.headSha[0:7])` |"' \
-            >> "$GITHUB_STEP_SUMMARY"
+            | out
 
           # --- Package Reports ---
           {
             echo ""
             echo "## Packages"
             echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | out
 
           bump_commands=""
 
@@ -94,15 +99,19 @@ jobs:
             pkg="${entry%%:*}"
             tag_prefix="${entry##*:}"
 
-            echo "### ${pkg}" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### ${pkg}"
+              echo ""
+            } | out
 
             # Find latest tag for this package
             latest_tag=$(git describe --tags --match "${tag_prefix}*" --abbrev=0 2>/dev/null || echo "")
 
             if [ -z "$latest_tag" ]; then
-              echo "No previous release tag found." >> "$GITHUB_STEP_SUMMARY"
-              echo "" >> "$GITHUB_STEP_SUMMARY"
+              {
+                echo "No previous release tag found."
+                echo ""
+              } | out
               continue
             fi
 
@@ -117,7 +126,7 @@ jobs:
                 echo ""
                 echo "No unreleased changes."
                 echo ""
-              } >> "$GITHUB_STEP_SUMMARY"
+              } | out
               continue
             fi
 
@@ -127,7 +136,7 @@ jobs:
             {
               echo "**Current version:** ${current_version} **-->** ${next_version}"
               echo ""
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | out
 
             bump_commands="${bump_commands}cog bump --package ${pkg} --auto\n"
 
@@ -143,7 +152,7 @@ jobs:
                 echo ""
                 echo "</details>"
                 echo ""
-              } >> "$GITHUB_STEP_SUMMARY"
+              } | out
             fi
           done
 
@@ -151,7 +160,7 @@ jobs:
           {
             echo "---"
             echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | out
 
           if [ -n "$bump_commands" ]; then
             {
@@ -164,10 +173,17 @@ jobs:
               echo '```bash'
               echo -e "$bump_commands"
               echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | out
           else
-            echo "No packages have unreleased changes." >> "$GITHUB_STEP_SUMMARY"
+            echo "No packages have unreleased changes." | out
           fi
+
+      - name: Upload release plan
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/release-plan.md
+          retention-days: 90
 
   release:
     name: Execute Release
@@ -204,6 +220,9 @@ jobs:
           INPUT_PACKAGE: ${{ inputs.package }}
         run: |
           set -euo pipefail
+
+          PLAN_FILE="${RUNNER_TEMP}/release-plan.md"
+          out() { tee -a "$PLAN_FILE" >> "$GITHUB_STEP_SUMMARY"; }
 
           # Package definitions: name -> tag_prefix and release workflows
           declare -A TAG_PREFIXES=(
@@ -258,7 +277,7 @@ jobs:
 
           if [ ${#released_tags[@]} -eq 0 ]; then
             echo "::warning::No packages had unreleased changes."
-            echo "No packages to release." >> "$GITHUB_STEP_SUMMARY"
+            echo "No packages to release." | out
             exit 0
           fi
 
@@ -306,4 +325,12 @@ jobs:
                 echo "- \`${wf}\` (\`${tag}\`)"
               done
             done
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | out
+
+      - name: Upload release report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/release-plan.md
+          retention-days: 90
