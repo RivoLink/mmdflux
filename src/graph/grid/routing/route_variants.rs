@@ -2,8 +2,8 @@ use super::super::backward::is_backward_edge;
 use super::super::bounds::subgraph_edge_face;
 use super::super::intersect::{NodeFace, calculate_attachment_points, classify_face};
 use super::attachment_resolution::{
-    clamp_to_boundary, clamp_to_face, edge_faces, infer_face_from_attachment, offset_for_face,
-    resolve_attachment_points,
+    clamp_to_boundary, clamp_to_face, clamp_to_face_axis, edge_faces, infer_face_from_attachment,
+    offset_for_face, resolve_attachment_points,
 };
 use super::orthogonal::{
     add_connector_segment, build_orthogonal_path_for_direction,
@@ -33,9 +33,7 @@ pub(super) fn route_edge_with_waypoints(
     );
 
     let src_attach_point = clamp_to_boundary(src_attach_raw, &ep.from_bounds);
-    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, &ep.to_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
-    let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
     if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|v| v == "1") {
         eprintln!(
@@ -45,13 +43,28 @@ pub(super) fn route_edge_with_waypoints(
     }
 
     let is_backward = is_backward_edge(&ep.from_bounds, &ep.to_bounds, direction);
+    let (default_src_face, default_tgt_face) = edge_faces(direction, is_backward);
+
+    // Use face-aware clamping for target when we have an override from the
+    // attachment planner — this lets dense fan-in spreads extend beyond the
+    // node's face extent while keeping the fixed axis on the boundary.
+    let tgt_face_hint = overrides.tgt_face.unwrap_or(default_tgt_face);
+    let tgt_attach_point = if overrides.tgt_attach.is_some()
+        && edge.from_subgraph.is_none()
+        && edge.to_subgraph.is_none()
+    {
+        clamp_to_face_axis(tgt_attach_raw, &ep.to_bounds, tgt_face_hint)
+    } else {
+        clamp_to_boundary(tgt_attach_raw, &ep.to_bounds)
+    };
+    let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
+
     let (src_face, tgt_face) = if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
         (
             classify_face(&ep.from_bounds, src_attach, ep.from_shape),
             classify_face(&ep.to_bounds, tgt_attach, ep.to_shape),
         )
     } else {
-        let (default_src_face, default_tgt_face) = edge_faces(direction, is_backward);
         (
             overrides.src_face.unwrap_or_else(|| {
                 infer_face_from_attachment(&ep.from_bounds, src_attach, default_src_face)

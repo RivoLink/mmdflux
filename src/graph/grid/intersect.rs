@@ -132,8 +132,19 @@ pub fn spread_points_on_face(
                 *pos = pos.saturating_sub(overshoot);
             }
         }
+    } else {
+        // Face is too narrow for the required spacing.  Extend the spread
+        // symmetrically beyond the face extent so every edge gets at least
+        // MIN_ATTACHMENT_GAP separation.  Downstream face-aware clamping
+        // keeps the fixed axis on the node boundary while allowing the
+        // cross-axis to extend.
+        let center = start + range / 2;
+        let half_span = needed_span / 2;
+        let extended_start = center.saturating_sub(half_span);
+        positions = (0..count)
+            .map(|i| extended_start + (i * needed_span) / (count - 1))
+            .collect();
     }
-    // When range < needed_span, keep endpoint formula as-is (graceful degradation)
 
     positions.into_iter().map(to_point).collect()
 }
@@ -715,9 +726,15 @@ mod tests {
 
     #[test]
     fn test_spread_points_narrow_range() {
-        // N=3 on range (0, 2): can't enforce MIN_GAP=2, falls back to endpoint formula
+        // N=3 on range (0, 2): can't enforce MIN_GAP=2 within range,
+        // so extend symmetrically to maintain spacing
         let result = spread_points_on_face(NodeFace::Top, 0, (0, 2), 3);
-        assert_eq!(result, vec![(0, 0), (1, 0), (2, 0)]);
+        assert_eq!(result, vec![(0, 0), (2, 0), (4, 0)]);
+        // All gaps are MIN_GAP=2
+        let xs: Vec<usize> = result.iter().map(|&(x, _)| x).collect();
+        for w in xs.windows(2) {
+            assert!(w[1] - w[0] >= 2);
+        }
     }
 
     #[test]
@@ -739,12 +756,13 @@ mod tests {
     #[test]
     fn test_spread_points_min_gap_insufficient_range() {
         // 4 edges on range (0, 5), range=5
-        // Endpoint formula: 0, 1, 3, 5 (gap of 1 between 0 and 1)
-        // needed_span = 3*2 = 6 > 5, so gap can't be fully enforced
-        // Graceful degradation: keep endpoint positions, don't panic
+        // needed_span = 3*2 = 6 > 5, extends symmetrically to maintain spacing
         let points = spread_points_on_face(NodeFace::Top, 0, (0, 5), 4);
         let xs: Vec<usize> = points.iter().map(|&(x, _)| x).collect();
-        assert_eq!(xs, vec![0, 1, 3, 5]);
+        assert_eq!(xs, vec![0, 2, 4, 6]);
+        for w in xs.windows(2) {
+            assert!(w[1] - w[0] >= 2, "gap too small: {} to {}", w[0], w[1]);
+        }
     }
 
     #[test]
@@ -763,18 +781,13 @@ mod tests {
     #[test]
     fn test_spread_points_min_gap_three_on_three() {
         // 3 edges on range (0, 3), range=3
-        // Endpoint formula: 0, 1, 3 (gap of 1 between first two — violates MIN_GAP=2)
-        // With MIN_GAP: needed span = 2*2 = 4 > 3, can't enforce fully
-        // Should still produce valid output within range
+        // needed_span = 2*2 = 4 > 3, extends symmetrically to maintain spacing
         let points = spread_points_on_face(NodeFace::Top, 0, (0, 3), 3);
         let xs: Vec<usize> = points.iter().map(|&(x, _)| x).collect();
         assert_eq!(xs.len(), 3);
-        // All within range and non-decreasing
-        for &x in &xs {
-            assert!(x <= 3);
-        }
+        // Positions extend beyond original range to maintain MIN_GAP
         for w in xs.windows(2) {
-            assert!(w[1] >= w[0]);
+            assert!(w[1] - w[0] >= 2, "gap too small: {} to {}", w[0], w[1]);
         }
     }
 

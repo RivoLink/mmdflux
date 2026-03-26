@@ -350,6 +350,28 @@ pub(super) fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> P
     Point::new(x.clamp(left, right), y.clamp(top, bottom))
 }
 
+/// Clamp only the face's fixed axis to the boundary, letting the cross-axis
+/// extend freely.  This supports dense fan-in spreads where attachment points
+/// are placed beyond the node's face extent to maintain minimum spacing.
+pub(super) fn clamp_to_face_axis(
+    point: (usize, usize),
+    bounds: &NodeBounds,
+    face: NodeFace,
+) -> Point {
+    let (x, y) = point;
+    let left = bounds.x;
+    let right = bounds.x + bounds.width - 1;
+    let top = bounds.y;
+    let bottom = bounds.y + bounds.height - 1;
+
+    match face {
+        NodeFace::Top => Point::new(x, top),
+        NodeFace::Bottom => Point::new(x, bottom),
+        NodeFace::Left => Point::new(left, y),
+        NodeFace::Right => Point::new(right, y),
+    }
+}
+
 pub(super) fn edge_faces(direction: Direction, is_backward: bool) -> (NodeFace, NodeFace) {
     let (src, tgt) = shared_edge_faces(direction, is_backward);
     (src.to_node_face(), tgt.to_node_face())
