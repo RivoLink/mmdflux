@@ -411,14 +411,16 @@ fn remap_angular_fan_out_source_fraction(base_fraction: f64, edge_count: usize) 
 }
 
 fn remap_angular_fan_in_target_fraction(base_fraction: f64, edge_count: usize) -> f64 {
-    if edge_count <= 3 {
+    if edge_count <= 2 {
         return base_fraction.clamp(0.0, 1.0);
     }
-
-    let exponent = (8.0 / edge_count as f64).clamp(1.0, 2.5);
-    let centered = (base_fraction.clamp(0.0, 1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
-    let remapped = centered.signum() * centered.abs().powf(exponent);
-    ((remapped + 1.0) * 0.5).clamp(0.0, 1.0)
+    // Map base fractions into the inset-safe range so the outermost
+    // edges land right at the corner-inset boundary (≈8% of face width)
+    // instead of getting clamped.  This uses the full usable face width
+    // and gives uniform gaps between all entry points.
+    let margin = 0.08;
+    let usable = 1.0 - 2.0 * margin;
+    (margin + usable * base_fraction).clamp(0.0, 1.0)
 }
 
 fn fan_in_source_cross_axis(
