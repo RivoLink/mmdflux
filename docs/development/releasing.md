@@ -14,12 +14,39 @@ This project publishes:
 
 All tags follow the pattern `{package}-v{version}`:
 
-| Package | Tag example | CI workflow |
-|---------|-------------|-------------|
-| mmdflux (root crate) | `mmdflux-v2.1.0` | Release + Crate Release + WASM Release + Playground Deploy |
-| @mmds/core | `mmds-core-v0.2.0` | Packages Release |
-| @mmds/excalidraw | `mmds-excalidraw-v0.2.0` | Packages Release |
-| @mmds/tldraw | `mmds-tldraw-v0.2.0` | Packages Release |
+| Package              | Tag example              | CI workflow                                                |
+| -------------------- | ------------------------ | ---------------------------------------------------------- |
+| mmdflux (root crate) | `mmdflux-v2.1.0`         | Release + Crate Release + WASM Release + Playground Deploy |
+| @mmds/core           | `mmds-core-v0.2.0`       | Packages Release                                           |
+| @mmds/excalidraw     | `mmds-excalidraw-v0.2.0` | Packages Release                                           |
+| @mmds/tldraw         | `mmds-tldraw-v0.2.0`     | Packages Release                                           |
+
+## Changelogs
+
+Cocogitto generates changelogs automatically during `cog bump`. Each package has its own `CHANGELOG.md`:
+
+| Package          | Changelog path                          |
+| ---------------- | --------------------------------------- |
+| mmdflux          | `CHANGELOG.md` (repo root)              |
+| @mmds/core       | `packages/mmds-core/CHANGELOG.md`       |
+| @mmds/excalidraw | `packages/mmds-excalidraw/CHANGELOG.md` |
+| @mmds/tldraw     | `packages/mmds-tldraw/CHANGELOG.md`     |
+
+Cocogitto inserts new release entries after the first `- - -` separator in each file, preserving any older hand-written entries below. The root `CHANGELOG.md` contains hand-written entries for versions prior to v2.0.1; these are kept intact beneath the auto-generated sections.
+
+### Previewing a changelog before release
+
+Use `cog changelog` with a range to preview what will be generated:
+
+```bash
+# Preview unreleased changes since last mmdflux tag
+cog changelog "$(git describe --tags --match 'mmdflux-v*' --abbrev=0)..HEAD"
+
+# Preview changes for a specific adapter package tag
+cog changelog "$(git describe --tags --match 'mmds-core-v*' --abbrev=0)..HEAD"
+```
+
+This prints to stdout only — no files are modified.
 
 ## Root Crate Release (mmdflux + @mmds/wasm)
 
@@ -29,29 +56,40 @@ The root crate and `@mmds/wasm` are version-locked and release together.
 
 1. Ensure `main` is green in CI.
 
-2. Bump with cocogitto:
+2. Ensure the working tree is clean (no uncommitted or untracked changes). `cog bump` will refuse to run otherwise.
+
+3. Preview the changelog and decide the bump level:
+
+```bash
+cog changelog "$(git describe --tags --match 'mmdflux-v*' --abbrev=0)..HEAD"
+```
+
+4. Bump with cocogitto:
 
 ```bash
 # Automatic version based on conventional commits since last tag
 cog bump --package mmdflux --auto
 
 # Or specify the bump level
-cog bump --package mmdflux --minor
+cog bump --package mmdflux --patch   # bug fixes only
+cog bump --package mmdflux --minor   # new features
+cog bump --package mmdflux --major   # breaking changes
 ```
 
 This will:
-   - Run `just lint` and `just test`
-   - Update version in `Cargo.toml` and `crates/mmdflux-wasm/Cargo.toml`
-   - Generate the changelog
-   - Commit, tag (`mmdflux-v{version}`), and push
 
-3. Confirm the four release workflows complete:
+- Run `just lint` and `just test`
+- Update version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `xtask/Cargo.toml`
+- Generate the changelog in `CHANGELOG.md`
+- Commit, tag (`mmdflux-v{version}`), and push
+
+5. Confirm the four release workflows complete:
    - **Release** — builds binaries and publishes GitHub Release assets
    - **Crate Release** — publishes `mmdflux` to crates.io
    - **WASM Release** — publishes `@mmds/wasm` to npm
    - **Playground Deploy** — deploys web playground to Cloudflare Pages
 
-4. Update the Homebrew formula (see below).
+6. Update the Homebrew formula (see below).
 
 ## npm Adapter Packages
 
@@ -60,17 +98,19 @@ The adapter packages (`@mmds/core`, `@mmds/excalidraw`, `@mmds/tldraw`) version 
 ### Bumping a Package
 
 ```bash
-# Automatic version based on conventional commits since last tag
+# Automatic version based on scoped conventional commits
 cog bump --package mmds-core --auto
 
 # Or specify the bump level
+cog bump --package mmds-core --patch
 cog bump --package mmds-excalidraw --minor
 cog bump --package mmds-tldraw --patch
 ```
 
 This will:
+
 1. Run `npm version` to update `package.json`
-2. Generate a package-specific changelog
+2. Generate a package-specific changelog in the package directory
 3. Commit, tag (e.g., `mmds-core-v0.2.0`), and push
 
 The tag push triggers the **Packages Release** workflow, which builds and publishes the package to npm.

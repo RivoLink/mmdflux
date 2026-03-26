@@ -91,12 +91,15 @@ authors = []
 
 [monorepo.packages.mmdflux]
 path = "."
+include = ["**"]
+ignore = ["crates/mmdflux-wasm/**", "xtask/**", "packages/mmds-core/**", "packages/mmds-excalidraw/**", "packages/mmds-tldraw/**"]
 public_api = true
 pre_bump_hooks = [
     "just lint",
     "just test",
     "cargo set-version {{version}}",
     "cargo set-version --manifest-path crates/mmdflux-wasm/Cargo.toml {{version}}",
+    "cargo set-version --manifest-path xtask/Cargo.toml {{version}}",
 ]
 
 [monorepo.packages.mmdflux-wasm]
@@ -113,6 +116,7 @@ public_api = true
 pre_bump_hooks = [
     "npm version {{version}} --no-git-tag-version",
 ]
+bump_order = 1
 
 [monorepo.packages.mmds-excalidraw]
 path = "packages/mmds-excalidraw"
@@ -120,6 +124,7 @@ public_api = true
 pre_bump_hooks = [
     "npm version {{version}} --no-git-tag-version",
 ]
+bump_order = 2
 
 [monorepo.packages.mmds-tldraw]
 path = "packages/mmds-tldraw"
@@ -127,5 +132,4 @@ public_api = true
 pre_bump_hooks = [
     "npm version {{version}} --no-git-tag-version",
 ]
-
-[bump_profiles]
+bump_order = 2
