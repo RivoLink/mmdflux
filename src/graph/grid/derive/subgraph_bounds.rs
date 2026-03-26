@@ -595,6 +595,225 @@ pub(super) fn expand_parent_subgraph_bounds(
     }
 }
 
+/// Clip override subgraphs to their actual member content, constrain against
+/// sibling nodes, and re-expand parents — all as one coordinated pass.
+///
+/// This runs after ALL override-subgraph phases (reconciliation, sibling
+/// overlap resolution, parent expansion, external-edge spacing).  It fixes
+/// subgraphs that are wider than their content due to the abstract layout's
+/// compound node bounds not matching the final placed member positions.
+pub(super) fn clip_and_repair_override_subgraph_bounds(
+    diagram: &Graph,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    // Process deepest first so child bounds are final before parents clip.
+    let mut ids: Vec<String> = subgraph_bounds.keys().cloned().collect();
+    ids.sort_by_key(|id| std::cmp::Reverse(subgraph_bounds.get(id).map(|b| b.depth).unwrap_or(0)));
+
+    for sg_id in &ids {
+        let Some(sg) = diagram.subgraphs.get(sg_id) else {
+            continue;
+        };
+        // Only clip subgraphs that have a direction override AND don't
+        // contain other override subgraphs.  The innermost overrides are the
+        // ones whose abstract bounds don't match content; parent overrides
+        // already have proper spacing from resolve_sibling_overlaps_draw.
+        if sg.dir.is_none() {
+            continue;
+        }
+        let has_child_override = sg.nodes.iter().any(|member| {
+            diagram
+                .subgraphs
+                .get(member)
+                .is_some_and(|child| child.dir.is_some())
+        });
+        if has_child_override {
+            continue;
+        }
+        let Some(bounds) = subgraph_bounds.get(sg_id).cloned() else {
+            continue;
+        };
+
+        // Compute actual member content extent
+        let members: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        let mut cmin_x = usize::MAX;
+        let mut cmax_x = 0usize;
+        let mut cmin_y = usize::MAX;
+        let mut cmax_y = 0usize;
+        let mut has_content = false;
+        for member in &sg.nodes {
+            if let Some(nb) = node_bounds.get(member) {
+                cmin_x = cmin_x.min(nb.x);
+                cmax_x = cmax_x.max(nb.x + nb.width);
+                cmin_y = cmin_y.min(nb.y);
+                cmax_y = cmax_y.max(nb.y + nb.height);
+                has_content = true;
+            }
+            if let Some(cb) = subgraph_bounds.get(member) {
+                cmin_x = cmin_x.min(cb.x);
+                cmax_x = cmax_x.max(cb.x + cb.width);
+                cmin_y = cmin_y.min(cb.y);
+                cmax_y = cmax_y.max(cb.y + cb.height);
+                has_content = true;
+            }
+        }
+        if !has_content {
+            continue;
+        }
+
+        // Find the nearest non-member sibling node to the RIGHT — don't extend past it
+        let mut max_right = bounds.x + bounds.width;
+        for (nid, nb) in node_bounds {
+            if members.contains(nid.as_str()) || diagram.subgraphs.contains_key(nid.as_str()) {
+                continue;
+            }
+            let nb_bottom = nb.y + nb.height.saturating_sub(1);
+            let y_overlap = nb.y <= bounds.y + bounds.height && nb_bottom >= bounds.y;
+            if y_overlap && nb.x > cmax_x && nb.x < max_right {
+                // Leave 2 cells of gap so expand_subgraphs_for_node_collisions
+                // doesn't re-expand into the sibling.
+                max_right = max_right.min(nb.x.saturating_sub(1));
+            }
+        }
+
+        // Content-based bounds: 2 cells padding on each side.
+        // Add an extra row at the bottom when cross-boundary edges exit
+        // through the bottom border, so the routing segment stays inside
+        // the subgraph instead of collapsing onto the border line.
+        let has_outgoing_bottom = {
+            let parent_map = build_subgraph_parent_map(&diagram.subgraphs);
+            let sg_node_set: HashSet<&str> = members.iter().copied().collect();
+            diagram.edges.iter().any(|e| {
+                sg_node_set.contains(e.from.as_str())
+                    && !is_node_in_subgraph(&e.to, sg_id, &diagram.subgraphs, &parent_map)
+            })
+        };
+        let bottom_pad: usize = if has_outgoing_bottom { 2 } else { 1 };
+
+        let new_x = cmin_x.saturating_sub(2);
+        let new_right = (cmax_x + 2).min(max_right);
+        let new_y = cmin_y.saturating_sub(2);
+        let new_bottom = cmax_y + bottom_pad;
+
+        let mut new_w = new_right.saturating_sub(new_x).max(4);
+        let new_h = new_bottom.saturating_sub(new_y).max(4);
+
+        // Title width: if title forces extra width, try to expand LEFT.
+        // But if a sibling node constrains max_right, accept a narrower
+        // subgraph — the rendering will auto-truncate the title to fit.
+        let has_title = !bounds.title.trim().is_empty();
+        let min_title_width = if has_title { bounds.title.len() + 6 } else { 0 };
+        let sibling_constrained = max_right < bounds.x + bounds.width;
+        let mut new_x = new_x;
+        if !sibling_constrained && new_w < min_title_width {
+            let extra = min_title_width - new_w;
+            new_x = new_x.saturating_sub(extra);
+            new_w = min_title_width;
+        }
+
+        // Only shrink, never expand beyond current bounds
+        if (new_w < bounds.width || new_h < bounds.height)
+            && let Some(sb) = subgraph_bounds.get_mut(sg_id)
+        {
+            if new_w < bounds.width {
+                sb.x = new_x;
+                sb.width = new_w;
+            }
+            if new_h < bounds.height {
+                sb.y = new_y;
+                sb.height = new_h;
+            }
+        }
+    }
+
+    // Re-expand parents to contain clipped children
+    expand_parent_subgraph_bounds(&diagram.subgraphs, subgraph_bounds);
+}
+
+/// Expand subgraphs whose borders are adjacent to non-member node borders.
+///
+/// After grid quantization, a non-member node's near edge may be within 1 cell
+/// of a subgraph border.  This produces overlapping border characters like
+/// `│ D││`.  Expand the subgraph by 1 cell on the colliding side.
+pub(super) fn expand_subgraphs_for_node_collisions(
+    subgraphs: &HashMap<String, Subgraph>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    let sg_ids: Vec<String> = subgraph_bounds.keys().cloned().collect();
+
+    for sg_id in &sg_ids {
+        let Some(sg) = subgraphs.get(sg_id) else {
+            continue;
+        };
+        let Some(sb) = subgraph_bounds.get(sg_id).cloned() else {
+            continue;
+        };
+        let members: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        let sg_right = sb.x + sb.width.saturating_sub(1);
+        let sg_bottom = sb.y + sb.height.saturating_sub(1);
+
+        let mut expand_right = 0usize;
+        let mut expand_left = 0usize;
+        let mut expand_top = 0usize;
+        let mut expand_bottom = 0usize;
+
+        for (node_id, nb) in node_bounds {
+            if members.contains(node_id.as_str()) || subgraphs.contains_key(node_id.as_str()) {
+                continue;
+            }
+
+            let nb_right = nb.x + nb.width.saturating_sub(1);
+            let nb_bottom = nb.y + nb.height.saturating_sub(1);
+            let y_overlap = nb.y <= sg_bottom && nb_bottom >= sb.y;
+            let x_overlap = nb.x <= sg_right && nb_right >= sb.x;
+
+            // Node just outside the RIGHT side of the subgraph
+            if y_overlap && nb.x > sb.x && nb.x <= sg_right + 1 {
+                let gap = nb.x.saturating_sub(sg_right);
+                if gap < 2 {
+                    expand_right = expand_right.max(2 - gap);
+                }
+            }
+
+            // Node just outside the LEFT side
+            if y_overlap && nb_right < sg_right && nb_right + 1 >= sb.x {
+                let gap = sb.x.saturating_sub(nb_right);
+                if gap < 2 {
+                    expand_left = expand_left.max(2 - gap);
+                }
+            }
+
+            // Node just outside the BOTTOM (node starts at or past the bottom border)
+            if x_overlap && nb.y >= sg_bottom && nb.y <= sg_bottom + 1 {
+                let gap = nb.y.saturating_sub(sg_bottom);
+                if gap < 2 {
+                    expand_bottom = expand_bottom.max(2 - gap);
+                }
+            }
+
+            // Node just outside the TOP (node ends at or above the top border)
+            if x_overlap && nb_bottom <= sb.y && nb_bottom + 1 >= sb.y {
+                let gap = sb.y.saturating_sub(nb_bottom);
+                if gap < 2 {
+                    expand_top = expand_top.max(2 - gap);
+                }
+            }
+        }
+
+        if (expand_right > 0 || expand_bottom > 0 || expand_left > 0 || expand_top > 0)
+            && let Some(sb) = subgraph_bounds.get_mut(sg_id)
+        {
+            sb.width += expand_right + expand_left;
+            sb.height += expand_bottom + expand_top;
+            sb.x = sb.x.saturating_sub(expand_left);
+            sb.y = sb.y.saturating_sub(expand_top);
+        }
+    }
+}
+
 /// Ensure each subgraph's draw-coordinate bounds contain all member nodes.
 ///
 /// After coordinate transformation (float→integer) and shrink passes, rounding

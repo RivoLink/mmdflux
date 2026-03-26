@@ -584,3 +584,411 @@ pub(super) fn align_cross_boundary_siblings_draw(
         }
     }
 }
+
+/// After sublayout reconciliation, re-layout direct children of override
+/// subgraphs that contain compound child subgraphs (nested overrides).
+///
+/// The sublayout engine only positions leaf nodes.  When a parent override
+/// subgraph contains compound children (nested override subgraphs), those
+/// children take up space that the leaf-node-only sublayout doesn't account
+/// for.  This pass lays out all direct children — compound subgraphs and
+/// leaf nodes — in the override direction using declaration order, which
+/// mirrors the synthetic-edge chaining the sublayout engine would use.
+pub(super) fn layout_compound_parent_members(
+    diagram: &Graph,
+    sublayouts: &HashMap<String, OverrideSubgraphProjection>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+    canvas_width: &mut usize,
+    canvas_height: &mut usize,
+) {
+    let parent_map = build_subgraph_parent_map(&diagram.subgraphs);
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        let Some(sub_dir) = sg.dir else { continue };
+        let is_horizontal = matches!(sub_dir, Direction::LeftRight | Direction::RightLeft);
+
+        // Find compound children (child subgraphs that are also override subgraphs).
+        let child_overrides: Vec<&str> = diagram
+            .subgraphs
+            .iter()
+            .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
+            .map(|(id, _)| id.as_str())
+            .collect();
+
+        if child_overrides.is_empty() {
+            continue;
+        }
+
+        // Nodes belonging to any child subgraph (to identify direct leaf nodes).
+        let child_sg_members: HashSet<&str> = child_overrides
+            .iter()
+            .filter_map(|id| diagram.subgraphs.get(*id))
+            .flat_map(|child| child.nodes.iter().map(|s| s.as_str()))
+            .collect();
+
+        // Collect direct children in declaration order: compound children and
+        // direct leaf nodes (not inside any child subgraph).
+        struct Member<'a> {
+            id: &'a str,
+            is_compound: bool,
+            primary_size: usize,
+            cross_size: usize,
+            sort_key: f64,
+        }
+
+        // Use sublayout float positions to determine ordering.  The sublayout
+        // has correct edge-based ordering for leaf nodes.  Compound children
+        // are ordered by the average primary-axis position of their members
+        // in the sublayout.
+        let sublayout = match sublayouts.get(sg_id) {
+            Some(sl) => sl,
+            None => continue,
+        };
+
+        // Helper: primary-axis float position from the sublayout.
+        let primary_float = |id: &str| -> Option<f64> {
+            sublayout.nodes.get(id).map(|r| {
+                if is_horizontal {
+                    r.x + r.width / 2.0
+                } else {
+                    r.y + r.height / 2.0
+                }
+            })
+        };
+
+        let mut members: Vec<Member> = Vec::new();
+        let mut seen: HashSet<&str> = HashSet::new();
+
+        // Add compound children with average primary-axis position from
+        // their members' sublayout positions.
+        for &cc_id in &child_overrides {
+            if let Some(cb) = subgraph_bounds.get(cc_id) {
+                let cc_sg = &diagram.subgraphs[cc_id];
+                let member_positions: Vec<f64> = cc_sg
+                    .nodes
+                    .iter()
+                    .filter_map(|n| primary_float(n.as_str()))
+                    .collect();
+                let avg_primary = if member_positions.is_empty() {
+                    f64::INFINITY
+                } else {
+                    member_positions.iter().sum::<f64>() / member_positions.len() as f64
+                };
+                let (ps, cs) = if is_horizontal {
+                    (cb.width, cb.height)
+                } else {
+                    (cb.height, cb.width)
+                };
+                members.push(Member {
+                    id: cc_id,
+                    is_compound: true,
+                    primary_size: ps,
+                    cross_size: cs,
+                    sort_key: avg_primary,
+                });
+            }
+        }
+
+        // Add direct leaf nodes.
+        for member_id in &sg.nodes {
+            let id = member_id.as_str();
+            if !seen.insert(id) {
+                continue;
+            }
+            if child_sg_members.contains(id) || diagram.is_subgraph(member_id) {
+                continue;
+            }
+            if let Some(nb) = node_bounds.get(id) {
+                let float_pos = primary_float(id).unwrap_or(f64::INFINITY);
+                let (ps, cs) = if is_horizontal {
+                    (nb.width, nb.height)
+                } else {
+                    (nb.height, nb.width)
+                };
+                members.push(Member {
+                    id,
+                    is_compound: false,
+                    primary_size: ps,
+                    cross_size: cs,
+                    sort_key: float_pos,
+                });
+            }
+        }
+
+        // Sort by sublayout primary-axis position.
+        members.sort_by(|a, b| {
+            a.sort_key
+                .partial_cmp(&b.sort_key)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        if members.len() < 2 {
+            continue;
+        }
+
+        // Determine existing cross-boundary edge routing needs.
+        let has_incoming = parent_map.contains_key(sg_id.as_str())
+            || diagram.edges.iter().any(|e| {
+                let to_in = sg.nodes.contains(&e.to) || child_sg_members.contains(e.to.as_str());
+                let from_in =
+                    sg.nodes.contains(&e.from) || child_sg_members.contains(e.from.as_str());
+                to_in && !from_in
+            });
+        let has_outgoing = diagram.edges.iter().any(|e| {
+            let from_in = sg.nodes.contains(&e.from) || child_sg_members.contains(e.from.as_str());
+            let to_in = sg.nodes.contains(&e.to) || child_sg_members.contains(e.to.as_str());
+            from_in && !to_in
+        });
+        let (top_pad, bottom_pad) = match diagram.direction {
+            Direction::TopDown => (
+                if has_incoming { 2 } else { 1 },
+                if has_outgoing { 2 } else { 1 },
+            ),
+            Direction::BottomTop => (
+                if has_outgoing { 2 } else { 1 },
+                if has_incoming { 2 } else { 1 },
+            ),
+            _ => (2, 2),
+        };
+        let side_pad = 2;
+
+        let min_gap = 2;
+        let max_cross: usize = members.iter().map(|m| m.cross_size).max().unwrap_or(0);
+        let total_primary: usize = members.iter().map(|m| m.primary_size).sum::<usize>()
+            + min_gap * members.len().saturating_sub(1);
+
+        let (content_w, content_h) = if is_horizontal {
+            (total_primary, max_cross)
+        } else {
+            (max_cross, total_primary)
+        };
+
+        // Enforce title minimum width.
+        let min_title_width = if !sg.title.trim().is_empty() {
+            sg.title.len() + 6
+        } else {
+            0
+        };
+        let sg_final_w = (content_w + side_pad * 2).max(min_title_width);
+        let sg_final_h = content_h + top_pad + bottom_pad;
+
+        // Anchor on the old subgraph center.
+        let sg_draw = match subgraph_bounds.get(sg_id) {
+            Some(b) => b.clone(),
+            None => continue,
+        };
+        let sg_cx = sg_draw.x + sg_draw.width / 2;
+        let sg_cy = sg_draw.y + sg_draw.height / 2;
+        let new_sg_x = sg_cx.saturating_sub(sg_final_w / 2);
+        let new_sg_y = sg_cy.saturating_sub(sg_final_h / 2);
+
+        let content_x = new_sg_x + side_pad + (sg_final_w - content_w - side_pad * 2) / 2;
+        let content_y = new_sg_y + top_pad;
+
+        // Place members along the primary axis in declaration order.
+        let mut cursor = 0usize;
+        for member in &members {
+            let (new_primary, new_cross) = if is_horizontal {
+                let x = content_x + cursor;
+                let y = content_y + (max_cross.saturating_sub(member.cross_size)) / 2;
+                (x, y)
+            } else {
+                let x = content_x + (max_cross.saturating_sub(member.cross_size)) / 2;
+                let y = content_y + cursor;
+                (x, y)
+            };
+
+            if member.is_compound {
+                // Shift compound child and all its content.
+                let cb = subgraph_bounds.get(member.id).unwrap().clone();
+                let (dx, dy) = if is_horizontal {
+                    (
+                        new_primary as isize - cb.x as isize,
+                        new_cross as isize - cb.y as isize,
+                    )
+                } else {
+                    (
+                        new_cross as isize - cb.x as isize,
+                        new_primary as isize - cb.y as isize,
+                    )
+                };
+                shift_subgraph_and_contents(
+                    diagram,
+                    member.id,
+                    dx,
+                    dy,
+                    draw_positions,
+                    node_bounds,
+                    subgraph_bounds,
+                );
+            } else {
+                // Set leaf node position.
+                let (x, y) = if is_horizontal {
+                    (new_primary, new_cross)
+                } else {
+                    (new_cross, new_primary)
+                };
+                if let Some(pos) = draw_positions.get_mut(member.id) {
+                    *pos = (x, y);
+                }
+                if let Some(nb) = node_bounds.get_mut(member.id) {
+                    nb.x = x;
+                    nb.y = y;
+                    nb.layout_center_x = Some(x + nb.width / 2);
+                    nb.layout_center_y = Some(y + nb.height / 2);
+                }
+            }
+
+            cursor += member.primary_size + min_gap;
+        }
+
+        // Update parent subgraph bounds.
+        let depth = diagram.subgraph_depth(sg_id);
+        subgraph_bounds.insert(
+            sg_id.clone(),
+            SubgraphBounds {
+                x: new_sg_x,
+                y: new_sg_y,
+                width: sg_final_w,
+                height: sg_final_h,
+                title: sg.title.clone(),
+                depth,
+            },
+        );
+
+        *canvas_width = (*canvas_width).max(new_sg_x + sg_final_w + 1);
+        *canvas_height = (*canvas_height).max(new_sg_y + sg_final_h + 1);
+    }
+}
+
+/// Shift a subgraph and all its descendant content by (dx, dy).
+fn shift_subgraph_and_contents(
+    diagram: &Graph,
+    sg_id: &str,
+    dx: isize,
+    dy: isize,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    // Shift the subgraph bounds.
+    if let Some(sb) = subgraph_bounds.get_mut(sg_id) {
+        sb.x = (sb.x as isize + dx).max(0) as usize;
+        sb.y = (sb.y as isize + dy).max(0) as usize;
+    }
+    // Shift all member nodes.
+    if let Some(sg) = diagram.subgraphs.get(sg_id) {
+        for member_id in &sg.nodes {
+            if diagram.is_subgraph(member_id) {
+                continue;
+            }
+            if let Some(pos) = draw_positions.get_mut(member_id) {
+                pos.0 = (pos.0 as isize + dx).max(0) as usize;
+                pos.1 = (pos.1 as isize + dy).max(0) as usize;
+            }
+            if let Some(nb) = node_bounds.get_mut(member_id) {
+                nb.x = (nb.x as isize + dx).max(0) as usize;
+                nb.y = (nb.y as isize + dy).max(0) as usize;
+                if let Some(ref mut cx) = nb.layout_center_x {
+                    *cx = (*cx as isize + dx).max(0) as usize;
+                }
+                if let Some(ref mut cy) = nb.layout_center_y {
+                    *cy = (*cy as isize + dy).max(0) as usize;
+                }
+            }
+        }
+    }
+    // Shift descendant subgraph bounds.
+    let descendant_sgs: Vec<String> = diagram
+        .subgraphs
+        .iter()
+        .filter(|(_, child)| child.parent.as_deref() == Some(sg_id))
+        .map(|(id, _)| id.clone())
+        .collect();
+    for child_id in &descendant_sgs {
+        if let Some(sb) = subgraph_bounds.get_mut(child_id.as_str()) {
+            sb.x = (sb.x as isize + dx).max(0) as usize;
+            sb.y = (sb.y as isize + dy).max(0) as usize;
+        }
+    }
+}
+
+/// Compact the vertical gap between external predecessor nodes and
+/// top-level override subgraphs in a TopDown diagram.
+///
+/// The main grid derivation maps float-space compound-node spacing to grid
+/// coordinates, which can produce excessive vertical gaps above override
+/// subgraphs.  This pass pulls each override subgraph up so its top border
+/// is at most `target_gap` rows below the nearest predecessor's bottom.
+pub(super) fn compact_override_subgraph_vertical_gaps(
+    diagram: &Graph,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    if !matches!(diagram.direction, Direction::TopDown) {
+        return;
+    }
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() || sg.parent.is_some() {
+            // Only process top-level override subgraphs.
+            continue;
+        }
+        // Only compact subgraphs that contain nested override children.
+        // These are the ones whose grid bounds were inflated by compound
+        // node rank expansion in the main layout.
+        let has_child_override = diagram
+            .subgraphs
+            .values()
+            .any(|child| child.parent.as_deref() == Some(sg_id.as_str()) && child.dir.is_some());
+        if !has_child_override {
+            continue;
+        }
+        let Some(sb) = subgraph_bounds.get(sg_id).cloned() else {
+            continue;
+        };
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        // Find the closest predecessor bottom edge above the subgraph.
+        let mut nearest_pred_bottom: Option<usize> = None;
+        for edge in &diagram.edges {
+            if sg_node_set.contains(edge.to.as_str())
+                && !sg_node_set.contains(edge.from.as_str())
+                && let Some(nb) = node_bounds.get(&edge.from)
+            {
+                let nb_bottom = nb.y + nb.height;
+                if nb_bottom <= sb.y {
+                    nearest_pred_bottom =
+                        Some(nearest_pred_bottom.map_or(nb_bottom, |c: usize| c.max(nb_bottom)));
+                }
+            }
+        }
+
+        let Some(pred_bottom) = nearest_pred_bottom else {
+            continue;
+        };
+
+        // Target gap: 4 rows (edge routing room).
+        let target_gap = 4usize;
+        let current_gap = sb.y.saturating_sub(pred_bottom);
+        if current_gap <= target_gap {
+            continue;
+        }
+
+        let pull_up = current_gap - target_gap;
+
+        // Shift the subgraph and all its content up.
+        shift_subgraph_and_contents(
+            diagram,
+            sg_id,
+            0,
+            -(pull_up as isize),
+            draw_positions,
+            node_bounds,
+            subgraph_bounds,
+        );
+    }
+}

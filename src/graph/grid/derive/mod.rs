@@ -17,7 +17,8 @@ mod waypoints;
 use std::collections::{HashMap, HashSet};
 
 use override_sublayouts::{
-    align_cross_boundary_siblings_draw, reconcile_sublayouts_draw, resolve_sibling_overlaps_draw,
+    align_cross_boundary_siblings_draw, compact_override_subgraph_vertical_gaps,
+    layout_compound_parent_members, reconcile_sublayouts_draw, resolve_sibling_overlaps_draw,
 };
 use quantize::{
     collision_repair, compute_grid_positions, compute_grid_scale_factors, compute_layer_starts,
@@ -26,8 +27,10 @@ use quantize::{
 #[cfg(test)]
 use subgraph_bounds::build_children_map;
 use subgraph_bounds::{
-    ensure_external_edge_spacing, ensure_subgraph_contains_members, expand_parent_subgraph_bounds,
-    shrink_subgraph_horizontal_gaps, shrink_subgraph_vertical_gaps, subgraph_bounds_to_draw,
+    clip_and_repair_override_subgraph_bounds, ensure_external_edge_spacing,
+    ensure_subgraph_contains_members, expand_parent_subgraph_bounds,
+    expand_subgraphs_for_node_collisions, shrink_subgraph_horizontal_gaps,
+    shrink_subgraph_vertical_gaps, subgraph_bounds_to_draw,
 };
 use waypoints::{
     clip_waypoints_to_subgraph, nudge_colliding_waypoints, transform_label_positions_direct,
@@ -579,6 +582,21 @@ pub fn geometry_to_grid_layout_with_routed(
 
         expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
 
+        // Re-layout parent override subgraphs that contain compound children.
+        // The leaf-only sublayouts don't account for compound child space, so
+        // this pass positions all direct children in the override direction.
+        layout_compound_parent_members(
+            diagram,
+            &projection.override_subgraphs,
+            &mut draw_positions,
+            &mut node_bounds,
+            &mut subgraph_bounds,
+            &mut width,
+            &mut height,
+        );
+
+        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
+
         resolve_sibling_overlaps_draw(
             diagram,
             &mut node_bounds,
@@ -594,6 +612,14 @@ pub fn geometry_to_grid_layout_with_routed(
         );
 
         expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
+
+        // Compact excessive vertical gaps above top-level override subgraphs.
+        compact_override_subgraph_vertical_gaps(
+            diagram,
+            &mut draw_positions,
+            &mut node_bounds,
+            &mut subgraph_bounds,
+        );
 
         // --- Phase N: Ensure external-edge spacing ---
         ensure_external_edge_spacing(
@@ -690,6 +716,12 @@ pub fn geometry_to_grid_layout_with_routed(
             }
         }
     }
+
+    // Final pass: clip override subgraphs to actual member content, constrain
+    // against sibling nodes, re-expand parents, and fix any remaining collisions.
+    // Must run after ALL override-subgraph phases are done repositioning.
+    clip_and_repair_override_subgraph_bounds(diagram, &node_bounds, &mut subgraph_bounds);
+    expand_subgraphs_for_node_collisions(&diagram.subgraphs, &node_bounds, &mut subgraph_bounds);
 
     let node_directions = geometry.node_directions.clone();
 
