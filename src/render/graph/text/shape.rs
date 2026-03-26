@@ -458,7 +458,7 @@ fn render_shadow_box(
     corners: (char, char, char, char),
     style: ResolvedTextNodeStyle,
 ) {
-    let (_tl, _tr, _bl, br) = corners;
+    let (_tl, _tr, bl, br) = corners;
     let bottom_horizontal = charset.horizontal;
     let right_x = x + width - 1;
     let bot_y = y + height - 1;
@@ -469,12 +469,13 @@ fn render_shadow_box(
         merge_fg(canvas, right_x, y + dy, style.stroke);
     }
 
-    // Bottom edge only (shadow)
-    for dx in 0..width {
+    // Bottom edge (shadow) with corners
+    canvas.set(x, bot_y, bl);
+    merge_fg(canvas, x, bot_y, style.stroke);
+    for dx in 1..width.saturating_sub(1) {
         canvas.set(x + dx, bot_y, bottom_horizontal);
         merge_fg(canvas, x + dx, bot_y, style.stroke);
     }
-
     canvas.set(right_x, bot_y, br);
     merge_fg(canvas, right_x, bot_y, style.stroke);
 }
