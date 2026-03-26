@@ -381,6 +381,12 @@ pub fn geometry_to_grid_layout_with_routed(
         &mut routed_edge_paths,
         &preserve_routed_path_topology,
     );
+    compact_horizontal_criss_cross_draw_paths(
+        diagram,
+        &node_bounds,
+        &mut routed_edge_paths,
+        &mut preserve_routed_path_topology,
+    );
 
     let mut edge_label_positions = grid_projection
         .map(|projection| {
@@ -704,6 +710,113 @@ pub fn geometry_to_grid_layout_with_routed(
         self_edges,
         node_directions,
     }
+}
+
+/// Compact criss-cross draw paths for LR/RL graphs by transposing coordinates
+/// and reusing the TD compaction logic.
+///
+/// The crossing pattern is geometrically identical to TD — just rotated 90°.
+/// Swap (x,y) → (y,x) in paths and bounds, run the vertical compaction (which
+/// thinks it's processing a TD graph), then swap the results back.
+fn compact_horizontal_criss_cross_draw_paths(
+    diagram: &Graph,
+    _node_bounds: &HashMap<String, NodeBounds>,
+    routed_edge_paths: &mut HashMap<usize, DrawPath>,
+    preserve_routed_path_topology: &mut HashSet<usize>,
+) {
+    if !matches!(
+        diagram.direction,
+        Direction::LeftRight | Direction::RightLeft
+    ) {
+        return;
+    }
+
+    // Detect LR criss-cross pairs: two 4-point H-V-H paths with opposite
+    // vertical directions (one goes up, one goes down) sharing the same
+    // vertical column.  Shift one path's vertical 2 cells to create a gap.
+    let mut adjusted: HashSet<usize> = HashSet::new();
+
+    for i in 0..diagram.edges.len() {
+        let a = &diagram.edges[i];
+        if a.from == a.to || a.from_subgraph.is_some() || a.to_subgraph.is_some() {
+            continue;
+        }
+        if adjusted.contains(&a.index) {
+            continue;
+        }
+        let Some(a_path) = routed_edge_paths.get(&a.index).cloned() else {
+            continue;
+        };
+        if !is_horizontal_criss_cross_simple_path(&a_path) {
+            continue;
+        }
+
+        for j in (i + 1)..diagram.edges.len() {
+            let b = &diagram.edges[j];
+            if b.from == b.to || b.from_subgraph.is_some() || b.to_subgraph.is_some() {
+                continue;
+            }
+            if adjusted.contains(&b.index) {
+                continue;
+            }
+            let Some(b_path) = routed_edge_paths.get(&b.index).cloned() else {
+                continue;
+            };
+            if !is_horizontal_criss_cross_simple_path(&b_path) {
+                continue;
+            }
+
+            // Both H-V-H. Check: same vertical column, opposite V directions,
+            // and different sources AND different targets (true criss-cross,
+            // not fan-out from the same node).
+            if a.from == b.from || a.to == b.to {
+                continue;
+            }
+            let a_v_x = a_path[1].0;
+            let b_v_x = b_path[1].0;
+            if a_v_x != b_v_x {
+                continue;
+            }
+            let a_goes_down = a_path[2].1 > a_path[1].1;
+            let b_goes_down = b_path[2].1 > b_path[1].1;
+            if a_goes_down == b_goes_down {
+                continue;
+            }
+
+            // Criss-cross found.  Shift the down-going edge's vertical 2
+            // cells right so the two edges have visually distinct columns.
+            let shift_idx = if a_goes_down { a.index } else { b.index };
+            let shift_path = if a_goes_down { &a_path } else { &b_path };
+            let new_x = shift_path[1].0 + 2;
+            routed_edge_paths.insert(
+                shift_idx,
+                vec![
+                    shift_path[0],
+                    (new_x, shift_path[1].1),
+                    (new_x, shift_path[2].1),
+                    shift_path[3],
+                ],
+            );
+            // Mark both edges for topology preservation so the text router
+            // uses these draw paths instead of falling back to direct routing.
+            preserve_routed_path_topology.insert(a.index);
+            preserve_routed_path_topology.insert(b.index);
+            adjusted.insert(a.index);
+            adjusted.insert(b.index);
+            break;
+        }
+    }
+}
+
+/// Check for a 4-point H-V-H draw path shape (horizontal-vertical-horizontal).
+fn is_horizontal_criss_cross_simple_path(points: &[(usize, usize)]) -> bool {
+    points.len() == 4
+        && points[0].1 == points[1].1 // H: same y
+        && points[1].0 == points[2].0 // V: same x
+        && points[2].1 == points[3].1 // H: same y
+        && points[0].0 != points[1].0 // H: different x
+        && points[1].1 != points[2].1 // V: different y
+        && points[2].0 != points[3].0 // H: different x
 }
 
 fn compact_vertical_criss_cross_draw_paths(
