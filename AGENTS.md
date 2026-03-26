@@ -130,11 +130,19 @@ dependency policy across production and test code.
 
 ### Snapshot Regeneration
 
-Text and SVG snapshots are checked into the repo. When rendering changes affect output:
+Text and SVG snapshots are checked into the repo. Each diagram type has its own env var and test target. Regenerate only the type you changed:
 
 ```bash
+# Flowchart
 GENERATE_TEXT_SNAPSHOTS=1 cargo nextest run -E 'test(generate_baseline_snapshots)'
 GENERATE_SVG_SNAPSHOTS=1 cargo nextest run -E 'test(svg_snapshot_all_fixtures)'
+
+# Class
+GENERATE_CLASS_TEXT_SNAPSHOTS=1 cargo nextest run --test compliance_class -E 'test(class_text_snapshots)'
+GENERATE_CLASS_SVG_SNAPSHOTS=1 cargo nextest run --test compliance_class -E 'test(class_svg_snapshots)'
+
+# Sequence
+GENERATE_SEQUENCE_TEXT_SNAPSHOTS=1 cargo nextest run --test compliance_sequence -E 'test(sequence_text_snapshots)'
 ```
 
 ## Debug Infrastructure
