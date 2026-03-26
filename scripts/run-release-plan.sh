@@ -52,7 +52,11 @@ echo ""
 gh run download "$RUN_ID" --repo "$REPO" --name release-plan --dir "$TMPDIR"
 
 if [ -f "$TMPDIR/release-plan.md" ]; then
-  cat "$TMPDIR/release-plan.md"
+  if command -v bat &>/dev/null; then
+    bat --paging=never "$TMPDIR/release-plan.md"
+  else
+    cat "$TMPDIR/release-plan.md"
+  fi
 else
   echo "error: release-plan.md not found in artifacts" >&2
   exit 1
