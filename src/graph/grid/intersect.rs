@@ -132,23 +132,28 @@ pub fn spread_points_on_face(
                 *pos = pos.saturating_sub(overshoot);
             }
         }
-    } else if matches!(face, NodeFace::Top | NodeFace::Bottom) || count > range + 1 {
-        // Face is too narrow for the required spacing.  Extend the spread
-        // symmetrically beyond the face extent so every edge gets at least
-        // MIN_ATTACHMENT_GAP separation.  Downstream face-aware clamping
-        // keeps the fixed axis on the node boundary while allowing the
-        // cross-axis to extend.
-        //
-        // Always extend for Top/Bottom faces where arrowheads share the same
-        // row and pile up as ▼▼▼.  For Left/Right faces, only extend when the
-        // packing would create duplicate positions (count > range + 1) — when
-        // each edge still gets its own row, packed positions are individually
-        // traceable without extension.
+    } else if matches!(face, NodeFace::Top | NodeFace::Bottom) {
+        // Top/Bottom faces: arrowheads share the same row and pile up as ▼▼▼.
+        // Extend symmetrically to maintain MIN_ATTACHMENT_GAP spacing.
         let center = start + range / 2;
         let half_span = needed_span / 2;
         let extended_start = center.saturating_sub(half_span);
         positions = (0..count)
             .map(|i| extended_start + (i * needed_span) / (count - 1))
+            .collect();
+    } else if count > range + 1 {
+        // Left/Right faces: each point is on its own row, so tight packing is
+        // more readable than extending far beyond the node boundary.  Cap the
+        // extension to 1 cell past each face end so arrows stay adjacent to
+        // the node border.
+        let capped_start = start.saturating_sub(1);
+        let capped_end = end + 1;
+        let capped_range = capped_end.saturating_sub(capped_start);
+        positions = (0..count)
+            .map(|i| {
+                let pos = capped_start + (i * capped_range) / (count - 1);
+                pos.min(capped_end)
+            })
             .collect();
     }
 

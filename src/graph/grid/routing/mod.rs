@@ -353,6 +353,12 @@ pub fn route_all_edges(
         simplify_terminal_dip(edge_route, layout);
     }
 
+    // Post-routing: separate adjacent parallel vertical segments that belong
+    // to different edges.  In LR criss-cross patterns, crossing edges get
+    // placed in adjacent columns (gap=1), making them look like a single
+    // thick line.  Push them apart so each edge has a visually distinct lane.
+    separate_adjacent_parallel_segments(&mut routed);
+
     // Route self-edges separately using pre-computed loop points
     for se_data in &layout.self_edges {
         if let Some(edge) = edges
@@ -537,6 +543,132 @@ fn segment_collides_with_nodes(segment: &Segment, layout: &Layout, edge: &Edge) 
             }
         }
     })
+}
+
+/// Separate adjacent parallel vertical segments that belong to different edges.
+///
+/// In LR criss-cross patterns, two crossing edges can be placed in adjacent
+/// columns (gap=1), making them look like a single thick line (`││`).  This
+/// pass detects such pairs and pushes the right-side segment 1 cell further
+/// right, creating a visible gap.
+fn separate_adjacent_parallel_segments(routed: &mut [RoutedEdge]) {
+    if routed.len() < 2 {
+        return;
+    }
+
+    // Collect (edge_index, segment_index, x, y_min, y_max) for all vertical segments
+    let mut verticals: Vec<(usize, usize, usize, usize, usize)> = Vec::new();
+    for (ei, edge_route) in routed.iter().enumerate() {
+        for (si, seg) in edge_route.segments.iter().enumerate() {
+            if let Segment::Vertical {
+                x, y_start, y_end, ..
+            } = seg
+            {
+                let (y_min, y_max) = if y_start <= y_end {
+                    (*y_start, *y_end)
+                } else {
+                    (*y_end, *y_start)
+                };
+                // Only consider interior segments (not the first or last)
+                if si > 0 && si < edge_route.segments.len() - 1 && y_max > y_min + 1 {
+                    verticals.push((ei, si, *x, y_min, y_max));
+                }
+            }
+        }
+    }
+
+    // Find pairs at the same or adjacent x-coordinates with overlapping y-ranges.
+    // For each pair, try nudging one edge; if that would break its terminal,
+    // try the other.  Collect at most one nudge per pair.
+    let mut nudges: Vec<(usize, usize, isize)> = Vec::new();
+    let mut already_nudged: Vec<usize> = Vec::new();
+    for i in 0..verticals.len() {
+        for j in (i + 1)..verticals.len() {
+            let (ei_a, si_a, x_a, y_min_a, y_max_a) = verticals[i];
+            let (ei_b, si_b, x_b, y_min_b, y_max_b) = verticals[j];
+            if ei_a == ei_b || already_nudged.contains(&ei_a) || already_nudged.contains(&ei_b) {
+                continue;
+            }
+            let overlaps_y = y_min_a < y_max_b && y_min_b < y_max_a;
+            if !overlaps_y {
+                continue;
+            }
+            let gap = x_a.abs_diff(x_b);
+            if gap <= 1 {
+                let dx = (2 - gap) as isize;
+                // Prefer nudging the rightmost; fall back to the other.
+                let (primary, fallback) = if x_b >= x_a {
+                    ((ei_b, si_b), (ei_a, si_a))
+                } else {
+                    ((ei_a, si_a), (ei_b, si_b))
+                };
+                if can_nudge_vertical(&routed[primary.0], primary.1, dx) {
+                    nudges.push((primary.0, primary.1, dx));
+                    already_nudged.push(primary.0);
+                } else if can_nudge_vertical(&routed[fallback.0], fallback.1, dx) {
+                    nudges.push((fallback.0, fallback.1, dx));
+                    already_nudged.push(fallback.0);
+                }
+            }
+        }
+    }
+
+    // Apply nudges: shift the vertical and adjust its neighboring horizontals.
+    for (ei, si, dx) in nudges {
+        let edge_route = &mut routed[ei];
+        if si >= edge_route.segments.len() {
+            continue;
+        }
+        if let Segment::Vertical { x, .. } = &mut edge_route.segments[si] {
+            *x = (*x as isize + dx) as usize;
+        }
+        if si > 0
+            && let Segment::Horizontal { x_end, .. } = &mut edge_route.segments[si - 1]
+        {
+            *x_end = (*x_end as isize + dx) as usize;
+        }
+        if si + 1 < edge_route.segments.len()
+            && let Segment::Horizontal { x_start, .. } = &mut edge_route.segments[si + 1]
+        {
+            *x_start = (*x_start as isize + dx) as usize;
+        }
+    }
+}
+
+/// Check whether nudging a vertical segment by `dx` would leave its
+/// neighboring horizontal segments valid (retaining direction and at least
+/// 2 cells of length for visible terminal connections).
+fn can_nudge_vertical(edge_route: &RoutedEdge, si: usize, dx: isize) -> bool {
+    let seg_count = edge_route.segments.len();
+    if si >= seg_count {
+        return false;
+    }
+
+    // Check preceding horizontal
+    if si > 0
+        && let Segment::Horizontal { x_start, x_end, .. } = &edge_route.segments[si - 1]
+    {
+        let new_end = (*x_end as isize + dx) as usize;
+        let retains_dir = (*x_start <= *x_end && *x_start <= new_end)
+            || (*x_start >= *x_end && *x_start >= new_end);
+        if !retains_dir || x_start.abs_diff(new_end) < 2 {
+            return false;
+        }
+    }
+
+    // Check following horizontal
+    if si + 1 < seg_count
+        && let Segment::Horizontal { x_start, x_end, .. } = &edge_route.segments[si + 1]
+    {
+        let new_start = (*x_start as isize + dx) as usize;
+        let retains_dir = (*x_start <= *x_end && new_start <= *x_end)
+            || (*x_start >= *x_end && new_start >= *x_end);
+        if !retains_dir || new_start.abs_diff(*x_end) < 2 {
+            return false;
+        }
+    }
+
+    true
 }
 
 #[cfg(test)]
