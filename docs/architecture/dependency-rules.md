@@ -25,7 +25,7 @@ from the repo-root
 [`boundaries.toml`](/Users/kevin/src/mmdflux-semantic-architecture/boundaries.toml).
 Set `SEMANTIC_BOUNDARIES_CONFIG` to point at a different file when reusing the
 checker outside this repo. The semantic-only command is
-`cargo xtask architecture check` or `just boundaries`.
+`cargo xtask architecture check` or `just architecture-check`.
 The normal one-shot command always works on its own. If a matching
 `cargo xtask architecture host` process is already running for this worktree,
 the one-shot command may reuse that warm host automatically; otherwise it
@@ -116,9 +116,9 @@ collapsed back into singleton roots:
    (hydrate→render dispatch) lives in `runtime/mmds.rs`.
 
 10. **MMDS is a frontend, not a logical diagram type** — MMDS input handling
-   is detected through `src/frontends.rs`, while the MMDS parse, hydration,
-   and output helpers live under `src/mmds/`. MMDS is not registered
-   in the logical diagram registry.
+    is detected through `src/frontends.rs`, while the MMDS parse, hydration,
+    and output helpers live under `src/mmds/`. MMDS is not registered
+    in the logical diagram registry.
 
 11. **engines do not know about diagram types or output formats** — Engine
     implementations (`src/engines/`) solve generic graph layout problems and

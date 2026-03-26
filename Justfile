@@ -23,8 +23,7 @@ release *args:
     cargo build --release {{ args }}
 
 # Run clippy, architecture boundaries, and fmt check
-lint:
-    cargo +nightly fmt -- --check
+lint: fmt-check
     cargo xtask lint
 
 # Run clippy with auto-fix
@@ -34,6 +33,9 @@ fix *args: fmt
 # Format code
 fmt *args:
     cargo +nightly fmt --all {{ args }}
+
+fmt-check:
+    cargo +nightly fmt --all -- --check
 
 # Install git hooks (commit-msg validation via cocogitto)
 setup-hooks:
@@ -72,7 +74,7 @@ conformance *args:
     cargo nextest run --test mmds_conformance --success-output immediate {{ args }}
 
 # Check that everything compiles, passes lint, tests, and architecture policy
-check: lint test architecture
+check: lint test
 
 # Build wasm bindings for browser and bundler targets
 wasm-build:
@@ -84,19 +86,19 @@ architecture:
     cargo xtask architecture
 
 # Run the semantic boundaries check.
-boundaries:
+architecture-check:
     cargo xtask architecture check
 
 # Watch semantic boundaries during larger refactors and host results for one-shot reuse.
-boundaries-watch:
+architecture-host:
     cargo xtask architecture host
 
 # Print the semantic boundary dependency graph as Mermaid.
-boundaries-graph:
+architecture-graph:
     cargo xtask architecture graph
 
 # Explain a specific edge or boundary in the semantic dependency graph.
-boundaries-explain *args:
+architecture-explain *args:
     cargo xtask architecture explain {{ args }}
 
 # Build size-optimized release wasm bindings for browser and bundler targets

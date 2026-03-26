@@ -28,6 +28,6 @@ icon = "tool"
 command = "just module-map-scc --max-depth 6 | rg \"largest-scc-size|cycle \\(\" -C 2"
 
 [[actions]]
-name = "monitor module boundaries"
+name = "check module boundaries"
 icon = "tool"
-command = "just boundaries-watch"
+command = "just architecture-check"

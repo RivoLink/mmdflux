@@ -17,6 +17,7 @@ Types: `feat`, `fix`, `perf`, `revert`, `docs`, `test`, `build`, `ci`, `refactor
 Scopes: `wasm`, `xtask`, `web`, `mmds-core`, `mmds-excalidraw`, `mmds-tldraw` (match monorepo packages). Omit scope for changes to the root `mmdflux` crate.
 
 Rules:
+
 - Header must be 100 characters or fewer
 - Subject must start with a lowercase letter
 - Subject must not end with a period
@@ -34,6 +35,7 @@ Format: `<type>/<description>`
 Types: `feat/`, `fix/`, `hotfix/`, `release/`, `chore/`
 
 Rules:
+
 - Use lowercase letters, numbers, and hyphens only (no underscores or spaces)
 - Include issue numbers when applicable (e.g., `feat/issue-42-add-svg-export`)
 - Keep descriptions concise (e.g., `fix/lr-routing-regression`)
@@ -50,7 +52,8 @@ just lint                      # clippy + fmt check
 just check                     # lint + test + architecture
 just build                     # Debug build
 just release                   # Release build
-just boundaries-watch         # Watch semantic architecture boundaries
+just architecture-host         # Host a semantic architecture lint server
+just architecture-check        # Run the archnitecture linter
 just run diagram.mmd           # Run the CLI
 just fmt                       # Format code
 
@@ -63,16 +66,17 @@ echo 'graph LR\nA-->B' | cargo run
 
 ## Architecture
 
-See `docs/architecture/dependency-rules.md` for the authoritative module ownership rules and public contract tiers. The repo-owned architecture gate is `cargo xtask architecture` or `just architecture`. Semantic module boundaries are enforced from `boundaries.toml` (override with `SEMANTIC_BOUNDARIES_CONFIG`); run `cargo xtask architecture check` or `just boundaries` for the semantic dependency check.
+See `docs/architecture/dependency-rules.md` for the authoritative module ownership rules and public contract tiers. The repo-owned architecture gate is `cargo xtask architecture check` or `just architecture-check`. Semantic module boundaries are enforced from `boundaries.toml` (override with `SEMANTIC_BOUNDARIES_CONFIG`); run `cargo xtask architecture check` or `just architecture-check` for the semantic dependency check.
 
 When editing imports, top-level wiring, or ownership boundaries, run
 `cargo xtask architecture check` before finishing. During larger boundary
-refactors, keep `just boundaries-watch` running in a separate terminal.
+refactors, keep `just architecture-host` running in a separate terminal.
 
 Inspection commands:
-- `just boundaries-graph` — print dependency graph as Mermaid
-- `just boundaries-explain --edge <source> <target>` — inspect a specific edge
-- `just boundaries-explain --boundary <name>` — inspect a boundary
+
+- `just architecture-graph` — print dependency graph as Mermaid
+- `just architecture-explain --edge <source> <target>` — inspect a specific edge
+- `just architecture-explain --boundary <name>` — inspect a boundary
 
 Pipeline: **Frontend → Diagrams → Engine → Render**
 
