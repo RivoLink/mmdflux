@@ -52,6 +52,8 @@ echo ""
 gh run download "$RUN_ID" --repo "$REPO" --name release-plan --dir "$TMPDIR"
 
 if [ -f "$TMPDIR/release-plan.md" ]; then
+  echo "To re-download: gh run download ${RUN_ID} -n release-plan"
+  echo ""
   if command -v bat &>/dev/null; then
     bat --paging=never "$TMPDIR/release-plan.md"
   else
