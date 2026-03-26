@@ -17,6 +17,8 @@ Optional (for specific workflows):
 |------|---------|---------|
 | [wasm-pack](https://rustwasm.github.io/wasm-pack/) | WebAssembly builds | `cargo install wasm-pack` |
 | [Node.js](https://nodejs.org/) | Dagre debug scripts, web playground | via nvm or brew |
+| [cargo-edit](https://github.com/killercup/cargo-edit) | `cargo set-version` used by release hooks | `cargo install cargo-edit` |
+| [gh](https://cli.github.com/) | GitHub CLI for CI checks and release assets | `brew install gh` |
 
 ## First-time setup
 

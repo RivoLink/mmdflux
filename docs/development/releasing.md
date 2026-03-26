@@ -2,6 +2,15 @@
 
 All releases are managed through [cocogitto](https://docs.cocogitto.io/) (`cog bump --package`). Each package gets a tag in the format `{package}-v{version}` (e.g., `mmdflux-v2.1.0`, `mmds-core-v0.2.0`). Tag pushes trigger the corresponding CI workflows.
 
+### Prerequisites
+
+The following tools must be installed locally:
+
+- [cocogitto](https://docs.cocogitto.io/) (`cog`) — version management, changelogs, and tagging
+- [cargo-edit](https://github.com/killercup/cargo-edit) — provides `cargo set-version`, used by pre-bump hooks
+- [just](https://just.systems/) — task runner for lint/test hooks
+- [gh](https://cli.github.com/) — GitHub CLI for checking CI status and downloading release assets
+
 This project publishes:
 
 - `mmdflux` crate to crates.io
@@ -54,9 +63,21 @@ The root crate and `@mmds/wasm` are version-locked and release together.
 
 ### Checklist
 
-1. Ensure `main` is green in CI.
+1. Ensure `main` is green in CI:
 
-2. Ensure the working tree is clean (no uncommitted or untracked changes). `cog bump` will refuse to run otherwise.
+```bash
+gh run list --branch main --limit 5
+```
+
+2. Ensure the working tree is clean and you are on `main`:
+
+```bash
+git status
+git checkout main
+git pull
+```
+
+`cog bump` will refuse to run on a dirty working tree.
 
 3. Preview the changelog and decide the bump level:
 
@@ -78,16 +99,24 @@ cog bump --package mmdflux --major   # breaking changes
 
 This will:
 
-- Run `just lint` and `just test`
-- Update version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `xtask/Cargo.toml`
+- Run `just lint` and `just test` (pre-bump hooks)
+- Update version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `xtask/Cargo.toml` via `cargo set-version`
 - Generate the changelog in `CHANGELOG.md`
-- Commit, tag (`mmdflux-v{version}`), and push
+- Commit and tag (`mmdflux-v{version}`)
+- **Automatically push** the commit and tag to origin (post-bump hooks) — no manual push needed
 
 5. Confirm the four release workflows complete:
-   - **Release** — builds binaries and publishes GitHub Release assets
-   - **Crate Release** — publishes `mmdflux` to crates.io
-   - **WASM Release** — publishes `@mmds/wasm` to npm
-   - **Playground Deploy** — deploys web playground to Cloudflare Pages
+
+```bash
+gh run list --limit 8
+# or watch a specific run
+gh run watch
+```
+
+- **Release** — builds binaries and publishes GitHub Release assets
+- **Crate Release** — publishes `mmdflux` to crates.io
+- **WASM Release** — publishes `@mmds/wasm` to npm
+- **Playground Deploy** — deploys web playground to Cloudflare Pages
 
 6. Update the Homebrew formula (see below).
 
@@ -109,9 +138,10 @@ cog bump --package mmds-tldraw --patch
 
 This will:
 
-1. Run `npm version` to update `package.json`
+1. Run `npm version` to update `package.json` (pre-bump hook)
 2. Generate a package-specific changelog in the package directory
-3. Commit, tag (e.g., `mmds-core-v0.2.0`), and push
+3. Commit and tag (e.g., `mmds-core-v0.2.0`)
+4. **Automatically push** the commit and tag to origin (post-bump hooks)
 
 The tag push triggers the **Packages Release** workflow, which builds and publishes the package to npm.
 
