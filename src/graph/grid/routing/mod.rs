@@ -345,6 +345,14 @@ pub fn route_all_edges(
         })
         .collect();
 
+    // Post-routing: simplify terminal dip patterns.  When a path
+    // overshoots the endpoint on one axis then corrects with a short
+    // segment back, the intermediate row/column is shared with other
+    // edges.  Flattening the dip avoids this shared-segment overlap.
+    for edge_route in &mut routed {
+        simplify_terminal_dip(edge_route, layout);
+    }
+
     // Route self-edges separately using pre-computed loop points
     for se_data in &layout.self_edges {
         if let Some(edge) = edges
@@ -357,6 +365,178 @@ pub fn route_all_edges(
     }
 
     routed
+}
+
+/// Simplify terminal dip patterns in a routed edge.
+///
+/// Detects when the last 3+ segments form a "dip and return": the path
+/// overshoots the endpoint on one axis, runs a horizontal/vertical, then
+/// comes back.  For example in LR:
+///
+/// ```text
+///   Before: ..., V(28, 9→12), H(12, 28→41), V(41, 12→11), H(11, 41→49)
+///   After:  ..., V(28, 9→11), H(11, 28→49)
+/// ```
+///
+/// The dip to y=12 is eliminated, preventing shared segments with other
+/// edges that also route through y=12.
+fn simplify_terminal_dip(routed: &mut RoutedEdge, layout: &Layout) {
+    if routed.segments.len() < 4 || routed.is_self_edge || routed.is_backward {
+        return;
+    }
+
+    let len = routed.segments.len();
+    // Pattern: ..., V(x1, a→b), H(b, x1→x2), V(x2, b→c), H(c, x2→end_x)
+    //   where |b - c| == 1 (the dip correction is 1 cell)
+    //   and the V segments go in opposite directions on y
+    // Or the LR-rotated equivalent for TD graphs.
+    let (dip_seg, horiz_seg, return_seg, final_seg) = (
+        &routed.segments[len - 4],
+        &routed.segments[len - 3],
+        &routed.segments[len - 2],
+        &routed.segments[len - 1],
+    );
+
+    // Match the vertical-dip pattern (common in LR graphs):
+    // V down, H across, V up 1, H to end
+    if let (
+        Segment::Vertical {
+            x: x1,
+            y_start: a,
+            y_end: b,
+        },
+        Segment::Horizontal {
+            y: hy,
+            x_start: hx1,
+            x_end: hx2,
+        },
+        Segment::Vertical {
+            x: x2,
+            y_start: rb,
+            y_end: c,
+        },
+        Segment::Horizontal {
+            y: fy,
+            x_start: fx1,
+            x_end: fx2,
+        },
+    ) = (dip_seg, horiz_seg, return_seg, final_seg)
+        && *hy == *b
+        && *hx1 == *x1
+        && *hx2 == *x2
+        && *rb == *b
+        && *fy == *c
+        && *fx1 == *x2
+        && b.abs_diff(*c) == 1
+    {
+        let simplified_v = Segment::Vertical {
+            x: *x1,
+            y_start: *a,
+            y_end: *c,
+        };
+        let simplified_h = Segment::Horizontal {
+            y: *c,
+            x_start: *x1,
+            x_end: *fx2,
+        };
+
+        if !segment_collides_with_nodes(&simplified_v, layout, &routed.edge)
+            && !segment_collides_with_nodes(&simplified_h, layout, &routed.edge)
+        {
+            routed.segments.truncate(len - 4);
+            routed.segments.push(simplified_v);
+            routed.segments.push(simplified_h);
+        }
+        return;
+    }
+
+    // Match the horizontal-dip pattern (common in TD graphs):
+    // H across, V down, H back 1, V to end
+    if let (
+        Segment::Horizontal {
+            y: y1,
+            x_start: a,
+            x_end: b,
+        },
+        Segment::Vertical {
+            x: vx,
+            y_start: vy1,
+            y_end: vy2,
+        },
+        Segment::Horizontal {
+            y: y2,
+            x_start: rb,
+            x_end: c,
+        },
+        Segment::Vertical {
+            x: fx,
+            y_start: fy1,
+            y_end: fy2,
+        },
+    ) = (dip_seg, horiz_seg, return_seg, final_seg)
+        && *vx == *b
+        && *vy1 == *y1
+        && *vy2 == *y2
+        && *rb == *b
+        && *fx == *c
+        && *fy1 == *y2
+        && b.abs_diff(*c) == 1
+    {
+        let simplified_h = Segment::Horizontal {
+            y: *y1,
+            x_start: *a,
+            x_end: *c,
+        };
+        let simplified_v = Segment::Vertical {
+            x: *c,
+            y_start: *y1,
+            y_end: *fy2,
+        };
+
+        if !segment_collides_with_nodes(&simplified_h, layout, &routed.edge)
+            && !segment_collides_with_nodes(&simplified_v, layout, &routed.edge)
+        {
+            routed.segments.truncate(len - 4);
+            routed.segments.push(simplified_h);
+            routed.segments.push(simplified_v);
+        }
+    }
+}
+
+fn segment_collides_with_nodes(segment: &Segment, layout: &Layout, edge: &Edge) -> bool {
+    layout.node_bounds.iter().any(|(node_id, bounds)| {
+        if node_id == &edge.from || node_id == &edge.to {
+            return false;
+        }
+        let left = bounds.x;
+        let right = bounds.x + bounds.width.saturating_sub(1);
+        let top = bounds.y;
+        let bottom = bounds.y + bounds.height.saturating_sub(1);
+        match segment {
+            Segment::Vertical { x, y_start, y_end } => {
+                if *x < left || *x > right {
+                    return false;
+                }
+                let (min_y, max_y) = if y_start <= y_end {
+                    (*y_start, *y_end)
+                } else {
+                    (*y_end, *y_start)
+                };
+                min_y <= bottom && max_y >= top
+            }
+            Segment::Horizontal { y, x_start, x_end } => {
+                if *y < top || *y > bottom {
+                    return false;
+                }
+                let (min_x, max_x) = if x_start <= x_end {
+                    (*x_start, *x_end)
+                } else {
+                    (*x_end, *x_start)
+                };
+                min_x <= right && max_x >= left
+            }
+        }
+    })
 }
 
 #[cfg(test)]
