@@ -4,14 +4,46 @@
 # download the report, and print it to stdout.
 #
 # Usage:
-#   ./scripts/run-release-plan.sh          # plan mode (default)
-#   ./scripts/run-release-plan.sh release  # release mode
-#   ./scripts/run-release-plan.sh release mmdflux  # release a specific package
+#   ./scripts/run-release-plan.sh                            # plan mode (default)
+#   ./scripts/run-release-plan.sh release                    # release mode
+#   ./scripts/run-release-plan.sh release mmdflux            # release a specific package
+#   ./scripts/run-release-plan.sh plan -- glow               # custom viewer
+#   ./scripts/run-release-plan.sh plan -- bat --paging=always # custom bat flags
 #
 set -euo pipefail
 
-MODE="${1:-plan}"
-PACKAGE="${2:-}"
+# Parse arguments: positional args before --, viewer command after --
+MODE="plan"
+PACKAGE=""
+VIEWER=()
+
+parsing_opts=true
+pos=0
+for arg in "$@"; do
+  if [ "$arg" = "--" ]; then
+    parsing_opts=false
+    continue
+  fi
+  if $parsing_opts; then
+    case $pos in
+      0) MODE="$arg" ;;
+      1) PACKAGE="$arg" ;;
+    esac
+    pos=$((pos + 1))
+  else
+    VIEWER+=("$arg")
+  fi
+done
+
+# Default viewer: bat (if available) or cat
+if [ ${#VIEWER[@]} -eq 0 ]; then
+  if command -v bat &>/dev/null; then
+    VIEWER=(bat --paging=never)
+  else
+    VIEWER=(cat)
+  fi
+fi
+
 REPO="kevinswiber/mmdflux"
 WORKFLOW="release-plan.yml"
 TMPDIR=$(mktemp -d)
@@ -54,11 +86,7 @@ gh run download "$RUN_ID" --repo "$REPO" --name release-plan --dir "$TMPDIR"
 if [ -f "$TMPDIR/release-plan.md" ]; then
   echo "To re-download: gh run download ${RUN_ID} -n release-plan"
   echo ""
-  if command -v bat &>/dev/null; then
-    bat --paging=never "$TMPDIR/release-plan.md"
-  else
-    cat "$TMPDIR/release-plan.md"
-  fi
+  "${VIEWER[@]}" "$TMPDIR/release-plan.md"
 else
   echo "error: release-plan.md not found in artifacts" >&2
   exit 1
