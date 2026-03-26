@@ -419,7 +419,8 @@ fn render_box(
                         i < first_sep
                     }
                 } else {
-                    false
+                    // No separator: center all lines (multi-line labels from <br>)
+                    true
                 };
                 let label_start = if center_line {
                     x + (width - line.chars().count()) / 2
@@ -882,7 +883,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_multiline_without_separator_remains_left_aligned() {
+    fn test_render_multiline_without_separator_centers_lines() {
         let mut canvas = Canvas::new(20, 6);
         let node = Node::new("C").with_label("Long\nx");
         let charset = CharSet::unicode();
@@ -890,9 +891,9 @@ mod tests {
         render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
 
-        // Non-compartment multiline labels keep left padding alignment.
-        assert!(output.contains("│ Long │"));
-        assert!(output.contains("│ x    │"));
+        // Non-compartment multiline labels center each line within the box.
+        assert!(output.contains("│ Long │"), "output: {output}");
+        assert!(output.contains("│  x   │"), "output: {output}");
     }
 
     #[test]
