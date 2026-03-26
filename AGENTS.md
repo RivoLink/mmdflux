@@ -40,6 +40,15 @@ Rules:
 - Include issue numbers when applicable (e.g., `feat/issue-42-add-svg-export`)
 - Keep descriptions concise (e.g., `fix/lr-routing-regression`)
 
+## Issue and PR Workflow
+
+When fixing a GitHub issue:
+1. Read the issue and comments: `gh issue view <N> --comments`
+2. Create a conventional branch: `fix/description` or `feat/description`
+3. Keep PRs as a **single commit** — use `git commit --amend` and `git push --force-with-lease` when iterating
+4. Reference the issue in the commit body: `Closes #N`
+5. Post findings back to the issue with `gh issue comment <N>` when investigation reveals useful context
+
 ## Common Commands
 
 Use `just` (see `Justfile`) for day-to-day work. Tests use `cargo-nextest` for parallel execution.
@@ -118,6 +127,15 @@ Key test files:
 The xtask architecture command enforces the semantic boundary rules in
 `docs/architecture/dependency-rules.md`. `boundaries` owns semantic top-level
 dependency policy across production and test code.
+
+### Snapshot Regeneration
+
+Text and SVG snapshots are checked into the repo. When rendering changes affect output:
+
+```bash
+GENERATE_TEXT_SNAPSHOTS=1 cargo nextest run -E 'test(generate_baseline_snapshots)'
+GENERATE_SVG_SNAPSHOTS=1 cargo nextest run -E 'test(svg_snapshot_all_fixtures)'
+```
 
 ## Debug Infrastructure
 
