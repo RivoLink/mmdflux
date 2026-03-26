@@ -46,7 +46,7 @@ pub fn calc_end_label_positions(segments: &[Segment]) -> (Option<Point>, Option<
     let total_length: usize = segments.iter().map(Segment::length).sum();
     let fraction = (total_length as f64 * 0.15).floor() as usize;
 
-    // Tail: near path start
+    // Tail: near path start, offset perpendicular to the segment
     let tail = {
         let target = fraction;
         let mut accumulated = 0usize;
@@ -54,15 +54,22 @@ pub fn calc_end_label_positions(segments: &[Segment]) -> (Option<Point>, Option<
         for seg in segments {
             let seg_len = seg.length();
             if accumulated + seg_len >= target {
-                pos = Some(seg.point_at_offset(target - accumulated));
+                pos = Some(offset_perpendicular(
+                    seg.point_at_offset(target - accumulated),
+                    seg,
+                ));
                 break;
             }
             accumulated += seg_len;
         }
-        pos.or_else(|| segments.first().map(Segment::start_point))
+        pos.or_else(|| {
+            segments
+                .first()
+                .map(|s| offset_perpendicular(s.start_point(), s))
+        })
     };
 
-    // Head: near path end
+    // Head: near path end, offset perpendicular to the segment
     let head = {
         let target = total_length.saturating_sub(fraction);
         let mut accumulated = 0usize;
@@ -70,15 +77,39 @@ pub fn calc_end_label_positions(segments: &[Segment]) -> (Option<Point>, Option<
         for seg in segments {
             let seg_len = seg.length();
             if accumulated + seg_len >= target {
-                pos = Some(seg.point_at_offset(target - accumulated));
+                pos = Some(offset_perpendicular(
+                    seg.point_at_offset(target - accumulated),
+                    seg,
+                ));
                 break;
             }
             accumulated += seg_len;
         }
-        pos.or_else(|| segments.last().map(Segment::end_point))
+        pos.or_else(|| {
+            segments
+                .last()
+                .map(|s| offset_perpendicular(s.end_point(), s))
+        })
     };
 
     (head, tail)
+}
+
+/// Offset a point perpendicular to its segment so the label sits beside
+/// the edge line rather than on top of it.
+fn offset_perpendicular(point: Point, segment: &Segment) -> Point {
+    match segment {
+        // Vertical edge: shift label 2 chars to the left
+        Segment::Vertical { .. } => Point {
+            x: point.x.saturating_sub(2),
+            ..point
+        },
+        // Horizontal edge: shift label 1 row above
+        Segment::Horizontal { .. } => Point {
+            y: point.y.saturating_sub(1),
+            ..point
+        },
+    }
 }
 
 const PRECOMPUTED_LABEL_BASE_DRIFT: f64 = 2.0;

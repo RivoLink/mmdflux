@@ -37,6 +37,10 @@
     <g class="edgeLabels">
       <text x="66.12" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">owns</text>
       <text x="222.43" y="113.50" text-anchor="middle" dominant-baseline="middle" fill="#333">contains</text>
+      <text x="84.12" y="149.12" text-anchor="middle" dominant-baseline="middle" fill="#333">*</text>
+      <text x="84.12" y="73.88" text-anchor="middle" dominant-baseline="middle" fill="#333">1</text>
+      <text x="240.43" y="149.12" text-anchor="middle" dominant-baseline="middle" fill="#333">*</text>
+      <text x="240.43" y="73.88" text-anchor="middle" dominant-baseline="middle" fill="#333">0..1</text>
     </g>
   </g>
 </svg>

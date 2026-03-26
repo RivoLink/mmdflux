@@ -111,6 +111,12 @@ pub fn compile(model: &ClassModel) -> Graph {
         if let Some(label) = &rel.label {
             edge = edge.with_label(label);
         }
+        if let Some(card) = &rel.cardinality_from {
+            edge.tail_label = Some(card.clone());
+        }
+        if let Some(card) = &rel.cardinality_to {
+            edge.head_label = Some(card.clone());
+        }
 
         diagram.add_edge(edge);
     }
@@ -407,6 +413,15 @@ Source --> Target";
     fn compiler_edge_label_preserved() {
         let diagram = compile_class("classDiagram\nA --> B : uses");
         assert_eq!(diagram.edges[0].label, Some("uses".to_string()));
+    }
+
+    #[test]
+    fn compiler_cardinality_labels_mapped_to_edge_endpoints() {
+        let diagram = compile_class("classDiagram\nUser \"1\" --> \"*\" Session : owns");
+        let edge = &diagram.edges[0];
+        assert_eq!(edge.tail_label.as_deref(), Some("1"));
+        assert_eq!(edge.head_label.as_deref(), Some("*"));
+        assert_eq!(edge.label.as_deref(), Some("owns"));
     }
 
     #[test]

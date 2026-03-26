@@ -42,7 +42,7 @@ pub fn compute_end_label_positions(path: &[FPoint]) -> (Option<FPoint>, Option<F
         return (None, None);
     }
 
-    let perpendicular_offset = 12.0; // px offset from path
+    let perpendicular_offset = 18.0; // px offset from path
     let along_fraction = 0.12; // 12% from endpoint
 
     let total_len: f64 = path
