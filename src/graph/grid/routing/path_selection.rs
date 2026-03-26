@@ -190,13 +190,20 @@ pub(super) fn try_shared_draw_path<'a>(
         }
     }
 
-    let channel_wps = generate_corridor_backward_waypoints(
-        edge,
-        layout,
-        &endpoints.from_bounds,
-        &endpoints.to_bounds,
-        diagram_direction,
-    );
+    // Skip backward corridor when the draw path was rejected for face inference
+    // — that indicates a forward edge with a mis-classified terminal step, not a
+    // backward edge that needs a corridor detour.
+    let channel_wps = if rejection == Some(TextPathRejection::FaceInference) {
+        vec![]
+    } else {
+        generate_corridor_backward_waypoints(
+            edge,
+            layout,
+            &endpoints.from_bounds,
+            &endpoints.to_bounds,
+            diagram_direction,
+        )
+    };
     if !channel_wps.is_empty() {
         return SharedDrawPathAttempt {
             routed: route_backward_with_synthetic_waypoints(

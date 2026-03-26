@@ -132,12 +132,18 @@ pub fn spread_points_on_face(
                 *pos = pos.saturating_sub(overshoot);
             }
         }
-    } else {
+    } else if matches!(face, NodeFace::Top | NodeFace::Bottom) || count > range + 1 {
         // Face is too narrow for the required spacing.  Extend the spread
         // symmetrically beyond the face extent so every edge gets at least
         // MIN_ATTACHMENT_GAP separation.  Downstream face-aware clamping
         // keeps the fixed axis on the node boundary while allowing the
         // cross-axis to extend.
+        //
+        // Always extend for Top/Bottom faces where arrowheads share the same
+        // row and pile up as ▼▼▼.  For Left/Right faces, only extend when the
+        // packing would create duplicate positions (count > range + 1) — when
+        // each edge still gets its own row, packed positions are individually
+        // traceable without extension.
         let center = start + range / 2;
         let half_span = needed_span / 2;
         let extended_start = center.saturating_sub(half_span);
