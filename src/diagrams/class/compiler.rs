@@ -22,16 +22,22 @@ pub fn compile(model: &ClassModel) -> Graph {
             continue;
         }
 
+        let display_name = class
+            .display_label
+            .as_deref()
+            .unwrap_or(&class.name)
+            .to_string();
+
         let mut header: Vec<String> = class
             .annotations
             .iter()
             .map(|a| format!("<<{a}>>"))
             .collect();
-        header.push(class.name.clone());
+        header.push(display_name.clone());
 
         let label = if class.members.is_empty() {
             if class.annotations.is_empty() {
-                class.name.clone()
+                display_name
             } else {
                 header.join("\n")
             }
@@ -474,6 +480,32 @@ Source --> Target";
     fn compiler_implicit_classes_from_relations() {
         let diagram = compile_class("classDiagram\nA --> B");
         assert_eq!(diagram.nodes.len(), 2);
+    }
+
+    #[test]
+    fn compiler_display_label_used_in_node_label() {
+        let diagram = compile_class("classDiagram\nclass User[\"Application User\"]");
+        assert_eq!(diagram.nodes["User"].label, "Application User");
+    }
+
+    #[test]
+    fn compiler_display_label_in_header_with_members() {
+        let input =
+            "classDiagram\nclass User[\"Application User\"] {\n  +String name\n  +login()\n}";
+        let diagram = compile_class(input);
+        let label = &diagram.nodes["User"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "Application User");
+    }
+
+    #[test]
+    fn compiler_display_label_with_annotation() {
+        let input = "classDiagram\nclass Svc[\"My Service\"] {\n  <<service>>\n}";
+        let diagram = compile_class(input);
+        let label = &diagram.nodes["Svc"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "<<service>>");
+        assert_eq!(lines[1], "My Service");
     }
 
     #[test]
