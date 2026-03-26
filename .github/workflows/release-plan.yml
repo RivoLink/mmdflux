@@ -104,8 +104,8 @@ jobs:
               echo ""
             } | out
 
-            # Find latest tag for this package
-            latest_tag=$(git describe --tags --match "${tag_prefix}*" --abbrev=0 2>/dev/null || echo "")
+            # Find latest tag for this package (by version sort, not ancestry)
+            latest_tag=$(git tag --list "${tag_prefix}*" --sort=-v:refname | head -1)
 
             if [ -z "$latest_tag" ]; then
               {
@@ -270,7 +270,7 @@ jobs:
             echo "Bumping ${pkg}..."
             cog bump --package "$pkg" --auto --skip-untracked
 
-            new_tag=$(git describe --tags --match "${tag_prefix}*" --abbrev=0)
+            new_tag=$(git tag --list "${tag_prefix}*" --sort=-v:refname | head -1)
             released_tags+=("${pkg}|${new_tag}")
             echo "::notice::Created tag ${new_tag}"
           done
