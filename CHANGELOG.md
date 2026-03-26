@@ -1,6 +1,30 @@
 # Changelog
 
 - - -
+## mmdflux-v2.0.2 - 2026-03-26
+#### Bug Fixes
+- render class diagram endpoint cardinality labels - (430eac9) - Kevin Swiber
+- anchor lollipop labels to markers and use hollow circle symbol - (d22d688) - Kevin Swiber
+- render class diagram display labels instead of internal identifiers - (d002c6b) - Kevin Swiber
+- widen SVG fan-in entry point spread on angular targets - (9fabc70) - Kevin Swiber
+- close stacked-document shape bottom border with corner character - (ed5e468) - Kevin Swiber
+- layout nested mixed-direction override subgraphs with proper spacing - (97a1f0e) - Kevin Swiber
+- center multi-line node labels within box - (aa43df9) - Kevin Swiber
+- separate LR criss-cross draw paths at the grid derivation level - (97730e9) - Kevin Swiber
+- separate overlapping parallel vertical segments and cap left/right face extension - (332eb33) - Kevin Swiber
+- simplify terminal dip patterns to prevent shared edge segments - (af3e17d) - Kevin Swiber
+- prevent backward corridor detour for forward edges with face-rejected draw paths - (8f10d54) - Kevin Swiber
+- spread dense fan-in arrowheads beyond narrow node faces - (d232cdb) - Kevin Swiber
+- ignore short perpendicular draw-path terminal steps for face inference - (ed97dd3) - Kevin Swiber
+- connect terminal segments to arrows via L-shaped diversion - (3aa0d79) - Kevin Swiber
+- derive entry direction from target face instead of segment geometry - (e379fa2) - Kevin Swiber
+- preserve edge lanes while clearing border collisions - (c344d74) - Kevin Swiber
+#### Documentation
+- configure cocogitto changelog generation and update release process - (25d6cc2) - Kevin Swiber
+- add class and sequence snapshot regeneration commands to AGENTS.md - (d443d44) - Kevin Swiber
+
+- - -
+
 
 ## v2.0.1
 
