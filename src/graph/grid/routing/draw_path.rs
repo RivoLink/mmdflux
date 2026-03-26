@@ -231,6 +231,24 @@ pub(super) fn route_edge_from_draw_path(
 
     let prefer_planned_face_spread = layout.preserve_routed_path_topology.contains(&edge.index);
     let src_override = inferred_src_override.or(overrides.src_attach);
+
+    // Detect short perpendicular terminal steps that mis-classify the face.
+    // A 1-cell vertical step in an LR graph (or horizontal in TD) is often
+    // just a center-alignment artifact, not a real face indicator.  When the
+    // planner's attachment disagrees, skip this draw path entirely — it was
+    // designed for the wrong face and tends to produce complex crossing
+    // patterns.  The fallback routing will use the correct face from the
+    // planner and produce a cleaner path.
+    if is_short_perpendicular_terminal(
+        inferred_tgt_face,
+        &points,
+        direction,
+        overrides.tgt_attach,
+        &ep.to_bounds,
+    ) {
+        return Err(TextPathRejection::FaceInference);
+    }
+
     let tgt_override = select_draw_path_attachment_override(
         &ep.to_bounds,
         inferred_tgt_face,
@@ -326,6 +344,57 @@ fn target_face_from_step(points: &[(usize, usize)]) -> Option<NodeFace> {
         }
     } else {
         None
+    }
+}
+
+/// Detect a draw-path terminal step that is short (≤ 1 cell), perpendicular
+/// to the layout direction, and disagrees with the planner's attachment.
+///
+/// Such steps are typically center-alignment artifacts: the last waypoint sits
+/// on the node boundary and the target center is one cell inward on the
+/// perpendicular axis.  Trusting that step would override the planner's
+/// correct face assignment.
+fn is_short_perpendicular_terminal(
+    inferred_face: Option<NodeFace>,
+    points: &[(usize, usize)],
+    direction: Direction,
+    planned_attach: Option<(usize, usize)>,
+    to_bounds: &NodeBounds,
+) -> bool {
+    let Some(face) = inferred_face else {
+        return false;
+    };
+
+    // Only filter faces that are perpendicular to the layout direction.
+    let perpendicular = match direction {
+        Direction::LeftRight | Direction::RightLeft => {
+            matches!(face, NodeFace::Top | NodeFace::Bottom)
+        }
+        Direction::TopDown | Direction::BottomTop => {
+            matches!(face, NodeFace::Left | NodeFace::Right)
+        }
+    };
+    if !perpendicular {
+        return false;
+    }
+
+    // Only filter when the terminal step is short (≤ 1 cell).
+    if points.len() >= 2 {
+        let end = points[points.len() - 1];
+        let prev = points[points.len() - 2];
+        let step = end.0.abs_diff(prev.0) + end.1.abs_diff(prev.1);
+        if step > 1 {
+            return false;
+        }
+    }
+
+    // Only filter when the planner's attachment implies a different face.
+    if let Some(planned) = planned_attach {
+        let planned_face = infer_face_from_attachment(to_bounds, planned, face);
+        planned_face != face
+    } else {
+        // No planner attachment — can't verify disagreement, don't filter.
+        false
     }
 }
 
