@@ -157,3 +157,115 @@ jobs:
           overwrite_files: true
           files: |
             dist/*
+
+  homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    needs: publish
+    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Resolve tag and version
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+
+          TAG="${TAG#refs/tags/}"
+          if [[ "$TAG" != mmdflux-v* ]]; then
+            TAG="mmdflux-v${TAG#v}"
+          fi
+
+          VERSION="${TAG#mmdflux-v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download checksums
+        uses: actions/download-artifact@v6
+        with:
+          path: dist
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Parse checksums
+        id: checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+          for suffix in darwin-arm64 darwin-x86_64 linux-x86_64; do
+            sha=$(grep "${suffix}.tar.gz" checksums.txt | awk '{print $1}')
+            key=$(echo "$suffix" | tr '-' '_')
+            echo "${key}=${sha}" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Clone Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/kevinswiber/homebrew-mmdflux.git" tap
+
+      - name: Update formula
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          SHA_DARWIN_ARM64: ${{ steps.checksums.outputs.darwin_arm64 }}
+          SHA_DARWIN_X86_64: ${{ steps.checksums.outputs.darwin_x86_64 }}
+          SHA_LINUX_X86_64: ${{ steps.checksums.outputs.linux_x86_64 }}
+        shell: bash
+        run: |
+          cat > tap/Formula/mmdflux.rb << FORMULA
+          class Mmdflux < Formula
+            desc "Render Mermaid diagrams as Unicode text, ASCII, SVG, and MMDS JSON"
+            homepage "https://github.com/kevinswiber/mmdflux"
+            version "${VERSION}"
+            license "MIT"
+
+            if OS.mac?
+              if Hardware::CPU.arm?
+                url "https://github.com/kevinswiber/mmdflux/releases/download/${TAG}/mmdflux-v${VERSION}-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              else
+                url "https://github.com/kevinswiber/mmdflux/releases/download/${TAG}/mmdflux-v${VERSION}-darwin-x86_64.tar.gz"
+                sha256 "${SHA_DARWIN_X86_64}"
+              end
+            elsif OS.linux?
+              if Hardware::CPU.intel?
+                url "https://github.com/kevinswiber/mmdflux/releases/download/${TAG}/mmdflux-v${VERSION}-linux-x86_64.tar.gz"
+                sha256 "${SHA_LINUX_X86_64}"
+              else
+                odie "Linux ARM64 binaries are not published yet."
+              end
+            end
+
+            def install
+              bin.install "mmdflux"
+            end
+
+            test do
+              assert_match "Usage: mmdflux", shell_output("#{bin}/mmdflux --help")
+            end
+          end
+          FORMULA
+
+          # Heredoc indents with spaces — strip them to match the original format
+          sed -i 's/^          //' tap/Formula/mmdflux.rb
+
+      - name: Commit and push
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/mmdflux.rb
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update mmdflux to v${{ steps.meta.outputs.version }}"
+          git push

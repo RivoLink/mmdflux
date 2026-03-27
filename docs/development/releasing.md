@@ -118,7 +118,7 @@ gh run watch
 - **WASM Release** — publishes `@mmds/wasm` to npm
 - **Playground Deploy** — deploys web playground to Cloudflare Pages
 
-6. Update the Homebrew formula (see below).
+6. The Homebrew formula is updated automatically by the Release workflow (see below).
 
 ## npm Adapter Packages
 
@@ -189,7 +189,11 @@ brew tap kevinswiber/mmdflux
 brew install mmdflux
 ```
 
-### Updating Homebrew Formula for a New Release
+### Automated Updates
+
+The Release workflow automatically updates the Homebrew formula after publishing GitHub Release assets. It uses the `HOMEBREW_TAP_TOKEN` repository secret (a fine-grained PAT with contents write access to `kevinswiber/homebrew-mmdflux`).
+
+### Manual Update (if needed)
 
 1. Clone/update tap repo:
 
