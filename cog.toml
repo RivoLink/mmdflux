@@ -143,13 +143,11 @@ bump_order = 1
 path = "packages/mmds-excalidraw"
 public_api = true
 pre_bump_hooks = [
-    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
-    "npm install --package-lock-only",
+    "npm install \"@mmds/core@^$(node -p \"require('../mmds-core/package.json').version\")\"",
     "npm version {{version}} --no-git-tag-version",
 ]
 bump_profiles.ci.pre_bump_hooks = [
-    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
-    "npm install --package-lock-only",
+    "npm install \"@mmds/core@^$(node -p \"require('../mmds-core/package.json').version\")\"",
     "npm version {{version}} --no-git-tag-version",
 ]
 bump_profiles.ci.post_bump_hooks = [
@@ -163,13 +161,11 @@ bump_order = 2
 path = "packages/mmds-tldraw"
 public_api = true
 pre_bump_hooks = [
-    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
-    "npm install --package-lock-only",
+    "npm install \"@mmds/core@^$(node -p \"require('../mmds-core/package.json').version\")\"",
     "npm version {{version}} --no-git-tag-version",
 ]
 bump_profiles.ci.pre_bump_hooks = [
-    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
-    "npm install --package-lock-only",
+    "npm install \"@mmds/core@^$(node -p \"require('../mmds-core/package.json').version\")\"",
     "npm version {{version}} --no-git-tag-version",
 ]
 bump_profiles.ci.post_bump_hooks = [
