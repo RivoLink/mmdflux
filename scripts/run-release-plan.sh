@@ -9,6 +9,8 @@
 #   ./scripts/run-release-plan.sh release mmdflux            # release a specific package
 #   ./scripts/run-release-plan.sh plan -- glow               # custom viewer
 #   ./scripts/run-release-plan.sh plan -- bat --paging=always # custom bat flags
+#   ./scripts/run-release-plan.sh plan -- open                # open in default app
+#   RELEASE_PLAN_DIR=. ./scripts/run-release-plan.sh          # keep release-plan.md in cwd
 #
 set -euo pipefail
 
@@ -46,9 +48,15 @@ fi
 
 REPO="kevinswiber/mmdflux"
 WORKFLOW="release-plan.yml"
-TMPDIR=$(mktemp -d)
 
-trap 'rm -rf "$TMPDIR"' EXIT
+# Output directory: set RELEASE_PLAN_DIR to keep the file, otherwise use a tmpdir
+if [ -n "${RELEASE_PLAN_DIR:-}" ]; then
+  OUTDIR="$RELEASE_PLAN_DIR"
+  mkdir -p "$OUTDIR"
+else
+  OUTDIR=$(mktemp -d)
+  trap 'rm -rf "$OUTDIR"' EXIT
+fi
 
 # Build dispatch flags
 flags=(-f "mode=${MODE}")
@@ -81,12 +89,12 @@ gh run watch "$RUN_ID" --repo "$REPO" --exit-status || {
 echo ""
 
 # Download and display the report
-gh run download "$RUN_ID" --repo "$REPO" --name release-plan --dir "$TMPDIR"
+gh run download "$RUN_ID" --repo "$REPO" --name release-plan --dir "$OUTDIR"
 
-if [ -f "$TMPDIR/release-plan.md" ]; then
+if [ -f "$OUTDIR/release-plan.md" ]; then
   echo "To re-download: gh run download ${RUN_ID} -n release-plan"
   echo ""
-  "${VIEWER[@]}" "$TMPDIR/release-plan.md"
+  "${VIEWER[@]}" "$OUTDIR/release-plan.md"
 else
   echo "error: release-plan.md not found in artifacts" >&2
   exit 1
