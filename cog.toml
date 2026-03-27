@@ -6,7 +6,6 @@ disable_bump_commit = false
 generate_mono_repository_global_tag = false
 generate_mono_repository_package_tags = true
 branch_whitelist = []
-pre = "alpha.*"
 skip_ci = "[skip ci]"
 skip_untracked = false
 tag_prefix = "v"
@@ -17,10 +16,14 @@ scopes = ["version", "wasm", "xtask", "web", "mmds-core", "mmds-excalidraw", "mm
 pre_bump_hooks = []
 post_bump_hooks = []
 pre_package_bump_hooks = []
-post_package_bump_hooks = [
-    "git push",
-    "git push origin {{package}}-v{{version}}",
-]
+post_package_bump_hooks = []
+
+# CI profile: used by release-plan.yml to skip lint/test and dispatch
+# release workflows instead of relying on tag-push triggers.
+# Usage: cog bump --auto --hook-profile ci
+[bump_profiles.ci]
+pre_bump_hooks = []
+post_bump_hooks = []
 
 [git_hooks.commit-msg]
 script = '''#!/bin/sh
@@ -89,7 +92,12 @@ repository = "mmdflux"
 owner = "kevinswiber"
 authors = []
 
-[monorepo.packages.mmdflux]
+# --- Monorepo packages ---
+# Only public packages are listed. Internal crates (mmdflux-wasm, xtask) are
+# version-locked to mmdflux via its pre_bump_hooks and excluded here to avoid
+# unwanted independent tags.
+
+[packages.mmdflux]
 path = "."
 include = ["**"]
 ignore = ["crates/mmdflux-wasm/**", "xtask/**", "packages/mmds-core/**", "packages/mmds-excalidraw/**", "packages/mmds-tldraw/**"]
@@ -101,35 +109,72 @@ pre_bump_hooks = [
     "cargo set-version --manifest-path crates/mmdflux-wasm/Cargo.toml {{version}}",
     "cargo set-version --manifest-path xtask/Cargo.toml {{version}}",
 ]
+bump_profiles.ci.pre_bump_hooks = [
+    "cargo set-version {{version}}",
+    "cargo set-version --manifest-path crates/mmdflux-wasm/Cargo.toml {{version}}",
+    "cargo set-version --manifest-path xtask/Cargo.toml {{version}}",
+]
+bump_profiles.ci.post_bump_hooks = [
+    "git push",
+    "git push origin {{package}}-v{{version}}",
+    "gh workflow run release.yml -f tag={{package}}-v{{version}}",
+    "gh workflow run crate-release.yml -f tag={{package}}-v{{version}}",
+    "gh workflow run wasm-release.yml -f tag={{package}}-v{{version}}",
+    "gh workflow run playground-deploy.yml",
+]
 
-[monorepo.packages.mmdflux-wasm]
-path = "crates/mmdflux-wasm"
-public_api = false
-
-[monorepo.packages.xtask]
-path = "xtask"
-public_api = false
-
-[monorepo.packages.mmds-core]
+[packages.mmds-core]
 path = "packages/mmds-core"
 public_api = true
 pre_bump_hooks = [
     "npm version {{version}} --no-git-tag-version",
 ]
+bump_profiles.ci.pre_bump_hooks = [
+    "npm version {{version}} --no-git-tag-version",
+]
+bump_profiles.ci.post_bump_hooks = [
+    "git push",
+    "git push origin {{package}}-v{{version}}",
+    "gh workflow run packages-release.yml -f tag={{package}}-v{{version}}",
+]
 bump_order = 1
 
-[monorepo.packages.mmds-excalidraw]
+[packages.mmds-excalidraw]
 path = "packages/mmds-excalidraw"
 public_api = true
 pre_bump_hooks = [
+    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
+    "npm install --package-lock-only",
     "npm version {{version}} --no-git-tag-version",
+]
+bump_profiles.ci.pre_bump_hooks = [
+    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
+    "npm install --package-lock-only",
+    "npm version {{version}} --no-git-tag-version",
+]
+bump_profiles.ci.post_bump_hooks = [
+    "git push",
+    "git push origin {{package}}-v{{version}}",
+    "gh workflow run packages-release.yml -f tag={{package}}-v{{version}}",
 ]
 bump_order = 2
 
-[monorepo.packages.mmds-tldraw]
+[packages.mmds-tldraw]
 path = "packages/mmds-tldraw"
 public_api = true
 pre_bump_hooks = [
+    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
+    "npm install --package-lock-only",
     "npm version {{version}} --no-git-tag-version",
+]
+bump_profiles.ci.pre_bump_hooks = [
+    "npm pkg set \"dependencies.@mmds/core=^$(node -p \"require('../mmds-core/package.json').version\")\"",
+    "npm install --package-lock-only",
+    "npm version {{version}} --no-git-tag-version",
+]
+bump_profiles.ci.post_bump_hooks = [
+    "git push",
+    "git push origin {{package}}-v{{version}}",
+    "gh workflow run packages-release.yml -f tag={{package}}-v{{version}}",
 ]
 bump_order = 2

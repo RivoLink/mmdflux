@@ -45,7 +45,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cocogitto
-        run: cargo binstall --no-confirm cocogitto
+        run: cargo binstall --no-confirm cocogitto@6.5.0
 
       - name: Generate release plan
         env:
@@ -202,7 +202,7 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install tools
-        run: cargo binstall --no-confirm cocogitto cargo-edit
+        run: cargo binstall --no-confirm cocogitto@6.5.0 cargo-edit
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -224,107 +224,19 @@ jobs:
           PLAN_FILE="${RUNNER_TEMP}/release-plan.md"
           out() { tee -a "$PLAN_FILE" >> "$GITHUB_STEP_SUMMARY"; }
 
-          # Package definitions: name -> tag_prefix and release workflows
-          declare -A TAG_PREFIXES=(
-            [mmdflux]="mmdflux-v"
-            [mmds-core]="mmds-core-v"
-            [mmds-excalidraw]="mmds-excalidraw-v"
-            [mmds-tldraw]="mmds-tldraw-v"
-          )
-          declare -A RELEASE_WORKFLOWS=(
-            [mmdflux]="release.yml crate-release.yml wasm-release.yml playground-deploy.yml"
-            [mmds-core]="packages-release.yml"
-            [mmds-excalidraw]="packages-release.yml"
-            [mmds-tldraw]="packages-release.yml"
-          )
-
-          # Determine which packages to process
+          # The CI bump profile (defined in cog.toml) skips lint/test and
+          # handles git push + workflow dispatch via per-package post_bump_hooks.
           if [ -n "${INPUT_PACKAGE}" ]; then
-            PACKAGES="${INPUT_PACKAGE}"
+            cog bump --package "${INPUT_PACKAGE}" --auto --hook-profile ci
           else
-            PACKAGES="mmdflux mmds-core mmds-excalidraw mmds-tldraw"
+            cog bump --auto --hook-profile ci
           fi
 
-          # Patch cog.toml: strip lint/test hooks (CI already validated)
-          # and push hooks (we push and dispatch workflows ourselves).
-          sed -i '/"just lint",/d' cog.toml
-          sed -i '/"just test",/d' cog.toml
-          sed -i '/"git push",/d' cog.toml
-          sed -i '/"git push origin {{package}}-v{{version}}",/d' cog.toml
-
-          # Hide the patched file from git so cog bump won't commit it
-          git update-index --assume-unchanged cog.toml
-
-          released_tags=()
-
-          for pkg in $PACKAGES; do
-            tag_prefix="${TAG_PREFIXES[$pkg]}"
-
-            dry_output=$(cog bump --package "$pkg" --auto --dry-run 2>&1 || true)
-
-            if echo "$dry_output" | grep -q "No conventional commits"; then
-              echo "::notice::Skipping ${pkg}: no unreleased changes"
-              continue
-            fi
-
-            echo "Bumping ${pkg}..."
-            cog bump --package "$pkg" --auto --skip-untracked
-
-            new_tag=$(git describe --tags --match "${tag_prefix}*" --abbrev=0)
-            released_tags+=("${pkg}|${new_tag}")
-            echo "::notice::Created tag ${new_tag}"
-          done
-
-          if [ ${#released_tags[@]} -eq 0 ]; then
-            echo "::warning::No packages had unreleased changes."
-            echo "No packages to release." | out
-            exit 0
-          fi
-
-          # Push commits and tags
-          git push
-          for entry in "${released_tags[@]}"; do
-            tag="${entry##*|}"
-            git push origin "$tag"
-          done
-
-          # Dispatch release workflows
-          # (GITHUB_TOKEN tag pushes don't trigger workflows, so we dispatch explicitly)
-          for entry in "${released_tags[@]}"; do
-            pkg="${entry%%|*}"
-            tag="${entry##*|}"
-
-            for wf in ${RELEASE_WORKFLOWS[$pkg]}; do
-              echo "Dispatching ${wf} for ${tag}..."
-              if [ "$wf" = "playground-deploy.yml" ]; then
-                gh workflow run "$wf" || echo "::warning::Failed to dispatch ${wf}"
-              else
-                gh workflow run "$wf" -f "tag=${tag}" || echo "::warning::Failed to dispatch ${wf}"
-              fi
-            done
-          done
-
-          # --- Summary ---
           {
             echo "# Release Complete"
             echo ""
-            echo "## Released"
-            echo ""
-            for entry in "${released_tags[@]}"; do
-              pkg="${entry%%|*}"
-              tag="${entry##*|}"
-              echo "- **${pkg}**: \`${tag}\`"
-            done
-            echo ""
-            echo "## Dispatched Workflows"
-            echo ""
-            for entry in "${released_tags[@]}"; do
-              pkg="${entry%%|*}"
-              tag="${entry##*|}"
-              for wf in ${RELEASE_WORKFLOWS[$pkg]}; do
-                echo "- \`${wf}\` (\`${tag}\`)"
-              done
-            done
+            echo "Release executed via \`cog bump --auto --hook-profile ci\`."
+            echo "See workflow logs for details on which packages were bumped and which workflows were dispatched."
           } | out
 
       - name: Upload release report

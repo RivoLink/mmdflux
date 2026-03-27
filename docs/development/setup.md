@@ -9,7 +9,7 @@ Install the following tools before working on mmdflux:
 | [Rust](https://rustup.rs/) (stable + nightly) | Build, test, format | `rustup install stable nightly` |
 | [just](https://github.com/casey/just) | Task runner | `cargo install just` or `brew install just` |
 | [cargo-nextest](https://nexte.st/) | Parallel test runner | `cargo install cargo-nextest` |
-| [cocogitto](https://docs.cocogitto.io/) | Conventional Commits enforcement | `cargo install cocogitto` or `brew install cocogitto` |
+| [cocogitto](https://docs.cocogitto.io/) 6.5.0 | Conventional Commits enforcement | `cargo install cocogitto@6.5.0` |
 
 Optional (for specific workflows):
 

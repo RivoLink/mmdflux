@@ -6,7 +6,7 @@ All releases are managed through [cocogitto](https://docs.cocogitto.io/) (`cog b
 
 The following tools must be installed locally:
 
-- [cocogitto](https://docs.cocogitto.io/) (`cog`) — version management, changelogs, and tagging
+- [cocogitto](https://docs.cocogitto.io/) 6.5.0 (`cog`) — version management, changelogs, and tagging. Pin to 6.5.0; version 7.0 has a [bump_order bug](https://github.com/kevinswiber/mmdflux/pull/86) that ignores package ordering.
 - [cargo-edit](https://github.com/killercup/cargo-edit) — provides `cargo set-version`, used by pre-bump hooks
 - [just](https://just.systems/) — task runner for lint/test hooks
 - [gh](https://cli.github.com/) — GitHub CLI for checking CI status and downloading release assets
@@ -103,9 +103,14 @@ This will:
 - Update version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `xtask/Cargo.toml` via `cargo set-version`
 - Generate the changelog in `CHANGELOG.md`
 - Commit and tag (`mmdflux-v{version}`)
-- **Automatically push** the commit and tag to origin (post-bump hooks) — no manual push needed
 
-5. Confirm the four release workflows complete:
+5. Push the commit and tag:
+
+```bash
+git push && git push origin mmdflux-v{version}
+```
+
+6. Confirm the four release workflows complete:
 
 ```bash
 gh run list --limit 8
@@ -118,7 +123,7 @@ gh run watch
 - **WASM Release** — publishes `@mmds/wasm` to npm
 - **Playground Deploy** — deploys web playground to Cloudflare Pages
 
-6. The Homebrew formula is updated automatically by the Release workflow (see below).
+7. The Homebrew formula is updated automatically by the Release workflow (see below).
 
 ## npm Adapter Packages
 
@@ -138,10 +143,16 @@ cog bump --package mmds-tldraw --patch
 
 This will:
 
-1. Run `npm version` to update `package.json` (pre-bump hook)
-2. Generate a package-specific changelog in the package directory
-3. Commit and tag (e.g., `mmds-core-v0.2.0`)
-4. **Automatically push** the commit and tag to origin (post-bump hooks)
+1. Sync `@mmds/core` dependency version and lockfiles (adapter packages only, pre-bump hook)
+2. Run `npm version` to update `package.json` (pre-bump hook)
+3. Generate a package-specific changelog in the package directory
+4. Commit and tag (e.g., `mmds-core-v0.2.0`)
+
+Then push manually:
+
+```bash
+git push && git push origin {tag}
+```
 
 The tag push triggers the **Packages Release** workflow, which builds and publishes the package to npm.
 
