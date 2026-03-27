@@ -2,6 +2,9 @@
 version = 1
 name = "mmdflux"
 
+[setup]
+script = ""
+
 [[actions]]
 name = "fmt"
 icon = "tool"
