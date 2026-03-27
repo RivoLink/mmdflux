@@ -91,7 +91,10 @@ package_template = "remote"
 remote = "github.com"
 repository = "mmdflux"
 owner = "kevinswiber"
-authors = []
+
+[[changelog.authors]]
+signature = "Kevin Swiber"
+username = "kevinswiber"
 
 # --- Monorepo packages ---
 # Only public packages are listed. Internal crates (mmdflux-wasm, xtask) are
