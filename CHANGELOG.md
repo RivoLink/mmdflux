@@ -1,27 +1,27 @@
 # Changelog
 
 - - -
-## mmdflux-v2.0.2 - 2026-03-26
+## [mmdflux-v2.0.2](https://github.com/kevinswiber/mmdflux/compare/mmdflux-v2.0.1..mmdflux-v2.0.2) - 2026-03-26
 #### Bug Fixes
-- render class diagram endpoint cardinality labels - (430eac9) - Kevin Swiber
-- anchor lollipop labels to markers and use hollow circle symbol - (d22d688) - Kevin Swiber
-- render class diagram display labels instead of internal identifiers - (d002c6b) - Kevin Swiber
-- widen SVG fan-in entry point spread on angular targets - (9fabc70) - Kevin Swiber
-- close stacked-document shape bottom border with corner character - (ed5e468) - Kevin Swiber
-- layout nested mixed-direction override subgraphs with proper spacing - (97a1f0e) - Kevin Swiber
-- center multi-line node labels within box - (aa43df9) - Kevin Swiber
-- separate LR criss-cross draw paths at the grid derivation level - (97730e9) - Kevin Swiber
-- separate overlapping parallel vertical segments and cap left/right face extension - (332eb33) - Kevin Swiber
-- simplify terminal dip patterns to prevent shared edge segments - (af3e17d) - Kevin Swiber
-- prevent backward corridor detour for forward edges with face-rejected draw paths - (8f10d54) - Kevin Swiber
-- spread dense fan-in arrowheads beyond narrow node faces - (d232cdb) - Kevin Swiber
-- ignore short perpendicular draw-path terminal steps for face inference - (ed97dd3) - Kevin Swiber
-- connect terminal segments to arrows via L-shaped diversion - (3aa0d79) - Kevin Swiber
-- derive entry direction from target face instead of segment geometry - (e379fa2) - Kevin Swiber
-- preserve edge lanes while clearing border collisions - (c344d74) - Kevin Swiber
+- render class diagram endpoint cardinality labels - ([430eac9](https://github.com/kevinswiber/mmdflux/commit/430eac96e7f8b3af714abff75ac4fe5e13ea4e51)) - Kevin Swiber
+- anchor lollipop labels to markers and use hollow circle symbol - ([d22d688](https://github.com/kevinswiber/mmdflux/commit/d22d688003dacc27c0aa301a34c11b169f2cb812)) - Kevin Swiber
+- render class diagram display labels instead of internal identifiers - ([d002c6b](https://github.com/kevinswiber/mmdflux/commit/d002c6bb38782c8ccb0b521b0c2be0d4321e9186)) - Kevin Swiber
+- widen SVG fan-in entry point spread on angular targets - ([9fabc70](https://github.com/kevinswiber/mmdflux/commit/9fabc70698bb476f08f2e862f535e27b76b52c04)) - Kevin Swiber
+- close stacked-document shape bottom border with corner character - ([ed5e468](https://github.com/kevinswiber/mmdflux/commit/ed5e468a0ead906cd7b1920836419c6c16574dd9)) - Kevin Swiber
+- layout nested mixed-direction override subgraphs with proper spacing - ([97a1f0e](https://github.com/kevinswiber/mmdflux/commit/97a1f0e78f046f81b7facd7d97fd0fc2f5cf626d)) - Kevin Swiber
+- center multi-line node labels within box - ([aa43df9](https://github.com/kevinswiber/mmdflux/commit/aa43df9cc90e98de0cc7fd3a5b9c3354d022b350)) - Kevin Swiber
+- separate LR criss-cross draw paths at the grid derivation level - ([97730e9](https://github.com/kevinswiber/mmdflux/commit/97730e9f812bb939ae2660f272dbe5930e53d521)) - Kevin Swiber
+- separate overlapping parallel vertical segments and cap left/right face extension - ([332eb33](https://github.com/kevinswiber/mmdflux/commit/332eb330e399f9e6bf0cde4e46de8d84bcc73b95)) - Kevin Swiber
+- simplify terminal dip patterns to prevent shared edge segments - ([af3e17d](https://github.com/kevinswiber/mmdflux/commit/af3e17d57652f4de4676f3f259f8964da223c954)) - Kevin Swiber
+- prevent backward corridor detour for forward edges with face-rejected draw paths - ([8f10d54](https://github.com/kevinswiber/mmdflux/commit/8f10d54761aa9ce68ee757e41754c94b289e322f)) - Kevin Swiber
+- spread dense fan-in arrowheads beyond narrow node faces - ([d232cdb](https://github.com/kevinswiber/mmdflux/commit/d232cdb9fa5080a120d2539b25b1ccce26697bf5)) - Kevin Swiber
+- ignore short perpendicular draw-path terminal steps for face inference - ([ed97dd3](https://github.com/kevinswiber/mmdflux/commit/ed97dd38f850806b6f73970a9b5ed1215b16bb06)) - Kevin Swiber
+- connect terminal segments to arrows via L-shaped diversion - ([3aa0d79](https://github.com/kevinswiber/mmdflux/commit/3aa0d798519fa25c0463ac99dfb40225a20d82f8)) - Kevin Swiber
+- derive entry direction from target face instead of segment geometry - ([e379fa2](https://github.com/kevinswiber/mmdflux/commit/e379fa2b7353d774564f2d0f04e692401b900dbf)) - Kevin Swiber
+- preserve edge lanes while clearing border collisions - ([c344d74](https://github.com/kevinswiber/mmdflux/commit/c344d749189b874ba13edacb3bcf1d02f11893e6)) - Kevin Swiber
 #### Documentation
-- configure cocogitto changelog generation and update release process - (25d6cc2) - Kevin Swiber
-- add class and sequence snapshot regeneration commands to AGENTS.md - (d443d44) - Kevin Swiber
+- configure cocogitto changelog generation and update release process - ([25d6cc2](https://github.com/kevinswiber/mmdflux/commit/25d6cc2284b0f41842b6f4ac4006c2673336773e)) - Kevin Swiber
+- add class and sequence snapshot regeneration commands to AGENTS.md - ([d443d44](https://github.com/kevinswiber/mmdflux/commit/d443d444908a11f624ae3064813bc07d9a0c6595)) - Kevin Swiber
 
 - - -
 
