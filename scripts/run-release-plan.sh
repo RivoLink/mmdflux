@@ -9,8 +9,8 @@
 #   ./scripts/run-release-plan.sh release mmdflux            # release a specific package
 #   ./scripts/run-release-plan.sh plan -- glow               # custom viewer
 #   ./scripts/run-release-plan.sh plan -- bat --paging=always # custom bat flags
-#   ./scripts/run-release-plan.sh plan -- open                # open in default app
 #   RELEASE_PLAN_DIR=. ./scripts/run-release-plan.sh          # keep release-plan.md in cwd
+#   RELEASE_PLAN_DIR=. ./scripts/run-release-plan.sh -- open  # open in default app
 #
 set -euo pipefail
 
