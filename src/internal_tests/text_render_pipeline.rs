@@ -464,8 +464,8 @@ mod edge_rendering_regression {
     };
     use crate::engines::graph::flux::FluxLayeredEngine;
     use crate::graph::grid::{
-        GridLayout, GridLayoutConfig, geometry_to_grid_layout_with_routed, route_edge,
-        route_edge_with_probe,
+        AttachDirection, GridLayout, GridLayoutConfig, geometry_to_grid_layout_with_routed,
+        route_all_edges, route_edge, route_edge_with_probe,
     };
     use crate::graph::measure::default_proportional_text_metrics;
     use crate::graph::routing::{EdgeRouting, route_graph_geometry};
@@ -1396,6 +1396,56 @@ mod edge_rendering_regression {
         assert_eq!(
             combined_forward_arrowheads, individual_forward_arrowheads,
             "five_fan_out_lr combined text edge painting should preserve every forward arrowhead from the routed fan-out edges after the text route probe keeps them forward.\nroute_families={route_families:?}\ncombined_output=\n{combined_output}"
+        );
+    }
+
+    /// When a node's left face can't fit all inbound forward edges (more edges
+    /// than rows), overflow edges should be reassigned to adjacent faces so
+    /// every arrival has a distinct endpoint.
+    #[test]
+    fn lr_left_face_saturation_overflows_to_adjacent_faces() {
+        let config = GridLayoutConfig::default();
+        let diagram = flowchart_fixture_diagram("architecture_graph_lr_terminal_contracts.mmd");
+        let (_, layout) = compute_layout_with_mode(&diagram, &config, MeasurementMode::Grid);
+
+        let routed = route_all_edges(&diagram.edges, &layout, Direction::LeftRight);
+
+        let graph1_arrivals: Vec<_> = routed
+            .iter()
+            .filter(|r| r.edge.to == "graph1" && !r.is_backward)
+            .collect();
+
+        // graph1 has height=3 (left face fits 3 distinct arrows).
+        // With 6 forward inbound edges, at most 3 should be on the left face.
+        let left_count = graph1_arrivals
+            .iter()
+            .filter(|r| r.entry_direction == AttachDirection::Left)
+            .count();
+
+        assert!(
+            left_count <= 3,
+            "graph1 left face (3 rows) should hold at most 3 forward edges, got {left_count}\narrivals={:#?}",
+            graph1_arrivals
+                .iter()
+                .map(|r| (&r.edge.from, r.end, r.entry_direction))
+                .collect::<Vec<_>>()
+        );
+
+        // All forward arrivals must have distinct endpoints.
+        let mut endpoints: Vec<(usize, usize)> =
+            graph1_arrivals.iter().map(|r| (r.end.x, r.end.y)).collect();
+        let total = endpoints.len();
+        endpoints.sort();
+        endpoints.dedup();
+
+        assert_eq!(
+            endpoints.len(),
+            total,
+            "all forward arrivals to graph1 should have distinct endpoints\narrivals={:#?}",
+            graph1_arrivals
+                .iter()
+                .map(|r| (&r.edge.from, r.end, r.entry_direction))
+                .collect::<Vec<_>>()
         );
     }
 }

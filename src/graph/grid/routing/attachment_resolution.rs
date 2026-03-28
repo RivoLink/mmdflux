@@ -12,6 +12,9 @@ use super::super::intersect::{
 };
 use super::super::layout::{GridLayout, NodeBounds};
 use super::types::{AttachmentOverride, EdgeEndpoints, Point};
+use crate::graph::attachment::{
+    AttachmentPlan, OverflowSide, fan_in_overflow_face_for_slot, fan_in_primary_target_face,
+};
 use crate::graph::{Direction, Edge, Stroke};
 
 /// Compute pre-assigned attachment points for edges that share a node face.
@@ -32,6 +35,10 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
     direction: Direction,
 ) -> HashMap<usize, AttachmentOverride> {
     let shared = shared_plan_attachments(edges, layout, direction);
+
+    // Detect face saturation and compute overflow corrections.
+    let overflow = compute_grid_face_overflow(edges, layout, direction, &shared);
+
     let mut overrides: HashMap<usize, AttachmentOverride> = HashMap::new();
 
     for edge in edges {
@@ -49,6 +56,7 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
         let entry = overrides.entry(edge.index).or_insert(AttachmentOverride {
             source: None,
             target: None,
+            target_face: None,
             source_first_vertical: false,
         });
 
@@ -65,7 +73,24 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
             ));
         }
 
-        if let Some(target_attachment) = attachments.target
+        // Apply overflow correction if present, otherwise use shared plan.
+        if let Some(&(face, fraction, group_size)) = overflow.get(&edge.index) {
+            if let Some(tgt_bounds) = bounds_for_node_id(layout, tgt_id) {
+                let node_face = face.to_node_face();
+                entry.target = Some(point_on_face_grid(
+                    &tgt_bounds,
+                    node_face,
+                    fraction,
+                    group_size,
+                ));
+                // Tag overflow edges (non-primary face) so routing honours the
+                // face instead of inferring from approach direction.
+                let primary = fan_in_primary_target_face(direction);
+                if face != primary {
+                    entry.target_face = Some(node_face);
+                }
+            }
+        } else if let Some(target_attachment) = attachments.target
             && shared.group_size(tgt_id, target_attachment.face) > 1
             && let Some(tgt_bounds) = bounds_for_node_id(layout, tgt_id)
         {
@@ -177,6 +202,139 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
 
     overrides.retain(|_, ov| ov.source.is_some() || ov.target.is_some());
     overrides
+}
+
+/// Grid face capacity: how many distinct attachment positions a face can hold.
+///
+/// For Left/Right faces this is the node height (rows); for Top/Bottom it is
+/// the node width (columns).
+fn grid_face_capacity(bounds: &NodeBounds, face: SharedFace) -> usize {
+    match face {
+        SharedFace::Left | SharedFace::Right => bounds.height,
+        SharedFace::Top | SharedFace::Bottom => bounds.width,
+    }
+}
+
+/// Detect target face groups that exceed grid capacity and compute overflow
+/// corrections.  Returns a map from edge index to (new_face, new_fraction,
+/// new_group_size) for every edge in a saturated group — both the edges that
+/// stay on the primary face (with corrected fractions) and the ones that
+/// overflow to an adjacent face.
+fn compute_grid_face_overflow(
+    edges: &[Edge],
+    layout: &GridLayout,
+    direction: Direction,
+    shared: &AttachmentPlan,
+) -> HashMap<usize, (SharedFace, f64, usize)> {
+    let primary_face = fan_in_primary_target_face(direction);
+
+    // Collect (edge_index, source_cross_axis) per (target_node, target_face).
+    let mut groups: HashMap<(String, SharedFace), Vec<(usize, f64)>> = HashMap::new();
+    for edge in edges {
+        if edge.from == edge.to || edge.stroke == Stroke::Invisible {
+            continue;
+        }
+        let tgt_id = edge.to_subgraph.as_deref().unwrap_or(edge.to.as_str());
+        let Some(attachments) = shared.edge(edge.index) else {
+            continue;
+        };
+        let Some(target) = attachments.target else {
+            continue;
+        };
+        // Only check the primary inbound face for overflow.
+        if target.face != primary_face {
+            continue;
+        }
+        let Some((src_bounds, _)) = resolve_edge_bounds(layout, edge) else {
+            continue;
+        };
+        // Cross-axis: for LR primary face (Left) the cross axis is y.
+        let source_cross = match direction {
+            Direction::LeftRight | Direction::RightLeft => src_bounds.center_y() as f64,
+            Direction::TopDown | Direction::BottomTop => src_bounds.center_x() as f64,
+        };
+        groups
+            .entry((tgt_id.to_string(), target.face))
+            .or_default()
+            .push((edge.index, source_cross));
+    }
+
+    let mut corrections: HashMap<usize, (SharedFace, f64, usize)> = HashMap::new();
+
+    for ((tgt_id, face), mut group) in groups {
+        let Some(tgt_bounds) = bounds_for_node_id(layout, &tgt_id) else {
+            continue;
+        };
+        let capacity = grid_face_capacity(&tgt_bounds, face);
+        // Only overflow when the face is fully saturated — every position
+        // would have at least one overlap.  Mild overlap (e.g. 5 edges on
+        // a 3-row face) is preferable to routing detours.
+        if group.len() < 2 * capacity {
+            continue;
+        }
+
+        // Sort by cross-axis so spatially adjacent sources stay together.
+        group.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+        let primary_count = capacity;
+        let target_cross = match direction {
+            Direction::LeftRight | Direction::RightLeft => tgt_bounds.center_y() as f64,
+            Direction::TopDown | Direction::BottomTop => tgt_bounds.center_x() as f64,
+        };
+
+        // Edges that stay on the primary face — assign new fractions.
+        for (idx, &(edge_index, _)) in group[..primary_count].iter().enumerate() {
+            let fraction = if primary_count <= 1 {
+                0.5
+            } else {
+                idx as f64 / (primary_count - 1) as f64
+            };
+            corrections.insert(edge_index, (face, fraction, primary_count));
+        }
+
+        // Overflow edges — assign to Top or Bottom (for LR) based on source
+        // position relative to the target center.
+        let mut top_edges: Vec<usize> = Vec::new();
+        let mut bottom_edges: Vec<usize> = Vec::new();
+        for &(edge_index, source_cross) in &group[primary_count..] {
+            if source_cross < target_cross {
+                top_edges.push(edge_index);
+            } else {
+                bottom_edges.push(edge_index);
+            }
+        }
+
+        // If all overflow went to one side, split evenly.
+        if top_edges.is_empty() && !bottom_edges.is_empty() && bottom_edges.len() > 1 {
+            let half = bottom_edges.len() / 2;
+            top_edges = bottom_edges.drain(..half).collect();
+        } else if bottom_edges.is_empty() && !top_edges.is_empty() && top_edges.len() > 1 {
+            let half = top_edges.len() / 2;
+            bottom_edges = top_edges.split_off(top_edges.len() - half);
+        }
+
+        let top_face = fan_in_overflow_face_for_slot(direction, OverflowSide::LeftOrTop);
+        let bottom_face = fan_in_overflow_face_for_slot(direction, OverflowSide::RightOrBottom);
+
+        for (idx, &edge_index) in top_edges.iter().enumerate() {
+            let fraction = if top_edges.len() <= 1 {
+                0.5
+            } else {
+                idx as f64 / (top_edges.len() - 1) as f64
+            };
+            corrections.insert(edge_index, (top_face, fraction, top_edges.len()));
+        }
+        for (idx, &edge_index) in bottom_edges.iter().enumerate() {
+            let fraction = if bottom_edges.len() <= 1 {
+                0.5
+            } else {
+                idx as f64 / (bottom_edges.len() - 1) as f64
+            };
+            corrections.insert(edge_index, (bottom_face, fraction, bottom_edges.len()));
+        }
+    }
+
+    corrections
 }
 
 fn point_on_face_grid(

@@ -38,6 +38,7 @@ use super::backward::{
 use super::bounds::{
     NodeContainingSubgraphMap, build_node_containing_subgraph_map, resolve_edge_bounds,
 };
+use super::intersect::NodeFace;
 use crate::graph::{Direction, Edge, Shape, Stroke};
 
 type Layout = GridLayout;
@@ -88,17 +89,20 @@ pub(crate) fn route_edge_with_probe(
         diagram_direction,
         src_attach_override,
         tgt_attach_override,
+        None,
         src_first_vertical,
         None,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn route_edge_with_probe_cached<'a>(
     edge: &Edge,
     layout: &Layout,
     diagram_direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
+    tgt_face_override: Option<NodeFace>,
     src_first_vertical: bool,
     node_containing_subgraph: Option<&NodeContainingSubgraphMap<'a>>,
 ) -> Option<RouteEdgeResult> {
@@ -130,6 +134,42 @@ fn route_edge_with_probe_cached<'a>(
         to_bounds,
         to_shape,
     };
+
+    // For overflow edges with an explicit target face override (e.g., Bottom
+    // instead of Left for a saturated LR face), route with waypoints directly.
+    // This produces a short "turn the corner" path instead of the long corridor
+    // backward detour that routes below all intermediate nodes.
+    if tgt_face_override.is_some() {
+        let wps = layout
+            .edge_waypoints
+            .get(&edge.index)
+            .map(|w| w.to_vec())
+            .unwrap_or_default();
+        return route_edge_with_waypoints(
+            edge,
+            &endpoints,
+            &wps,
+            diagram_direction,
+            RoutingOverrides {
+                src_attach: src_attach_override,
+                tgt_attach: tgt_attach_override,
+                src_face: None,
+                tgt_face: tgt_face_override,
+                src_first_vertical,
+            },
+        )
+        .map(|routed| {
+            route_result(
+                routed,
+                TextPathFamily::Direct,
+                None,
+                layout,
+                edge,
+                node_containing_subgraph,
+            )
+        });
+    }
+
     let draw_path_attempt = try_shared_draw_path(
         edge,
         layout,
@@ -139,7 +179,7 @@ fn route_edge_with_probe_cached<'a>(
             src_attach: src_attach_override,
             tgt_attach: tgt_attach_override,
             src_face: None,
-            tgt_face: None,
+            tgt_face: tgt_face_override,
             src_first_vertical,
         },
         node_containing_subgraph,
@@ -327,10 +367,17 @@ pub fn route_all_edges(
             if edge.stroke == Stroke::Invisible {
                 return None;
             }
-            let (src_override, tgt_override, src_first_vertical) = plan
+            let (src_override, tgt_override, tgt_face_override, src_first_vertical) = plan
                 .get(&edge.index)
-                .map(|ov| (ov.source, ov.target, ov.source_first_vertical))
-                .unwrap_or((None, None, false));
+                .map(|ov| {
+                    (
+                        ov.source,
+                        ov.target,
+                        ov.target_face,
+                        ov.source_first_vertical,
+                    )
+                })
+                .unwrap_or((None, None, None, false));
             let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, diagram_direction);
             route_edge_with_probe_cached(
                 edge,
@@ -338,6 +385,7 @@ pub fn route_all_edges(
                 edge_dir,
                 src_override,
                 tgt_override,
+                tgt_face_override,
                 src_first_vertical,
                 node_containing_subgraph.as_ref(),
             )

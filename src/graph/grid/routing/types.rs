@@ -181,5 +181,10 @@ pub(super) fn build_routed_edge(
 pub struct AttachmentOverride {
     pub source: Option<(usize, usize)>,
     pub target: Option<(usize, usize)>,
+    /// Explicit target face when the attachment plan overflows an edge to a
+    /// non-primary face (e.g., Bottom instead of Left for LR).  When `Some`,
+    /// routing should honour this face rather than inferring one from the
+    /// approach direction.
+    pub target_face: Option<NodeFace>,
     pub source_first_vertical: bool,
 }
