@@ -181,6 +181,8 @@ pub fn route_edges_orthogonal(
         .collect();
 
     overlap::resolve_forward_td_bt_criss_cross_overlaps(diagram, geometry, &mut routed);
+    overlap::resolve_forward_lr_rl_criss_cross_overlaps(diagram, geometry, &mut routed);
+    overlap::resolve_forward_lr_rl_parallel_vertical_overlaps(diagram, geometry, &mut routed);
     routed
 }
 

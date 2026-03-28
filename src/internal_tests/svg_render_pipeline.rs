@@ -42,6 +42,29 @@ fn render_svg(diagram: &crate::graph::Graph, config: &RenderConfig) -> String {
     }
 }
 
+fn solve_visual_geometry(
+    diagram: &crate::graph::Graph,
+    config: &RenderConfig,
+) -> crate::graph::geometry::GraphGeometry {
+    let engine = FluxLayeredEngine::text();
+    let request = GraphSolveRequest::new(
+        MeasurementMode::Proportional(default_proportional_text_metrics()),
+        GraphGeometryContract::Visual,
+        config.geometry_level,
+        config
+            .routing_style
+            .or_else(|| config.edge_preset.map(|preset| preset.expand().0)),
+    );
+    engine
+        .solve(
+            diagram,
+            &EngineConfig::Layered(config.layout.clone().into()),
+            &request,
+        )
+        .expect("SVG render should succeed")
+        .geometry
+}
+
 fn default_proportional_mode() -> MeasurementMode {
     MeasurementMode::Proportional(default_proportional_text_metrics())
 }
@@ -4831,6 +4854,142 @@ fn svg_lr_architecture_repro_no_primary_axis_reversal() {
     assert!(
         !has_x_reversal,
         "registry→format should not have a primary-axis (x) reversal; points={points:?}"
+    );
+}
+
+#[test]
+fn svg_lr_architecture_render_graph_step_preserves_source_support_elbow() {
+    let diagram = load_flowchart_fixture_diagram("architecture_graph_lr_intrusion.mmd");
+    let edge_idx = edge_index(&diagram, "render", "graph");
+    let config = RenderConfig {
+        routing_style: Some(RoutingStyle::Orthogonal),
+        curve: Some(Curve::Linear(CornerStyle::Sharp)),
+        path_simplification: PathSimplification::None,
+        ..Default::default()
+    };
+    let visual = solve_visual_geometry(&diagram, &config);
+    let visual_path = visual
+        .edges
+        .iter()
+        .find(|edge| edge.index == edge_idx)
+        .and_then(|edge| edge.layout_path_hint.clone())
+        .unwrap_or_default();
+    assert!(
+        visual_path.len() >= 3,
+        "render→graph visual orthogonal hint should contain at least three points for its source-support elbow: visual_path={visual_path:?}"
+    );
+    assert!(
+        (visual_path[0].y - visual_path[1].y).abs() <= 0.5
+            && (visual_path[0].x - visual_path[1].x).abs() >= 3.5,
+        "render→graph visual orthogonal hint should leave render on a short horizontal support segment before turning upward: visual_path={visual_path:?}"
+    );
+    assert!(
+        (visual_path[1].x - visual_path[2].x).abs() <= 0.5,
+        "render→graph visual orthogonal hint should turn vertically immediately after its source-support elbow: visual_path={visual_path:?}"
+    );
+
+    let svg = render_svg(&diagram, &config);
+
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        points.len() >= 3,
+        "render→graph step SVG should contain at least three points for its source-support elbow: points={points:?}"
+    );
+    assert!(
+        (points[0].1 - points[1].1).abs() <= 0.5 && (points[0].0 - points[1].0).abs() >= 3.5,
+        "render→graph step SVG should leave render on a short horizontal support segment before turning upward: visual_path={visual_path:?}, points={points:?}"
+    );
+    assert!(
+        (points[1].0 - points[2].0).abs() <= 0.5,
+        "render→graph step SVG should turn vertically immediately after its source-support elbow: visual_path={visual_path:?}, points={points:?}"
+    );
+}
+
+#[test]
+fn svg_lr_architecture_payload_timeline_step_simplifies_source_staircase() {
+    let diagram = load_flowchart_fixture_diagram("architecture_graph_lr_intrusion.mmd");
+    let edge_idx = edge_index(&diagram, "payload", "timeline");
+    let svg = render_svg(
+        &diagram,
+        &RenderConfig {
+            routing_style: Some(RoutingStyle::Orthogonal),
+            curve: Some(Curve::Linear(CornerStyle::Sharp)),
+            path_simplification: PathSimplification::None,
+            ..Default::default()
+        },
+    );
+
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        points.len() >= 2,
+        "payload→timeline step SVG should contain at least two points: points={points:?}"
+    );
+    assert!(
+        (points[0].1 - points[1].1).abs() <= 0.5,
+        "payload→timeline step SVG should start on a single horizontal lane from payload: points={points:?}"
+    );
+    assert!(
+        points.len() >= 4,
+        "payload→timeline step SVG should contain an interior vertical column and a final horizontal approach: points={points:?}"
+    );
+    assert!(
+        points[1..points.len() - 1]
+            .windows(2)
+            .all(|segment| (segment[0].0 - segment[1].0).abs() <= 0.5),
+        "payload→timeline step SVG should use a single interior vertical column instead of a split source staircase: points={points:?}"
+    );
+    assert!(
+        (points[points.len() - 2].1 - points[points.len() - 1].1).abs() <= 0.5,
+        "payload→timeline step SVG should finish with a direct horizontal approach into timeline: points={points:?}"
+    );
+}
+
+#[test]
+fn svg_lr_architecture_payload_timeline_smooth_step_avoids_source_shelf() {
+    let diagram = load_flowchart_fixture_diagram("architecture_graph_lr_intrusion.mmd");
+    let edge_idx = edge_index(&diagram, "payload", "timeline");
+    let svg = render_svg(
+        &diagram,
+        &RenderConfig {
+            routing_style: Some(RoutingStyle::Orthogonal),
+            curve: Some(Curve::Linear(CornerStyle::Rounded)),
+            path_simplification: PathSimplification::None,
+            ..Default::default()
+        },
+    );
+
+    let d = edge_path_d_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        d.contains('Q'),
+        "payload→timeline smooth-step SVG should use rounded corner commands: d={d}"
+    );
+
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        points.len() >= 4,
+        "payload→timeline smooth-step SVG should expose a rounded interior column: points={points:?}, d={d}"
+    );
+    let start_y = points[0].1;
+    let end_y = points[points.len() - 1].1;
+    let interior_xs: Vec<f64> = points
+        .iter()
+        .skip(1)
+        .take(points.len().saturating_sub(2))
+        .filter(|(_, y)| *y > start_y + 1.0 && *y < end_y - 1.0)
+        .map(|(x, _)| *x)
+        .collect();
+    assert!(
+        !interior_xs.is_empty(),
+        "payload→timeline smooth-step SVG should contain interior rounded-column samples: points={points:?}, d={d}"
+    );
+    let min_x = interior_xs.iter().copied().fold(f64::INFINITY, f64::min);
+    let max_x = interior_xs
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        max_x - min_x <= 1.0,
+        "payload→timeline smooth-step SVG should keep one interior vertical column instead of a rounded source shelf: points={points:?}, d={d}"
     );
 }
 

@@ -53,7 +53,7 @@ pub(super) fn points_for_svg_path(
     match path_simplification {
         PathSimplification::None => points,
         PathSimplification::Lossless => {
-            let compacted = compact_visual_staircases(&points, 12.0);
+            let compacted = compact_visual_staircases(&points, 12.0, true);
             PathSimplification::Lossless
                 .simplify_with_coords(&compacted, |point| (point.x, point.y))
         }

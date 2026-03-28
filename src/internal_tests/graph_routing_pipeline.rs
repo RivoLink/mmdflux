@@ -422,6 +422,62 @@ fn has_coincident_vertical_overlap(path_a: &[FPoint], path_b: &[FPoint]) -> bool
     false
 }
 
+fn min_parallel_vertical_clearance(path_a: &[FPoint], path_b: &[FPoint]) -> Option<f64> {
+    const EPS: f64 = 0.5;
+    let mut best: Option<f64> = None;
+
+    for seg_a in path_a.windows(2) {
+        let a0 = seg_a[0];
+        let a1 = seg_a[1];
+        let a_is_vertical = (a0.x - a1.x).abs() <= EPS && (a0.y - a1.y).abs() > EPS;
+        if !a_is_vertical {
+            continue;
+        }
+        let a_min_y = a0.y.min(a1.y);
+        let a_max_y = a0.y.max(a1.y);
+
+        for seg_b in path_b.windows(2) {
+            let b0 = seg_b[0];
+            let b1 = seg_b[1];
+            let b_is_vertical = (b0.x - b1.x).abs() <= EPS && (b0.y - b1.y).abs() > EPS;
+            if !b_is_vertical {
+                continue;
+            }
+            let b_min_y = b0.y.min(b1.y);
+            let b_max_y = b0.y.max(b1.y);
+            let overlap = a_max_y.min(b_max_y) - a_min_y.max(b_min_y);
+            if overlap > EPS {
+                let clearance = (a0.x - b0.x).abs();
+                best = Some(best.map_or(clearance, |current| current.min(clearance)));
+            }
+        }
+    }
+
+    best
+}
+
+fn min_routed_vertical_clearance(edges: &[RoutedEdgeGeometry]) -> Option<(usize, usize, f64)> {
+    let mut best: Option<(usize, usize, f64)> = None;
+
+    for i in 0..edges.len() {
+        for j in (i + 1)..edges.len() {
+            if edges[i].from == edges[j].from || edges[i].to == edges[j].to {
+                continue;
+            }
+            let Some(clearance) = min_parallel_vertical_clearance(&edges[i].path, &edges[j].path)
+            else {
+                continue;
+            };
+            match best {
+                Some((_, _, best_clearance)) if best_clearance <= clearance => {}
+                _ => best = Some((i, j, clearance)),
+            }
+        }
+    }
+
+    best
+}
+
 fn td_bt_middle_horizontal_lane(path: &[FPoint]) -> Option<f64> {
     const EPS: f64 = 0.5;
     if path.len() != 4 {
@@ -3813,6 +3869,63 @@ fn five_fan_out_lr_primary_face_channels_are_staggered_without_overlap() {
     assert!(
         (b_lane - f_lane).abs() <= 0.5,
         "five_fan_out_lr mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
+fn architecture_graph_lr_intrusion_criss_cross_pair_keeps_distinct_horizontal_lanes() {
+    let (diagram, geom) = layout_fixture_svg("architecture_graph_lr_intrusion.mmd");
+    assert_eq!(geom.direction, crate::graph::Direction::LeftRight);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+
+    let render_to_graph = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "render" && edge.to == "graph")
+        .expect("architecture_graph_lr_intrusion should include render -> graph");
+    let payload_to_timeline = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "payload" && edge.to == "timeline")
+        .expect("architecture_graph_lr_intrusion should include payload -> timeline");
+
+    assert!(
+        !has_coincident_horizontal_overlap(&render_to_graph.path, &payload_to_timeline.path),
+        "architecture_graph_lr_intrusion should keep render->graph and payload->timeline on distinct horizontal lanes: render_graph={:?}, payload_timeline={:?}",
+        render_to_graph.path,
+        payload_to_timeline.path
+    );
+    assert!(
+        !path_has_primary_axis_reversal(&render_to_graph.path, geom.direction),
+        "architecture_graph_lr_intrusion render -> graph should remain monotonic on the LR primary axis after de-overlap rerouting: path={:?}",
+        render_to_graph.path
+    );
+    assert!(
+        !path_has_primary_axis_reversal(&payload_to_timeline.path, geom.direction),
+        "architecture_graph_lr_intrusion payload -> timeline should remain monotonic on the LR primary axis after de-overlap rerouting: path={:?}",
+        payload_to_timeline.path
+    );
+}
+
+#[test]
+fn architecture_graph_lr_intrusion_format_inbound_verticals_keep_visible_gap() {
+    let (diagram, geom) = layout_fixture_svg("architecture_graph_lr_intrusion.mmd");
+    assert_eq!(geom.direction, crate::graph::Direction::LeftRight);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+
+    let (edge_a_idx, edge_b_idx, clearance) = min_routed_vertical_clearance(&routed.edges)
+        .expect("architecture_graph_lr_intrusion should contain at least one parallel vertical-lane pair to compare");
+    let edge_a = &routed.edges[edge_a_idx];
+    let edge_b = &routed.edges[edge_b_idx];
+    assert!(
+        clearance >= 7.5,
+        "architecture_graph_lr_intrusion should keep a visible gap between the closest parallel vertical lanes: clearance={clearance}, edge_a={} -> {}, edge_b={} -> {}, path_a={:?}, path_b={:?}",
+        edge_a.from,
+        edge_a.to,
+        edge_b.from,
+        edge_b.to,
+        edge_a.path,
+        edge_b.path
     );
 }
 

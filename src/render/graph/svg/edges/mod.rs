@@ -245,12 +245,14 @@ pub(super) fn prepare_rendered_edge_paths(
             points = vec![projected_start, projected_end];
         }
 
-        let preserve_forward_orthogonal_topology =
-            matches!(edge_routing, EdgeRouting::OrthogonalRoute)
-                && !is_backward
-                && edge.from != edge.to
-                && preserve_orthogonal_topology
-                && points.len() > 4;
+        let preserve_forward_orthogonal_topology = matches!(
+            edge_routing,
+            EdgeRouting::OrthogonalRoute | EdgeRouting::EngineProvided
+        ) && !is_backward
+            && edge.from != edge.to
+            && preserve_orthogonal_topology
+            && points.len() >= 4
+            && points_are_axis_aligned(&points);
         let preserve_orthogonal_marker_contract =
             preserve_orthogonal_endpoint_contract || preserve_forward_orthogonal_topology;
 
@@ -319,18 +321,22 @@ pub(super) fn prepare_rendered_edge_paths(
         }
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on orthogonal routing paths.
-        if !is_rounded_corner
-            && !is_basis
+        if !is_basis
             && !preserve_orthogonal_marker_contract
             && !matches!(edge_routing, EdgeRouting::EngineProvided)
             && edge.from != edge.to
         {
-            let jog_tol = if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
-                30.0
-            } else {
-                12.0
-            };
-            points = collapse_tiny_straight_smoothing_jogs(&points, jog_tol);
+            if !is_rounded_corner {
+                let jog_tol = if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+                    30.0
+                } else {
+                    12.0
+                };
+                points = collapse_tiny_straight_smoothing_jogs(&points, jog_tol);
+            } else if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+                points = collapse_tiny_straight_smoothing_jogs(&points, 20.0);
+                points = compact_visual_staircases(&points, 20.0, false);
+            }
         }
         // For backward edges with orthogonal contract, use rounded-corner routing
         // for path topology (preserves endpoint contract), but keep the user's
@@ -510,7 +516,11 @@ fn segment_manhattan_len(start: Point, end: Point) -> f64 {
     (start.x - end.x).abs() + (start.y - end.y).abs()
 }
 
-fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
+fn compact_visual_staircases(
+    points: &[Point],
+    short_tol: f64,
+    preserve_terminal_approach: bool,
+) -> Vec<Point> {
     if points.len() < 4 {
         return points.to_vec();
     }
@@ -520,7 +530,7 @@ fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
     while i + 3 < compacted.len() {
         // Preserve start/end approach geometry so marker orientation keeps a
         // clear supporting segment into/out of the endpoint.
-        if i == 0 || i + 3 >= compacted.len() - 1 {
+        if preserve_terminal_approach && (i == 0 || i + 3 >= compacted.len() - 1) {
             i += 1;
             continue;
         }
