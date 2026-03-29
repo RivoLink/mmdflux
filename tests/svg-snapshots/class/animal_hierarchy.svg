@@ -50,9 +50,9 @@
       <text x="489.11" y="379.00" text-anchor="start" dominant-baseline="middle" fill="#333">+run()</text>
     </g>
     <g class="edgePaths">
-      <path d="M260.10,210.00 L260.10,212.11 C260.10,214.22 260.10,218.44 248.26,223.33 C236.42,228.22 212.74,233.78 200.90,239.33 C189.06,244.89 189.06,250.44 189.06,253.22 L189.06,256.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" />
+      <path d="M256.15,206.63 L256.15,212.40 Q256.15,217.40 251.15,217.40 L194.06,217.40 Q189.06,217.40 189.06,222.40 L189.06,256.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" />
       <path d="M336.20,210.00 L336.20,256.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" />
-      <path d="M412.30,210.00 L412.30,212.11 C412.30,214.22 412.30,218.44 423.93,223.33 C435.57,228.22 458.84,233.78 470.47,239.33 C482.11,244.89 482.11,250.44 482.11,253.22 L482.11,256.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" />
+      <path d="M416.25,206.64 L416.25,212.40 Q416.25,217.40 421.25,217.40 L477.11,217.40 Q482.11,217.40 482.11,222.40 L482.11,256.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

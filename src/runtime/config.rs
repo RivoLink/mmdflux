@@ -2,7 +2,7 @@
 
 use crate::engines::graph::{EngineAlgorithmId, EngineId};
 pub use crate::engines::graph::{LabelDummyStrategy, LayoutConfig, LayoutDirection, Ranker};
-use crate::format::{Curve, EdgePreset, OutputFormat, RoutingStyle, TextColorMode};
+use crate::format::{CornerStyle, Curve, EdgePreset, OutputFormat, RoutingStyle, TextColorMode};
 use crate::graph::GeometryLevel;
 use crate::render::graph::{SvgRenderOptions, TextRenderOptions};
 use crate::simplification::PathSimplification;
@@ -84,7 +84,10 @@ impl RenderConfig {
         let engine_id = self.layout_engine.map(|id| id.engine());
         let (def_routing, def_curve) = match engine_id {
             Some(EngineId::Mermaid) => (RoutingStyle::Polyline, Curve::Basis),
-            _ => (RoutingStyle::Orthogonal, Curve::Basis),
+            _ => (
+                RoutingStyle::Orthogonal,
+                Curve::Linear(CornerStyle::Rounded),
+            ),
         };
         let (preset_routing, preset_curve) = self
             .edge_preset
@@ -135,7 +138,7 @@ mod tests {
     fn default_config_uses_orthogonal_routing() {
         let options = RenderConfig::default().svg_render_options();
         assert_eq!(options.routing_style, RoutingStyle::Orthogonal);
-        assert_eq!(options.curve, Curve::Basis);
+        assert_eq!(options.curve, Curve::Linear(CornerStyle::Rounded));
     }
 
     #[test]

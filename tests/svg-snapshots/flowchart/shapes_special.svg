@@ -26,7 +26,7 @@
       <text x="127.96" y="23.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Note</text>
     </g>
     <g class="edgePaths">
-      <path d="M62.00,23.00 L64.78,23.00 C67.56,23.00 73.11,23.00 78.11,23.00 C83.11,23.00 87.56,23.00 92.44,23.00 C97.33,23.00 102.67,23.00 105.33,23.00 L108.00,23.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M62.00,23.00 L108.00,23.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

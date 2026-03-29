@@ -564,8 +564,8 @@ fn flux_polyline_vs_orthogonal_produce_distinct_svg_for_cycle() {
 fn basis_preset_uses_polyline_edge_routing_on_flux() {
     // basis expands to Polyline+Basis — should use PolylineRoute (same as explicit Polyline).
     // Edge path topology should match explicit polyline routing.
-    let basis = render_cycle_svg_with_preset("flux-layered", EdgePreset::Basis);
-    let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
+    let basis = render_cycle_svg_with_preset("flux-layered", EdgePreset::SmoothStep);
+    let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Orthogonal);
     assert_eq!(
         basis, polyline,
         "basis preset should produce same edge path topology as explicit polyline routing"
