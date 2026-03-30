@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::mermaid::sequence::ast::SequenceStatement;
+use crate::mermaid::sequence::ast::{ActivationModifier, SequenceStatement};
 use crate::timeline::sequence::model::{
     NotePlacement, Participant, ParticipantKind, Sequence, SequenceEvent,
 };
@@ -52,6 +52,7 @@ pub fn compile(
                 line_style,
                 arrow_head,
                 text,
+                activate,
             } => {
                 let from_idx = ensure_participant(&mut participants, &mut participant_index, from);
                 let to_idx = ensure_participant(&mut participants, &mut participant_index, to);
@@ -69,6 +70,30 @@ pub fn compile(
                         None
                     },
                 });
+
+                // Emit activation events from +/- shorthand.
+                // + activates the target; - deactivates the source.
+                match activate {
+                    Some(ActivationModifier::Activate) => {
+                        events.push(SequenceEvent::ActivateStart {
+                            participant: to_idx,
+                        });
+                    }
+                    Some(ActivationModifier::Deactivate) => {
+                        events.push(SequenceEvent::ActivateEnd {
+                            participant: from_idx,
+                        });
+                    }
+                    None => {}
+                }
+            }
+            SequenceStatement::Activate { participant: id } => {
+                let idx = ensure_participant(&mut participants, &mut participant_index, id);
+                events.push(SequenceEvent::ActivateStart { participant: idx });
+            }
+            SequenceStatement::Deactivate { participant: id } => {
+                let idx = ensure_participant(&mut participants, &mut participant_index, id);
+                events.push(SequenceEvent::ActivateEnd { participant: idx });
             }
             SequenceStatement::Note {
                 placement,

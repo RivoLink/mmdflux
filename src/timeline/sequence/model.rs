@@ -56,7 +56,7 @@ pub enum NotePlacement {
     Over,
 }
 
-/// An event in the sequence (message or note).
+/// An event in the sequence (message, note, or activation change).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SequenceEvent {
     /// A message between (or within) participants.
@@ -82,6 +82,16 @@ pub enum SequenceEvent {
         participants: Vec<usize>,
         /// Note text.
         text: String,
+    },
+    /// Begin an activation on a participant's lifeline.
+    ActivateStart {
+        /// Index into `Sequence::participants`.
+        participant: usize,
+    },
+    /// End an activation on a participant's lifeline.
+    ActivateEnd {
+        /// Index into `Sequence::participants`.
+        participant: usize,
     },
 }
 

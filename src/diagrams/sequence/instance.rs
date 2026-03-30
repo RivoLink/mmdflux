@@ -70,11 +70,11 @@ mod tests {
     #[test]
     fn sequence_instance_reports_warnings_for_skipped_lines() {
         let instance = SequenceInstance::new();
-        let warnings = instance
-            .validation_warnings("sequenceDiagram\nactivate A\nparticipant B\ndeactivate A");
+        let warnings =
+            instance.validation_warnings("sequenceDiagram\nloop Start\nparticipant B\nend");
         assert_eq!(warnings.len(), 2);
-        assert!(warnings[0].message.contains("activate A"));
-        assert!(warnings[1].message.contains("deactivate A"));
+        assert!(warnings[0].message.contains("loop Start"));
+        assert!(warnings[1].message.contains("end"));
     }
 
     #[test]

@@ -6,7 +6,9 @@
 
 pub mod ast;
 
-use ast::{ArrowHead, LineStyle, NotePlacement, ParticipantKind, SequenceStatement};
+use ast::{
+    ActivationModifier, ArrowHead, LineStyle, NotePlacement, ParticipantKind, SequenceStatement,
+};
 
 use crate::errors::ParseDiagnostic;
 
@@ -83,6 +85,11 @@ pub fn parse_sequence(
             continue;
         }
 
+        if let Some(stmt) = try_parse_activate(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
         if let Some(stmt) = try_parse_note(trimmed) {
             statements.push(stmt);
             continue;
@@ -142,6 +149,27 @@ fn try_parse_participant(line: &str) -> Option<SequenceStatement> {
         id: rest.to_string(),
         alias: None,
     })
+}
+
+/// Try to parse an `activate <participant>` or `deactivate <participant>` statement.
+fn try_parse_activate(line: &str) -> Option<SequenceStatement> {
+    let lower = line.to_lowercase();
+    if lower.starts_with("activate ") || lower.starts_with("activate\t") {
+        let rest = line["activate".len()..].trim();
+        if !rest.is_empty() {
+            return Some(SequenceStatement::Activate {
+                participant: rest.to_string(),
+            });
+        }
+    } else if lower.starts_with("deactivate ") || lower.starts_with("deactivate\t") {
+        let rest = line["deactivate".len()..].trim();
+        if !rest.is_empty() {
+            return Some(SequenceStatement::Deactivate {
+                participant: rest.to_string(),
+            });
+        }
+    }
+    None
 }
 
 /// Try to parse a note statement.
@@ -242,6 +270,9 @@ static ARROWS: &[ArrowPattern] = &[
 ];
 
 /// Try to parse a message: `A->>B: text`, `A-->B: text`, `A-xB: text`, etc.
+///
+/// Also handles `+`/`-` activation shorthand: `A->>+B: text` activates B,
+/// `B-->>-A: text` deactivates A.
 fn try_parse_message(line: &str) -> Option<SequenceStatement> {
     for arrow in ARROWS {
         if let Some(arrow_pos) = line.find(arrow.syntax) {
@@ -251,6 +282,15 @@ fn try_parse_message(line: &str) -> Option<SequenceStatement> {
             if from.is_empty() {
                 continue;
             }
+
+            // Check for +/- activation shorthand at the start of the target
+            let (activate, rest) = if let Some(stripped) = rest.strip_prefix('+') {
+                (Some(ActivationModifier::Activate), stripped)
+            } else if let Some(stripped) = rest.strip_prefix('-') {
+                (Some(ActivationModifier::Deactivate), stripped)
+            } else {
+                (None, rest)
+            };
 
             // Split on first colon for "to: text"
             let (to, text) = if let Some(colon_pos) = rest.find(':') {
@@ -271,6 +311,7 @@ fn try_parse_message(line: &str) -> Option<SequenceStatement> {
                 line_style: arrow.line_style,
                 arrow_head: arrow.arrow_head,
                 text,
+                activate,
             });
         }
     }
@@ -361,6 +402,7 @@ mod tests {
                 line_style: LineStyle::Solid,
                 arrow_head: ArrowHead::Filled,
                 text: "hello".to_string(),
+                activate: None,
             }
         );
     }
@@ -377,6 +419,7 @@ mod tests {
                 line_style: LineStyle::Dashed,
                 arrow_head: ArrowHead::Filled,
                 text: "response".to_string(),
+                activate: None,
             }
         );
     }
@@ -393,6 +436,7 @@ mod tests {
                 line_style: LineStyle::Solid,
                 arrow_head: ArrowHead::Open,
                 text: "open".to_string(),
+                activate: None,
             }
         );
     }
@@ -409,6 +453,7 @@ mod tests {
                 line_style: LineStyle::Dashed,
                 arrow_head: ArrowHead::Open,
                 text: "dashed open".to_string(),
+                activate: None,
             }
         );
     }
@@ -425,6 +470,7 @@ mod tests {
                 line_style: LineStyle::Solid,
                 arrow_head: ArrowHead::Cross,
                 text: "lost".to_string(),
+                activate: None,
             }
         );
     }
@@ -441,6 +487,7 @@ mod tests {
                 line_style: LineStyle::Dashed,
                 arrow_head: ArrowHead::Cross,
                 text: "dashed lost".to_string(),
+                activate: None,
             }
         );
     }
@@ -457,6 +504,7 @@ mod tests {
                 line_style: LineStyle::Solid,
                 arrow_head: ArrowHead::Async,
                 text: "async".to_string(),
+                activate: None,
             }
         );
     }
@@ -473,6 +521,7 @@ mod tests {
                 line_style: LineStyle::Dashed,
                 arrow_head: ArrowHead::Async,
                 text: "dashed async".to_string(),
+                activate: None,
             }
         );
     }
@@ -489,6 +538,7 @@ mod tests {
                 line_style: LineStyle::Solid,
                 arrow_head: ArrowHead::Filled,
                 text: "think".to_string(),
+                activate: None,
             }
         );
     }
@@ -600,14 +650,70 @@ sequenceDiagram
     }
 
     #[test]
-    fn parse_permissive_skips_unknown_with_warnings() {
+    fn parse_activate_deactivate_keywords() {
         let input = "sequenceDiagram\nactivate A\nparticipant B\ndeactivate A";
         let result = parse_sequence(input).unwrap();
-        // Only participant B is recognized, activate/deactivate are skipped
+        assert_eq!(result.statements.len(), 3);
+        assert_eq!(result.warnings.len(), 0);
+        assert_eq!(
+            result.statements[0],
+            SequenceStatement::Activate {
+                participant: "A".to_string(),
+            }
+        );
+        assert!(matches!(
+            &result.statements[1],
+            SequenceStatement::Participant { .. }
+        ));
+        assert_eq!(
+            result.statements[2],
+            SequenceStatement::Deactivate {
+                participant: "A".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_activation_shorthand_plus() {
+        let stmts = parse_stmts("sequenceDiagram\nA->>+B: Request");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Filled,
+                text: "Request".to_string(),
+                activate: Some(ActivationModifier::Activate),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_activation_shorthand_minus() {
+        let stmts = parse_stmts("sequenceDiagram\nB-->>-A: Response");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "B".to_string(),
+                to: "A".to_string(),
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Filled,
+                text: "Response".to_string(),
+                activate: Some(ActivationModifier::Deactivate),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_permissive_skips_unknown_with_warnings() {
+        let input = "sequenceDiagram\nloop Start\nparticipant B\nend";
+        let result = parse_sequence(input).unwrap();
+        // Only participant B is recognized, loop/end are skipped
         assert_eq!(result.statements.len(), 1);
         assert_eq!(result.warnings.len(), 2);
-        assert!(result.warnings[0].message.contains("activate A"));
-        assert!(result.warnings[1].message.contains("deactivate A"));
     }
 
     #[test]

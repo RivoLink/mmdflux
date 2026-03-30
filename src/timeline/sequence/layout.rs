@@ -74,6 +74,19 @@ pub enum RowLayout {
     },
 }
 
+/// An activation rectangle on a participant's lifeline.
+#[derive(Debug, Clone)]
+pub struct ActivationRect {
+    /// Participant index.
+    pub participant_idx: usize,
+    /// Y row where the activation starts.
+    pub y_start: usize,
+    /// Y row where the activation ends (inclusive).
+    pub y_end: usize,
+    /// Nesting depth (0-based). Deeper activations render slightly offset.
+    pub depth: usize,
+}
+
 /// Complete sequence diagram layout.
 #[derive(Debug, Clone)]
 pub struct SequenceLayout {
@@ -81,6 +94,8 @@ pub struct SequenceLayout {
     pub participants: Vec<ParticipantLayout>,
     /// Positioned event rows.
     pub rows: Vec<RowLayout>,
+    /// Activation rectangles to render on lifelines.
+    pub activations: Vec<ActivationRect>,
     /// Total canvas width.
     pub width: usize,
     /// Total canvas height.
@@ -93,6 +108,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         return SequenceLayout {
             participants: Vec::new(),
             rows: Vec::new(),
+            activations: Vec::new(),
             width: 0,
             height: 0,
         };
@@ -105,6 +121,15 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let mut rows = Vec::new();
     let mut cursor_y = HEADER_HEIGHT + EVENT_GAP;
 
+    // Activation tracking: stack of (y_start, depth) per participant
+    let num_participants = model.participants.len();
+    let mut activation_stacks: Vec<Vec<(usize, usize)>> = vec![Vec::new(); num_participants];
+    let mut activation_depth: Vec<usize> = vec![0; num_participants];
+    let mut activations: Vec<ActivationRect> = Vec::new();
+    // Track the Y of the last message row so activation start/end aligns with
+    // the triggering message rather than the cursor after it.
+    let mut last_message_y = cursor_y;
+
     for event in &model.events {
         match event {
             SequenceEvent::Message {
@@ -116,8 +141,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                 number,
             } => {
                 let is_self = from == to;
+                last_message_y = cursor_y;
                 if is_self {
-                    // Self-message: label on the row, then the loop
                     rows.push(RowLayout::Message {
                         y: cursor_y,
                         from_idx: *from,
@@ -129,7 +154,6 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                     });
                     cursor_y += SELF_MSG_HEIGHT + EVENT_GAP;
                 } else {
-                    // Normal message: label row + arrow row = 2 rows
                     rows.push(RowLayout::Message {
                         y: cursor_y,
                         from_idx: *from,
@@ -153,9 +177,40 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                     participant_indices: indices.clone(),
                     text: text.clone(),
                 });
-                // Note box: 3 rows (border + text + border)
                 cursor_y += 3 + EVENT_GAP;
             }
+            SequenceEvent::ActivateStart { participant } => {
+                let depth = activation_depth[*participant];
+                activation_stacks[*participant].push((last_message_y, depth));
+                activation_depth[*participant] += 1;
+            }
+            SequenceEvent::ActivateEnd { participant } => {
+                if let Some((y_start, depth)) = activation_stacks[*participant].pop() {
+                    // End at the last message row (inclusive).
+                    let y_end = last_message_y.max(y_start);
+                    activations.push(ActivationRect {
+                        participant_idx: *participant,
+                        y_start,
+                        y_end,
+                        depth,
+                    });
+                    activation_depth[*participant] =
+                        activation_depth[*participant].saturating_sub(1);
+                }
+            }
+        }
+    }
+
+    // Close any unclosed activations at the bottom of the diagram
+    for (pidx, stack) in activation_stacks.iter_mut().enumerate() {
+        while let Some((y_start, depth)) = stack.pop() {
+            let y_end = cursor_y.saturating_sub(1).max(y_start);
+            activations.push(ActivationRect {
+                participant_idx: pidx,
+                y_start,
+                y_end,
+                depth,
+            });
         }
     }
 
@@ -234,6 +289,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     SequenceLayout {
         participants,
         rows,
+        activations,
         width,
         height,
     }

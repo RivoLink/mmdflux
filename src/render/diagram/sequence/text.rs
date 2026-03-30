@@ -6,7 +6,7 @@
 use crate::render::text::canvas::Canvas;
 use crate::render::text::chars::CharSet;
 use crate::timeline::sequence::layout::{
-    ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
+    ActivationRect, ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
 };
 use crate::timeline::sequence::model::{ArrowHead, LineStyle, NotePlacement};
 
@@ -28,6 +28,11 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
         for y in lifeline_start..lifeline_end {
             canvas.set(p.center_x, y, charset.vertical);
         }
+    }
+
+    // Draw activation boxes on lifelines
+    for activation in &layout.activations {
+        draw_activation(&mut canvas, activation, &layout.participants, charset);
     }
 
     for row in &layout.rows {
@@ -288,5 +293,25 @@ fn format_label(text: &str, number: &Option<usize>) -> String {
             }
         }
         None => text.to_string(),
+    }
+}
+
+/// Draw an activation bar on a participant's lifeline.
+///
+/// Replaces the thin `│` lifeline with `║` during the active region.
+/// Nested activations are drawn one column to the right of the lifeline.
+fn draw_activation(
+    canvas: &mut Canvas,
+    activation: &ActivationRect,
+    participants: &[ParticipantLayout],
+    cs: &CharSet,
+) {
+    let center_x = participants[activation.participant_idx].center_x;
+    // depth 0 draws on the lifeline itself; deeper levels offset right
+    let x = center_x + activation.depth;
+
+    let activation_char = if cs.is_ascii() { '#' } else { '║' };
+    for y in activation.y_start..=activation.y_end {
+        canvas.set(x, y, activation_char);
     }
 }
