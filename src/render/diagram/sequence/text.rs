@@ -8,7 +8,7 @@ use crate::render::text::chars::CharSet;
 use crate::timeline::sequence::layout::{
     ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
 };
-use crate::timeline::sequence::model::MessageStyle;
+use crate::timeline::sequence::model::{MessageStyle, NotePlacement};
 
 /// Render a sequence layout to a string.
 pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
@@ -49,9 +49,21 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                     draw_message(&mut canvas, from_x, to_x, *y, text, number, style, charset);
                 }
             }
-            RowLayout::Note { y, over_idx, text } => {
-                let center_x = layout.participants[*over_idx].center_x;
-                draw_note(&mut canvas, center_x, *y, text, charset);
+            RowLayout::Note {
+                y,
+                placement,
+                participant_indices,
+                text,
+            } => {
+                draw_note(
+                    &mut canvas,
+                    &layout.participants,
+                    placement,
+                    participant_indices,
+                    *y,
+                    text,
+                    charset,
+                );
             }
         }
     }
@@ -155,9 +167,43 @@ fn draw_self_message(
     canvas.set(arm_end, y + 2, cs.corner_br);
 }
 
-fn draw_note(canvas: &mut Canvas, center_x: usize, y: usize, text: &str, cs: &CharSet) {
-    let box_width = text.len() + 4;
-    let box_x = center_x.saturating_sub(box_width / 2);
+fn draw_note(
+    canvas: &mut Canvas,
+    participants: &[ParticipantLayout],
+    placement: &NotePlacement,
+    participant_indices: &[usize],
+    y: usize,
+    text: &str,
+    cs: &CharSet,
+) {
+    let min_box_width = text.len() + 4;
+
+    let (box_x, box_width) = match placement {
+        NotePlacement::LeftOf => {
+            let center_x = participants[participant_indices[0]].center_x;
+            let bx = center_x.saturating_sub(min_box_width + 1);
+            (bx, min_box_width)
+        }
+        NotePlacement::RightOf => {
+            let center_x = participants[participant_indices[0]].center_x;
+            (center_x + 2, min_box_width)
+        }
+        NotePlacement::Over if participant_indices.len() == 2 => {
+            let cx1 = participants[participant_indices[0]].center_x;
+            let cx2 = participants[participant_indices[1]].center_x;
+            let left = cx1.min(cx2);
+            let right = cx1.max(cx2);
+            let span_width = min_box_width.max(right - left + 4);
+            let mid = (left + right) / 2;
+            let bx = mid.saturating_sub(span_width / 2);
+            (bx, span_width)
+        }
+        NotePlacement::Over => {
+            let center_x = participants[participant_indices[0]].center_x;
+            let bx = center_x.saturating_sub(min_box_width / 2);
+            (bx, min_box_width)
+        }
+    };
 
     canvas.set(box_x, y, cs.corner_tl);
     for i in 1..box_width - 1 {
@@ -166,9 +212,12 @@ fn draw_note(canvas: &mut Canvas, center_x: usize, y: usize, text: &str, cs: &Ch
     canvas.set(box_x + box_width - 1, y, cs.corner_tr);
 
     canvas.set(box_x, y + 1, cs.vertical);
-    canvas.set(box_x + 1, y + 1, ' ');
-    canvas.write_str(box_x + 2, y + 1, text);
-    canvas.set(box_x + 2 + text.len(), y + 1, ' ');
+    // Fill entire interior with spaces first (overwrites lifelines)
+    for i in 1..box_width - 1 {
+        canvas.set(box_x + i, y + 1, ' ');
+    }
+    let text_offset = (box_width - 2 - text.len()) / 2;
+    canvas.write_str(box_x + 1 + text_offset, y + 1, text);
     canvas.set(box_x + box_width - 1, y + 1, cs.vertical);
 
     canvas.set(box_x, y + 2, cs.corner_bl);

@@ -6,7 +6,7 @@
 
 pub mod ast;
 
-use ast::{ArrowType, ParticipantKind, SequenceStatement};
+use ast::{ArrowType, NotePlacement, ParticipantKind, SequenceStatement};
 
 /// Parse a sequence diagram from Mermaid input text.
 ///
@@ -123,23 +123,49 @@ fn try_parse_participant(line: &str) -> Option<SequenceStatement> {
     })
 }
 
-/// Try to parse a `Note over <participant>: text` statement.
+/// Try to parse a note statement.
+///
+/// Supports:
+/// - `Note over A: text` (single participant)
+/// - `Note over A,B: text` (spanning two participants)
+/// - `Note left of A: text`
+/// - `Note right of A: text`
 fn try_parse_note(line: &str) -> Option<SequenceStatement> {
     let lower = line.to_lowercase();
-    if !lower.starts_with("note over ") {
-        return None;
-    }
 
-    let rest = &line["note over ".len()..];
+    let (placement, rest) = if lower.starts_with("note left of ") {
+        (NotePlacement::LeftOf, &line["note left of ".len()..])
+    } else if lower.starts_with("note right of ") {
+        (NotePlacement::RightOf, &line["note right of ".len()..])
+    } else if lower.starts_with("note over ") {
+        (NotePlacement::Over, &line["note over ".len()..])
+    } else {
+        return None;
+    };
+
     let colon_pos = rest.find(':')?;
-    let over = rest[..colon_pos].trim().to_string();
+    let participant_str = rest[..colon_pos].trim();
     let text = rest[colon_pos + 1..].trim().to_string();
 
-    if over.is_empty() || text.is_empty() {
+    if participant_str.is_empty() || text.is_empty() {
         return None;
     }
 
-    Some(SequenceStatement::Note { over, text })
+    let participants: Vec<String> = participant_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if participants.is_empty() {
+        return None;
+    }
+
+    Some(SequenceStatement::Note {
+        placement,
+        participants,
+        text,
+    })
 }
 
 /// Try to parse a message: `A->>B: text` or `A-->>B: text`.
@@ -299,7 +325,8 @@ mod tests {
         assert_eq!(
             stmts[0],
             SequenceStatement::Note {
-                over: "A".to_string(),
+                placement: ast::NotePlacement::Over,
+                participants: vec!["A".to_string()],
                 text: "done".to_string(),
             }
         );
@@ -337,7 +364,9 @@ sequenceDiagram
         assert!(
             matches!(&stmts[5], SequenceStatement::Message { from, to, .. } if from == "A" && to == "A")
         );
-        assert!(matches!(&stmts[6], SequenceStatement::Note { over, .. } if over == "A"));
+        assert!(
+            matches!(&stmts[6], SequenceStatement::Note { participants, .. } if participants == &["A".to_string()])
+        );
     }
 
     #[test]
@@ -401,5 +430,87 @@ sequenceDiagram
         let stmts = parse_sequence(input).unwrap();
         // Only participant B is recognized, activate/deactivate are skipped
         assert_eq!(stmts.len(), 1);
+    }
+
+    #[test]
+    fn parse_note_left_of() {
+        let stmts = parse_sequence("sequenceDiagram\nNote left of A: reminder").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::LeftOf,
+                participants: vec!["A".to_string()],
+                text: "reminder".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_note_right_of() {
+        let stmts = parse_sequence("sequenceDiagram\nNote right of B: status").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::RightOf,
+                participants: vec!["B".to_string()],
+                text: "status".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_note_spanning() {
+        let stmts = parse_sequence("sequenceDiagram\nNote over A,B: shared").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::Over,
+                participants: vec!["A".to_string(), "B".to_string()],
+                text: "shared".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_note_spanning_with_spaces() {
+        let stmts = parse_sequence("sequenceDiagram\nNote over A , B : spaced").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::Over,
+                participants: vec!["A".to_string(), "B".to_string()],
+                text: "spaced".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_note_left_of_case_insensitive() {
+        let stmts = parse_sequence("sequenceDiagram\nnote LEFT of A: test").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert!(matches!(
+            &stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::LeftOf,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_note_right_of_case_insensitive() {
+        let stmts = parse_sequence("sequenceDiagram\nNOTE RIGHT OF A: test").unwrap();
+        assert_eq!(stmts.len(), 1);
+        assert!(matches!(
+            &stmts[0],
+            SequenceStatement::Note {
+                placement: ast::NotePlacement::RightOf,
+                ..
+            }
+        ));
     }
 }
