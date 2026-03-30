@@ -1,29 +1,42 @@
 //! Sequence diagram parser.
 //!
 //! Hand-written line-oriented parser for Mermaid sequence diagram syntax.
-//! Supports MVP scope: participant/actor declarations, solid/dashed messages,
-//! self-messages, notes over one participant, and autonumber.
+//! Supports participant/actor declarations, messages with all standard arrow
+//! types, notes over one participant, and autonumber.
 
 pub mod ast;
 
-use ast::{ArrowType, ParticipantKind, SequenceStatement};
+use ast::{ArrowHead, LineStyle, ParticipantKind, SequenceStatement};
+
+use crate::errors::ParseDiagnostic;
+
+/// Result of parsing a sequence diagram.
+///
+/// Contains the parsed statements and any warnings collected during parsing.
+pub struct SequenceParseResult {
+    /// Parsed statements in source order.
+    pub statements: Vec<SequenceStatement>,
+    /// Warnings collected during parsing (e.g., skipped lines).
+    pub warnings: Vec<ParseDiagnostic>,
+}
 
 /// Parse a sequence diagram from Mermaid input text.
 ///
 /// Expects the input to start with `sequenceDiagram` (case-insensitive).
-/// Returns a list of parsed statements in source order.
+/// Returns parsed statements and any warnings (e.g., unrecognized lines).
 pub fn parse_sequence(
     input: &str,
-) -> Result<Vec<SequenceStatement>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<SequenceParseResult, Box<dyn std::error::Error + Send + Sync>> {
     let mut statements = Vec::new();
-    let mut lines = input.lines().peekable();
+    let mut warnings = Vec::new();
+    let mut lines = input.lines().enumerate().peekable();
 
     // Skip frontmatter
-    if let Some(first) = lines.peek()
+    if let Some((_, first)) = lines.peek()
         && first.trim() == "---"
     {
         lines.next();
-        for line in lines.by_ref() {
+        for (_, line) in lines.by_ref() {
             if line.trim() == "---" {
                 break;
             }
@@ -32,7 +45,7 @@ pub fn parse_sequence(
 
     // Skip leading comments and whitespace, then consume header
     let mut found_header = false;
-    while let Some(line) = lines.peek() {
+    while let Some((_, line)) = lines.peek() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with("%%") {
             lines.next();
@@ -51,7 +64,7 @@ pub fn parse_sequence(
     }
 
     // Parse body lines
-    for line in lines {
+    for (line_num, line) in lines {
         let trimmed = line.trim();
 
         // Skip empty lines and comments
@@ -80,10 +93,18 @@ pub fn parse_sequence(
             continue;
         }
 
-        // Permissive: skip unrecognized lines
+        // Permissive: skip unrecognized lines but collect a warning
+        warnings.push(ParseDiagnostic::warning(
+            Some(line_num + 1), // 1-indexed
+            None,
+            format!("skipped unrecognized line: {trimmed}"),
+        ));
     }
 
-    Ok(statements)
+    Ok(SequenceParseResult {
+        statements,
+        warnings,
+    })
 }
 
 /// Try to parse a `participant` or `actor` declaration.
@@ -142,15 +163,64 @@ fn try_parse_note(line: &str) -> Option<SequenceStatement> {
     Some(SequenceStatement::Note { over, text })
 }
 
-/// Try to parse a message: `A->>B: text` or `A-->>B: text`.
-fn try_parse_message(line: &str) -> Option<SequenceStatement> {
-    // Arrow patterns, ordered by length (longest first)
-    static ARROWS: &[(&str, ArrowType)] = &[("-->>", ArrowType::Dashed), ("->>", ArrowType::Solid)];
+/// Arrow pattern entry: (syntax, line style, arrowhead).
+struct ArrowPattern {
+    syntax: &'static str,
+    line_style: LineStyle,
+    arrow_head: ArrowHead,
+}
 
-    for &(pattern, arrow) in ARROWS {
-        if let Some(arrow_pos) = line.find(pattern) {
+/// All supported arrow patterns, ordered by length (longest first) to prevent
+/// prefix conflicts.
+static ARROWS: &[ArrowPattern] = &[
+    ArrowPattern {
+        syntax: "-->>",
+        line_style: LineStyle::Dashed,
+        arrow_head: ArrowHead::Filled,
+    },
+    ArrowPattern {
+        syntax: "->>",
+        line_style: LineStyle::Solid,
+        arrow_head: ArrowHead::Filled,
+    },
+    ArrowPattern {
+        syntax: "-->",
+        line_style: LineStyle::Dashed,
+        arrow_head: ArrowHead::Open,
+    },
+    ArrowPattern {
+        syntax: "->",
+        line_style: LineStyle::Solid,
+        arrow_head: ArrowHead::Open,
+    },
+    ArrowPattern {
+        syntax: "--x",
+        line_style: LineStyle::Dashed,
+        arrow_head: ArrowHead::Cross,
+    },
+    ArrowPattern {
+        syntax: "-x",
+        line_style: LineStyle::Solid,
+        arrow_head: ArrowHead::Cross,
+    },
+    ArrowPattern {
+        syntax: "--)",
+        line_style: LineStyle::Dashed,
+        arrow_head: ArrowHead::Async,
+    },
+    ArrowPattern {
+        syntax: "-)",
+        line_style: LineStyle::Solid,
+        arrow_head: ArrowHead::Async,
+    },
+];
+
+/// Try to parse a message: `A->>B: text`, `A-->B: text`, `A-xB: text`, etc.
+fn try_parse_message(line: &str) -> Option<SequenceStatement> {
+    for arrow in ARROWS {
+        if let Some(arrow_pos) = line.find(arrow.syntax) {
             let from = line[..arrow_pos].trim().to_string();
-            let rest = line[arrow_pos + pattern.len()..].trim();
+            let rest = line[arrow_pos + arrow.syntax.len()..].trim();
 
             if from.is_empty() {
                 continue;
@@ -172,7 +242,8 @@ fn try_parse_message(line: &str) -> Option<SequenceStatement> {
             return Some(SequenceStatement::Message {
                 from,
                 to,
-                arrow,
+                line_style: arrow.line_style,
+                arrow_head: arrow.arrow_head,
                 text,
             });
         }
@@ -187,15 +258,20 @@ mod tests {
 
     use super::*;
 
+    /// Helper to parse and unwrap statements (ignoring warnings).
+    fn parse_stmts(input: &str) -> Vec<SequenceStatement> {
+        parse_sequence(input).unwrap().statements
+    }
+
     #[test]
     fn parse_empty_diagram() {
-        let stmts = parse_sequence("sequenceDiagram\n").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\n");
         assert!(stmts.is_empty());
     }
 
     #[test]
     fn parse_participant() {
-        let stmts = parse_sequence("sequenceDiagram\nparticipant A").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nparticipant A");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -209,7 +285,7 @@ mod tests {
 
     #[test]
     fn parse_actor() {
-        let stmts = parse_sequence("sequenceDiagram\nactor Bob").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nactor Bob");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -223,7 +299,7 @@ mod tests {
 
     #[test]
     fn parse_participant_with_alias() {
-        let stmts = parse_sequence("sequenceDiagram\nparticipant A as Alice").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nparticipant A as Alice");
         assert_eq!(
             stmts[0],
             SequenceStatement::Participant {
@@ -236,7 +312,7 @@ mod tests {
 
     #[test]
     fn parse_actor_with_alias() {
-        let stmts = parse_sequence("sequenceDiagram\nactor B as Bob").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nactor B as Bob");
         assert_eq!(
             stmts[0],
             SequenceStatement::Participant {
@@ -248,45 +324,144 @@ mod tests {
     }
 
     #[test]
-    fn parse_solid_message() {
-        let stmts = parse_sequence("sequenceDiagram\nA->>B: hello").unwrap();
+    fn parse_solid_filled_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA->>B: hello");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
             SequenceStatement::Message {
                 from: "A".to_string(),
                 to: "B".to_string(),
-                arrow: ArrowType::Solid,
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Filled,
                 text: "hello".to_string(),
             }
         );
     }
 
     #[test]
-    fn parse_dashed_message() {
-        let stmts = parse_sequence("sequenceDiagram\nA-->>B: response").unwrap();
+    fn parse_dashed_filled_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA-->>B: response");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
             SequenceStatement::Message {
                 from: "A".to_string(),
                 to: "B".to_string(),
-                arrow: ArrowType::Dashed,
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Filled,
                 text: "response".to_string(),
             }
         );
     }
 
     #[test]
+    fn parse_solid_open_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA->B: open");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Open,
+                text: "open".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_dashed_open_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA-->B: dashed open");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Open,
+                text: "dashed open".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_solid_cross_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA-xB: lost");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Cross,
+                text: "lost".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_dashed_cross_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA--xB: dashed lost");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Cross,
+                text: "dashed lost".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_solid_async_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA-)B: async");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Async,
+                text: "async".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_dashed_async_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA--)B: dashed async");
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Message {
+                from: "A".to_string(),
+                to: "B".to_string(),
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Async,
+                text: "dashed async".to_string(),
+            }
+        );
+    }
+
+    #[test]
     fn parse_self_message() {
-        let stmts = parse_sequence("sequenceDiagram\nA->>A: think").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nA->>A: think");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
             SequenceStatement::Message {
                 from: "A".to_string(),
                 to: "A".to_string(),
-                arrow: ArrowType::Solid,
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Filled,
                 text: "think".to_string(),
             }
         );
@@ -294,7 +469,7 @@ mod tests {
 
     #[test]
     fn parse_note_over() {
-        let stmts = parse_sequence("sequenceDiagram\nNote over A: done").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nNote over A: done");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -307,7 +482,7 @@ mod tests {
 
     #[test]
     fn parse_autonumber() {
-        let stmts = parse_sequence("sequenceDiagram\nautonumber").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nautonumber");
         assert_eq!(stmts.len(), 1);
         assert_eq!(stmts[0], SequenceStatement::Autonumber);
     }
@@ -323,16 +498,16 @@ sequenceDiagram
     B-->>A: hi back
     A->>A: think
     Note over A: done";
-        let stmts = parse_sequence(input).unwrap();
+        let stmts = parse_stmts(input);
         assert_eq!(stmts.len(), 7);
         assert_eq!(stmts[0], SequenceStatement::Autonumber);
         assert!(matches!(&stmts[1], SequenceStatement::Participant { id, .. } if id == "A"));
         assert!(matches!(&stmts[2], SequenceStatement::Participant { id, .. } if id == "B"));
         assert!(
-            matches!(&stmts[3], SequenceStatement::Message { from, to, arrow: ArrowType::Solid, .. } if from == "A" && to == "B")
+            matches!(&stmts[3], SequenceStatement::Message { from, to, line_style: LineStyle::Solid, arrow_head: ArrowHead::Filled, .. } if from == "A" && to == "B")
         );
         assert!(
-            matches!(&stmts[4], SequenceStatement::Message { from, to, arrow: ArrowType::Dashed, .. } if from == "B" && to == "A")
+            matches!(&stmts[4], SequenceStatement::Message { from, to, line_style: LineStyle::Dashed, arrow_head: ArrowHead::Filled, .. } if from == "B" && to == "A")
         );
         assert!(
             matches!(&stmts[5], SequenceStatement::Message { from, to, .. } if from == "A" && to == "A")
@@ -343,20 +518,20 @@ sequenceDiagram
     #[test]
     fn parse_skips_comments() {
         let input = "sequenceDiagram\n%% comment\nparticipant A";
-        let stmts = parse_sequence(input).unwrap();
+        let stmts = parse_stmts(input);
         assert_eq!(stmts.len(), 1);
     }
 
     #[test]
     fn parse_skips_empty_lines() {
         let input = "sequenceDiagram\n\nparticipant A\n\nA->>B: hi";
-        let stmts = parse_sequence(input).unwrap();
+        let stmts = parse_stmts(input);
         assert_eq!(stmts.len(), 2);
     }
 
     #[test]
     fn parse_case_insensitive_header() {
-        let stmts = parse_sequence("SEQUENCEDIAGRAM\nparticipant A").unwrap();
+        let stmts = parse_stmts("SEQUENCEDIAGRAM\nparticipant A");
         assert_eq!(stmts.len(), 1);
     }
 
@@ -369,20 +544,20 @@ sequenceDiagram
     #[test]
     fn parse_skips_frontmatter() {
         let input = "---\ntitle: Test\n---\nsequenceDiagram\nparticipant A";
-        let stmts = parse_sequence(input).unwrap();
+        let stmts = parse_stmts(input);
         assert_eq!(stmts.len(), 1);
     }
 
     #[test]
     fn parse_note_case_insensitive() {
-        let stmts = parse_sequence("sequenceDiagram\nnote over A: done").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nnote over A: done");
         assert_eq!(stmts.len(), 1);
         assert!(matches!(&stmts[0], SequenceStatement::Note { .. }));
     }
 
     #[test]
     fn parse_message_without_text() {
-        let stmts = parse_sequence("sequenceDiagram\nA->>B:").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nA->>B:");
         // Message with empty text after colon
         assert_eq!(stmts.len(), 1);
         assert!(matches!(&stmts[0], SequenceStatement::Message { text, .. } if text.is_empty()));
@@ -390,16 +565,74 @@ sequenceDiagram
 
     #[test]
     fn parse_message_no_colon() {
-        let stmts = parse_sequence("sequenceDiagram\nA->>B").unwrap();
+        let stmts = parse_stmts("sequenceDiagram\nA->>B");
         assert_eq!(stmts.len(), 1);
         assert!(matches!(&stmts[0], SequenceStatement::Message { text, .. } if text.is_empty()));
     }
 
     #[test]
-    fn parse_permissive_skips_unknown() {
+    fn parse_permissive_skips_unknown_with_warnings() {
         let input = "sequenceDiagram\nactivate A\nparticipant B\ndeactivate A";
-        let stmts = parse_sequence(input).unwrap();
+        let result = parse_sequence(input).unwrap();
         // Only participant B is recognized, activate/deactivate are skipped
-        assert_eq!(stmts.len(), 1);
+        assert_eq!(result.statements.len(), 1);
+        assert_eq!(result.warnings.len(), 2);
+        assert!(result.warnings[0].message.contains("activate A"));
+        assert!(result.warnings[1].message.contains("deactivate A"));
+    }
+
+    #[test]
+    fn parse_arrow_priority_prevents_prefix_match() {
+        // `-->>` should be matched as dashed-filled, not `-->` + `>`
+        let stmts = parse_stmts("sequenceDiagram\nA-->>B: hi");
+        assert!(matches!(
+            &stmts[0],
+            SequenceStatement::Message {
+                line_style: LineStyle::Dashed,
+                arrow_head: ArrowHead::Filled,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_all_eight_arrow_types() {
+        let input = "\
+sequenceDiagram
+    A->>B: filled solid
+    A-->>B: filled dashed
+    A->B: open solid
+    A-->B: open dashed
+    A-xB: cross solid
+    A--xB: cross dashed
+    A-)B: async solid
+    A--)B: async dashed";
+        let stmts = parse_stmts(input);
+        assert_eq!(stmts.len(), 8);
+
+        let expected = [
+            (LineStyle::Solid, ArrowHead::Filled),
+            (LineStyle::Dashed, ArrowHead::Filled),
+            (LineStyle::Solid, ArrowHead::Open),
+            (LineStyle::Dashed, ArrowHead::Open),
+            (LineStyle::Solid, ArrowHead::Cross),
+            (LineStyle::Dashed, ArrowHead::Cross),
+            (LineStyle::Solid, ArrowHead::Async),
+            (LineStyle::Dashed, ArrowHead::Async),
+        ];
+
+        for (i, (ls, ah)) in expected.iter().enumerate() {
+            match &stmts[i] {
+                SequenceStatement::Message {
+                    line_style,
+                    arrow_head,
+                    ..
+                } => {
+                    assert_eq!(line_style, ls, "line_style mismatch at index {i}");
+                    assert_eq!(arrow_head, ah, "arrow_head mismatch at index {i}");
+                }
+                other => panic!("expected Message at index {i}, got {other:?}"),
+            }
+        }
     }
 }

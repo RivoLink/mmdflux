@@ -8,8 +8,8 @@ use crate::timeline::sequence::layout::{
 };
 
 fn layout_input(input: &str) -> SequenceLayout {
-    let stmts = parse_sequence(input).unwrap();
-    let model = compiler::compile(&stmts).unwrap();
+    let result = parse_sequence(input).unwrap();
+    let model = compiler::compile(&result.statements).unwrap();
     layout(&model)
 }
 

@@ -23,13 +23,26 @@ pub struct Participant {
     pub kind: ParticipantKind,
 }
 
-/// Arrow style for a message.
+/// Line style for a message arrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MessageStyle {
-    /// Solid line with filled arrowhead.
+pub enum LineStyle {
+    /// Solid line.
     Solid,
-    /// Dashed line with filled arrowhead.
+    /// Dashed line.
     Dashed,
+}
+
+/// Arrowhead shape for a message arrow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowHead {
+    /// Filled arrowhead (`>>`).
+    Filled,
+    /// Open arrowhead (`>`).
+    Open,
+    /// Cross terminal (`x`).
+    Cross,
+    /// Async (open arrow) terminal (`)`).
+    Async,
 }
 
 /// An event in the sequence (message or note).
@@ -41,8 +54,10 @@ pub enum SequenceEvent {
         from: usize,
         /// Index into `Sequence::participants`.
         to: usize,
-        /// Arrow style.
-        style: MessageStyle,
+        /// Line style (solid or dashed).
+        line_style: LineStyle,
+        /// Arrowhead shape.
+        arrow_head: ArrowHead,
         /// Message text label.
         text: String,
         /// Optional autonumber prefix (1-indexed).
