@@ -45,6 +45,17 @@ pub enum ArrowHead {
     Async,
 }
 
+/// Placement of a note relative to participant(s).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotePlacement {
+    /// Note positioned to the left of a participant's lifeline.
+    LeftOf,
+    /// Note positioned to the right of a participant's lifeline.
+    RightOf,
+    /// Note centered over one participant, or spanning between two.
+    Over,
+}
+
 /// An event in the sequence (message or note).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SequenceEvent {
@@ -63,10 +74,12 @@ pub enum SequenceEvent {
         /// Optional autonumber prefix (1-indexed).
         number: Option<usize>,
     },
-    /// A note over one participant.
+    /// A note positioned relative to one or two participants.
     Note {
-        /// Index into `Sequence::participants`.
-        over: usize,
+        /// How the note is placed (left of, right of, or over).
+        placement: NotePlacement,
+        /// Participant indices (1 for left/right/over-single, 2 for spanning).
+        participants: Vec<usize>,
         /// Note text.
         text: String,
     },

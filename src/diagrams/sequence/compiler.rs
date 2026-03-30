@@ -7,7 +7,9 @@
 use std::collections::HashMap;
 
 use crate::mermaid::sequence::ast::SequenceStatement;
-use crate::timeline::sequence::model::{Participant, ParticipantKind, Sequence, SequenceEvent};
+use crate::timeline::sequence::model::{
+    NotePlacement, Participant, ParticipantKind, Sequence, SequenceEvent,
+};
 
 /// Compile parsed sequence statements into a validated model.
 ///
@@ -68,14 +70,46 @@ pub fn compile(
                     },
                 });
             }
-            SequenceStatement::Note { over, text } => {
-                let over_idx = participant_index.get(over.as_str()).copied().ok_or_else(
-                    || -> Box<dyn std::error::Error + Send + Sync> {
-                        format!("Note references unknown participant: {over}").into()
-                    },
-                )?;
+            SequenceStatement::Note {
+                placement,
+                participants: names,
+                text,
+            } => {
+                // Validate participant count for each placement
+                match placement {
+                    NotePlacement::LeftOf | NotePlacement::RightOf => {
+                        if names.len() != 1 {
+                            return Err(format!(
+                                "Note left/right of requires exactly 1 participant, got {}",
+                                names.len()
+                            )
+                            .into());
+                        }
+                    }
+                    NotePlacement::Over => {
+                        if names.len() > 2 {
+                            return Err(format!(
+                                "Note over supports at most 2 participants, got {}",
+                                names.len()
+                            )
+                            .into());
+                        }
+                    }
+                }
+
+                let mut indices = Vec::with_capacity(names.len());
+                for name in names {
+                    let idx = participant_index.get(name.as_str()).copied().ok_or_else(
+                        || -> Box<dyn std::error::Error + Send + Sync> {
+                            format!("Note references unknown participant: {name}").into()
+                        },
+                    )?;
+                    indices.push(idx);
+                }
+
                 events.push(SequenceEvent::Note {
-                    over: over_idx,
+                    placement: *placement,
+                    participants: indices,
                     text: text.clone(),
                 });
             }
@@ -198,8 +232,13 @@ mod tests {
         let model = compile_input("sequenceDiagram\nparticipant A\nNote over A: done");
         assert_eq!(model.events.len(), 1);
         match &model.events[0] {
-            SequenceEvent::Note { over, text } => {
-                assert_eq!(*over, 0);
+            SequenceEvent::Note {
+                placement,
+                participants,
+                text,
+            } => {
+                assert_eq!(*placement, NotePlacement::Over);
+                assert_eq!(participants, &[0]);
                 assert_eq!(text, "done");
             }
             _ => panic!("expected note"),
@@ -309,5 +348,70 @@ sequenceDiagram
         assert_eq!(model.participants[1].label, "Bob");
         assert_eq!(model.events.len(), 4);
         assert!(model.autonumber);
+    }
+
+    #[test]
+    fn compile_note_left_of() {
+        let model =
+            compile_input("sequenceDiagram\nparticipant A\nparticipant B\nNote left of A: left");
+        match &model.events[0] {
+            SequenceEvent::Note {
+                placement,
+                participants,
+                text,
+            } => {
+                assert_eq!(*placement, NotePlacement::LeftOf);
+                assert_eq!(participants, &[0]);
+                assert_eq!(text, "left");
+            }
+            _ => panic!("expected note"),
+        }
+    }
+
+    #[test]
+    fn compile_note_right_of() {
+        let model =
+            compile_input("sequenceDiagram\nparticipant A\nparticipant B\nNote right of B: right");
+        match &model.events[0] {
+            SequenceEvent::Note {
+                placement,
+                participants,
+                text,
+            } => {
+                assert_eq!(*placement, NotePlacement::RightOf);
+                assert_eq!(participants, &[1]);
+                assert_eq!(text, "right");
+            }
+            _ => panic!("expected note"),
+        }
+    }
+
+    #[test]
+    fn compile_note_spanning() {
+        let model =
+            compile_input("sequenceDiagram\nparticipant A\nparticipant B\nNote over A,B: spanning");
+        match &model.events[0] {
+            SequenceEvent::Note {
+                placement,
+                participants,
+                text,
+            } => {
+                assert_eq!(*placement, NotePlacement::Over);
+                assert_eq!(participants, &[0, 1]);
+                assert_eq!(text, "spanning");
+            }
+            _ => panic!("expected note"),
+        }
+    }
+
+    #[test]
+    fn compile_note_spanning_unknown_participant_errors() {
+        let stmts = parse_sequence("sequenceDiagram\nparticipant A\nNote over A,X: oops")
+            .unwrap()
+            .statements;
+        let result = compile(&stmts);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown participant"));
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! These represent the raw parsed syntax before validation/compilation
 //! into the `Sequence` model used by the layout engine.
-pub use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
+pub use crate::timeline::sequence::model::{ArrowHead, LineStyle, NotePlacement, ParticipantKind};
 
 /// A parsed sequence diagram statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,8 +21,13 @@ pub enum SequenceStatement {
         arrow_head: ArrowHead,
         text: String,
     },
-    /// `Note over A: text`.
-    Note { over: String, text: String },
+    /// `Note over A: text`, `Note left of A: text`, `Note right of A: text`,
+    /// or `Note over A,B: text` (spanning).
+    Note {
+        placement: NotePlacement,
+        participants: Vec<String>,
+        text: String,
+    },
     /// `autonumber`.
     Autonumber,
 }

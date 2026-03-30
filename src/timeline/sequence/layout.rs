@@ -3,7 +3,9 @@
 //! Computes character-grid positions for participants, messages,
 //! and notes. Output is consumed by the text renderer.
 
-use super::model::{ArrowHead, LineStyle, Participant, ParticipantKind, Sequence, SequenceEvent};
+use super::model::{
+    ArrowHead, LineStyle, NotePlacement, Participant, ParticipantKind, Sequence, SequenceEvent,
+};
 
 /// Minimum gap between participant centers (characters).
 const MIN_PARTICIPANT_GAP: usize = 20;
@@ -59,12 +61,14 @@ pub enum RowLayout {
         /// Autonumber prefix if any.
         number: Option<usize>,
     },
-    /// A note box over a participant.
+    /// A note box positioned relative to participant(s).
     Note {
         /// Y row of the note top border.
         y: usize,
-        /// Participant index.
-        over_idx: usize,
+        /// Note placement mode.
+        placement: NotePlacement,
+        /// Participant indices (1 for left/right/over-single, 2 for spanning).
+        participant_indices: Vec<usize>,
         /// Note text.
         text: String,
     },
@@ -95,7 +99,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     }
 
     let participant_gap = compute_participant_gap(model);
-    let participants = layout_participants(&model.participants, participant_gap);
+    let left_margin = compute_left_note_margin(model);
+    let participants = layout_participants(&model.participants, participant_gap, left_margin);
 
     let mut rows = Vec::new();
     let mut cursor_y = HEADER_HEIGHT + EVENT_GAP;
@@ -137,10 +142,15 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                     cursor_y += 1 + EVENT_GAP;
                 }
             }
-            SequenceEvent::Note { over, text } => {
+            SequenceEvent::Note {
+                placement,
+                participants: indices,
+                text,
+            } => {
                 rows.push(RowLayout::Note {
                     y: cursor_y,
-                    over_idx: *over,
+                    placement: *placement,
+                    participant_indices: indices.clone(),
                     text: text.clone(),
                 });
                 // Note box: 3 rows (border + text + border)
@@ -183,10 +193,33 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         .events
         .iter()
         .filter_map(|e| match e {
-            SequenceEvent::Note { over, text } => {
+            SequenceEvent::Note {
+                placement,
+                participants: indices,
+                text,
+            } => {
                 let box_width = text.len() + 4;
-                let center_x = participants[*over].center_x;
-                let box_right = center_x.saturating_sub(box_width / 2) + box_width;
+                let box_right = match placement {
+                    NotePlacement::LeftOf => {
+                        // Box right edge at center_x - 1
+                        participants[indices[0]].center_x
+                    }
+                    NotePlacement::RightOf => {
+                        let center_x = participants[indices[0]].center_x;
+                        center_x + 1 + box_width
+                    }
+                    NotePlacement::Over if indices.len() == 2 => {
+                        let cx1 = participants[indices[0]].center_x;
+                        let cx2 = participants[indices[1]].center_x;
+                        let mid = (cx1 + cx2) / 2;
+                        let span_width = box_width.max(cx1.abs_diff(cx2) + 4);
+                        mid.saturating_sub(span_width / 2) + span_width
+                    }
+                    NotePlacement::Over => {
+                        let center_x = participants[indices[0]].center_x;
+                        center_x.saturating_sub(box_width / 2) + box_width
+                    }
+                };
                 Some(box_right)
             }
             _ => None,
@@ -230,10 +263,52 @@ fn compute_participant_gap(model: &Sequence) -> usize {
     (max_label_len + LABEL_PADDING).max(MIN_PARTICIPANT_GAP)
 }
 
+/// Compute extra left margin needed for left-of notes.
+///
+/// A left-of note on the first participant needs space to the left of the
+/// lifeline. Without this, the note box would overflow into negative x
+/// (clamped to 0 by saturating_sub), overlapping the diagram.
+fn compute_left_note_margin(model: &Sequence) -> usize {
+    // Tentative center_x for each participant with default margin of 1
+    let mut centers = Vec::with_capacity(model.participants.len());
+    let mut x = 1usize;
+    for (i, p) in model.participants.iter().enumerate() {
+        let box_width = p.label.len() + 4;
+        centers.push(x + box_width / 2);
+        if i < model.participants.len() - 1 {
+            let next_bw = model.participants[i + 1].label.len() + 4;
+            x = centers[i] + MIN_PARTICIPANT_GAP - next_bw / 2;
+        }
+    }
+
+    let mut max_overhang = 0usize;
+    for event in &model.events {
+        if let SequenceEvent::Note {
+            placement: NotePlacement::LeftOf,
+            participants: indices,
+            text,
+        } = event
+        {
+            let box_width = text.len() + 4;
+            let center_x = centers[indices[0]];
+            // The renderer places the box at center_x - (box_width + 1)
+            let needed = box_width + 1;
+            if needed > center_x {
+                max_overhang = max_overhang.max(needed - center_x);
+            }
+        }
+    }
+    max_overhang
+}
+
 /// Compute horizontal positions for all participants.
-fn layout_participants(participants: &[Participant], gap: usize) -> Vec<ParticipantLayout> {
+fn layout_participants(
+    participants: &[Participant],
+    gap: usize,
+    left_margin: usize,
+) -> Vec<ParticipantLayout> {
     let mut result = Vec::with_capacity(participants.len());
-    let mut x = 1; // left margin
+    let mut x = 1 + left_margin; // left margin + space for left-of notes
 
     for (i, p) in participants.iter().enumerate() {
         let box_width = p.label.len() + 4; // | + space + label + space + |
