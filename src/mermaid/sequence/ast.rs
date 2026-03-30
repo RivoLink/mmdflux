@@ -2,16 +2,7 @@
 //!
 //! These represent the raw parsed syntax before validation/compilation
 //! into the `Sequence` model used by the layout engine.
-pub use crate::timeline::sequence::model::ParticipantKind;
-
-/// Arrow type for messages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArrowType {
-    /// Solid line with filled arrowhead (`->>`).
-    Solid,
-    /// Dashed line with filled arrowhead (`-->>`).
-    Dashed,
-}
+pub use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
 
 /// A parsed sequence diagram statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,11 +13,12 @@ pub enum SequenceStatement {
         id: String,
         alias: Option<String>,
     },
-    /// `A->>B: hello` or `A-->>B: hello`.
+    /// A message between participants (e.g., `A->>B: hello`).
     Message {
         from: String,
         to: String,
-        arrow: ArrowType,
+        line_style: LineStyle,
+        arrow_head: ArrowHead,
         text: String,
     },
     /// `Note over A: text`.

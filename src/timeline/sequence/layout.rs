@@ -3,7 +3,7 @@
 //! Computes character-grid positions for participants, messages,
 //! and notes. Output is consumed by the text renderer.
 
-use super::model::{MessageStyle, Participant, ParticipantKind, Sequence, SequenceEvent};
+use super::model::{ArrowHead, LineStyle, Participant, ParticipantKind, Sequence, SequenceEvent};
 
 /// Minimum gap between participant centers (characters).
 const MIN_PARTICIPANT_GAP: usize = 20;
@@ -50,8 +50,10 @@ pub enum RowLayout {
         from_idx: usize,
         /// Target participant index.
         to_idx: usize,
-        /// Solid or dashed.
-        style: MessageStyle,
+        /// Solid or dashed line.
+        line_style: LineStyle,
+        /// Arrowhead shape.
+        arrow_head: ArrowHead,
         /// Label text.
         text: String,
         /// Autonumber prefix if any.
@@ -103,7 +105,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
             SequenceEvent::Message {
                 from,
                 to,
-                style,
+                line_style,
+                arrow_head,
                 text,
                 number,
             } => {
@@ -114,7 +117,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
-                        style: *style,
+                        line_style: *line_style,
+                        arrow_head: *arrow_head,
                         text: text.clone(),
                         number: *number,
                     });
@@ -125,7 +129,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
-                        style: *style,
+                        line_style: *line_style,
+                        arrow_head: *arrow_head,
                         text: text.clone(),
                         number: *number,
                     });
@@ -231,7 +236,7 @@ fn layout_participants(participants: &[Participant], gap: usize) -> Vec<Particip
     let mut x = 1; // left margin
 
     for (i, p) in participants.iter().enumerate() {
-        let box_width = p.label.len() + 4; // │ + space + label + space + │
+        let box_width = p.label.len() + 4; // | + space + label + space + |
         let center_x = x + box_width / 2;
 
         result.push(ParticipantLayout {

@@ -8,7 +8,7 @@ use crate::render::text::chars::CharSet;
 use crate::timeline::sequence::layout::{
     ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
 };
-use crate::timeline::sequence::model::MessageStyle;
+use crate::timeline::sequence::model::{ArrowHead, LineStyle};
 
 /// Render a sequence layout to a string.
 pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
@@ -36,7 +36,8 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                 y,
                 from_idx,
                 to_idx,
-                style,
+                line_style,
+                arrow_head,
                 text,
                 number,
             } => {
@@ -44,9 +45,28 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                 let to_x = layout.participants[*to_idx].center_x;
 
                 if from_idx == to_idx {
-                    draw_self_message(&mut canvas, from_x, *y, text, number, style, charset);
+                    draw_self_message(
+                        &mut canvas,
+                        from_x,
+                        *y,
+                        text,
+                        number,
+                        line_style,
+                        arrow_head,
+                        charset,
+                    );
                 } else {
-                    draw_message(&mut canvas, from_x, to_x, *y, text, number, style, charset);
+                    draw_message(
+                        &mut canvas,
+                        from_x,
+                        to_x,
+                        *y,
+                        text,
+                        number,
+                        line_style,
+                        arrow_head,
+                        charset,
+                    );
                 }
             }
             RowLayout::Note { y, over_idx, text } => {
@@ -84,6 +104,36 @@ fn draw_participant_header(canvas: &mut Canvas, p: &ParticipantLayout, cs: &Char
     canvas.set(p.center_x, 2, cs.tee_down);
 }
 
+/// Resolve the arrowhead character for the given direction and head type.
+fn arrow_char(arrow_head: &ArrowHead, left_to_right: bool) -> char {
+    match arrow_head {
+        // Filled and Open look identical in monospace text mode
+        ArrowHead::Filled | ArrowHead::Open => {
+            if left_to_right {
+                '>'
+            } else {
+                '<'
+            }
+        }
+        ArrowHead::Cross => 'x',
+        ArrowHead::Async => {
+            if left_to_right {
+                ')'
+            } else {
+                '('
+            }
+        }
+    }
+}
+
+/// Resolve the line character for the given line style.
+fn line_char(line_style: &LineStyle, cs: &CharSet) -> char {
+    match line_style {
+        LineStyle::Solid => cs.horizontal,
+        LineStyle::Dashed => cs.dotted_horizontal,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_message(
     canvas: &mut Canvas,
@@ -92,7 +142,8 @@ fn draw_message(
     y: usize,
     text: &str,
     number: &Option<usize>,
-    style: &MessageStyle,
+    line_style: &LineStyle,
+    arrow_head: &ArrowHead,
     cs: &CharSet,
 ) {
     let left_to_right = to_x > from_x;
@@ -102,19 +153,17 @@ fn draw_message(
         (to_x + 1, from_x)
     };
 
-    let (line_char, arrow_char) = match style {
-        MessageStyle::Solid => (cs.horizontal, if left_to_right { '>' } else { '<' }),
-        MessageStyle::Dashed => (cs.dotted_horizontal, if left_to_right { '>' } else { '<' }),
-    };
+    let lc = line_char(line_style, cs);
+    let ac = arrow_char(arrow_head, left_to_right);
 
     for x in start_x..end_x {
-        canvas.set(x, y, line_char);
+        canvas.set(x, y, lc);
     }
 
     if left_to_right {
-        canvas.set(end_x - 1, y, arrow_char);
+        canvas.set(end_x - 1, y, ac);
     } else {
-        canvas.set(start_x, y, arrow_char);
+        canvas.set(start_x, y, ac);
     }
 
     let label = format_label(text, number);
@@ -124,13 +173,15 @@ fn draw_message(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_self_message(
     canvas: &mut Canvas,
     center_x: usize,
     y: usize,
     text: &str,
     number: &Option<usize>,
-    _style: &MessageStyle,
+    _line_style: &LineStyle,
+    arrow_head: &ArrowHead,
     cs: &CharSet,
 ) {
     let arm_end = center_x + SELF_MSG_WIDTH;
@@ -148,7 +199,7 @@ fn draw_self_message(
 
     canvas.set(arm_end, y + 1, cs.vertical);
 
-    canvas.set(center_x, y + 2, '<');
+    canvas.set(center_x, y + 2, arrow_char(arrow_head, false));
     for x in (center_x + 1)..arm_end {
         canvas.set(x, y + 2, cs.horizontal);
     }

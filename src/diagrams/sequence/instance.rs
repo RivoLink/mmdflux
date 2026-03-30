@@ -1,7 +1,7 @@
 //! Sequence diagram instance implementation.
 
 use super::compiler;
-use crate::errors::RenderError;
+use crate::errors::{ParseDiagnostic, RenderError};
 use crate::mermaid::sequence::parse_sequence;
 use crate::registry::{DiagramInstance, ParsedDiagram};
 use crate::timeline::Sequence;
@@ -25,10 +25,17 @@ impl DiagramInstance for SequenceInstance {
         self: Box<Self>,
         input: &str,
     ) -> Result<Box<dyn ParsedDiagram>, Box<dyn std::error::Error + Send + Sync>> {
-        let statements = parse_sequence(input)?;
+        let result = parse_sequence(input)?;
         Ok(Box::new(ParsedSequence {
-            model: compiler::compile(&statements)?,
+            model: compiler::compile(&result.statements)?,
         }))
+    }
+
+    fn validation_warnings(&self, input: &str) -> Vec<ParseDiagnostic> {
+        match parse_sequence(input) {
+            Ok(result) => result.warnings,
+            Err(_) => Vec::new(),
+        }
     }
 }
 
@@ -58,6 +65,23 @@ mod tests {
         };
         assert_eq!(sequence.participants.len(), 2);
         assert_eq!(sequence.events.len(), 1);
+    }
+
+    #[test]
+    fn sequence_instance_reports_warnings_for_skipped_lines() {
+        let instance = SequenceInstance::new();
+        let warnings = instance
+            .validation_warnings("sequenceDiagram\nactivate A\nparticipant B\ndeactivate A");
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings[0].message.contains("activate A"));
+        assert!(warnings[1].message.contains("deactivate A"));
+    }
+
+    #[test]
+    fn sequence_instance_no_warnings_for_clean_input() {
+        let instance = SequenceInstance::new();
+        let warnings = instance.validation_warnings("sequenceDiagram\nparticipant A\nA->>B: hello");
+        assert!(warnings.is_empty());
     }
 
     // Engine selection rejection and format support are now tested at the

@@ -6,10 +6,8 @@
 
 use std::collections::HashMap;
 
-use crate::mermaid::sequence::ast::{ArrowType, SequenceStatement};
-use crate::timeline::sequence::model::{
-    MessageStyle, Participant, ParticipantKind, Sequence, SequenceEvent,
-};
+use crate::mermaid::sequence::ast::SequenceStatement;
+use crate::timeline::sequence::model::{Participant, ParticipantKind, Sequence, SequenceEvent};
 
 /// Compile parsed sequence statements into a validated model.
 ///
@@ -49,7 +47,8 @@ pub fn compile(
             SequenceStatement::Message {
                 from,
                 to,
-                arrow,
+                line_style,
+                arrow_head,
                 text,
             } => {
                 let from_idx = ensure_participant(&mut participants, &mut participant_index, from);
@@ -59,10 +58,8 @@ pub fn compile(
                 events.push(SequenceEvent::Message {
                     from: from_idx,
                     to: to_idx,
-                    style: match arrow {
-                        ArrowType::Solid => MessageStyle::Solid,
-                        ArrowType::Dashed => MessageStyle::Dashed,
-                    },
+                    line_style: *line_style,
+                    arrow_head: *arrow_head,
                     text: text.clone(),
                     number: if autonumber {
                         Some(message_counter)
@@ -119,10 +116,11 @@ fn ensure_participant(
 mod tests {
     use super::*;
     use crate::mermaid::sequence::parse_sequence;
+    use crate::timeline::sequence::model::{ArrowHead, LineStyle};
 
     fn compile_input(input: &str) -> Sequence {
-        let stmts = parse_sequence(input).unwrap();
-        compile(&stmts).unwrap()
+        let result = parse_sequence(input).unwrap();
+        compile(&result.statements).unwrap()
     }
 
     #[test]
@@ -210,10 +208,10 @@ mod tests {
 
     #[test]
     fn compile_note_unknown_participant_errors() {
-        let stmts = parse_sequence("sequenceDiagram\nNote over X: oops").unwrap();
-        let result = compile(&stmts);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let result = parse_sequence("sequenceDiagram\nNote over X: oops").unwrap();
+        let compile_result = compile(&result.statements);
+        assert!(compile_result.is_err());
+        let err = compile_result.unwrap_err().to_string();
         assert!(err.contains("unknown participant"));
     }
 
@@ -244,16 +242,53 @@ mod tests {
     }
 
     #[test]
-    fn compile_message_style_mapping() {
+    fn compile_line_style_mapping() {
         let model = compile_input("sequenceDiagram\nA->>B: solid\nA-->>B: dashed");
         match &model.events[0] {
-            SequenceEvent::Message { style, .. } => assert_eq!(*style, MessageStyle::Solid),
+            SequenceEvent::Message {
+                line_style,
+                arrow_head,
+                ..
+            } => {
+                assert_eq!(*line_style, LineStyle::Solid);
+                assert_eq!(*arrow_head, ArrowHead::Filled);
+            }
             _ => panic!("expected message"),
         }
         match &model.events[1] {
-            SequenceEvent::Message { style, .. } => assert_eq!(*style, MessageStyle::Dashed),
+            SequenceEvent::Message {
+                line_style,
+                arrow_head,
+                ..
+            } => {
+                assert_eq!(*line_style, LineStyle::Dashed);
+                assert_eq!(*arrow_head, ArrowHead::Filled);
+            }
             _ => panic!("expected message"),
         }
+    }
+
+    #[test]
+    fn compile_all_arrow_heads() {
+        let model =
+            compile_input("sequenceDiagram\nA->>B: filled\nA->B: open\nA-xB: cross\nA-)B: async");
+        let heads: Vec<_> = model
+            .events
+            .iter()
+            .map(|e| match e {
+                SequenceEvent::Message { arrow_head, .. } => *arrow_head,
+                _ => panic!("expected message"),
+            })
+            .collect();
+        assert_eq!(
+            heads,
+            vec![
+                ArrowHead::Filled,
+                ArrowHead::Open,
+                ArrowHead::Cross,
+                ArrowHead::Async
+            ]
+        );
     }
 
     #[test]
