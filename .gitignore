@@ -12,4 +12,6 @@ AGENTS.local.md
 /scripts/out
 /.cursor/worktrees.json
 
+/.claude/scheduled_tasks.lock
+
 __pycache__
