@@ -222,3 +222,26 @@ fn sequence_interaction_operators_render_block_labels() {
     assert!(loop_output.contains("[loop] Every 5 seconds"));
     assert!(opt.contains("[opt] Extra data needed"));
 }
+
+#[test]
+fn sequence_svg_interaction_operators_use_operator_tabs() {
+    let svg = render_sequence_svg("alt_else.mmd");
+
+    assert!(
+        svg.contains("<polygon "),
+        "expected SVG operator tab polygon"
+    );
+    assert!(svg.contains(">alt</text>"), "expected alt operator tab");
+    assert!(
+        svg.contains(">Check status</text>"),
+        "message text should remain present"
+    );
+    assert!(
+        svg.contains("[available]</text>"),
+        "expected bracketed fragment guard"
+    );
+    assert!(
+        svg.contains("[busy]</text>"),
+        "expected bracketed else guard"
+    );
+}

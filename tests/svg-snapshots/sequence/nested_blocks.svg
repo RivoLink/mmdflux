@@ -18,15 +18,16 @@
     <line x1="193.63" y1="54.00" x2="193.63" y2="364.00" stroke="#333" stroke-width="1" stroke-dasharray="5,5" />
   </g>
   <g class="blocks">
-    <rect x="27.63" y="74.00" width="207.19" height="262.00" fill="none" stroke="#666" stroke-width="1" />
-    <rect x="35.63" y="78.00" width="192.00" height="16" fill="white" stroke="none" />
-    <text x="37.63" y="88.00" text-anchor="start" dominant-baseline="middle" fill="#333">[loop] Retry until ready</text>
-    <rect x="39.63" y="152.00" width="158.00" height="156.00" fill="none" stroke="#666" stroke-width="1" />
-    <rect x="47.63" y="156.00" width="88.00" height="16" fill="white" stroke="none" />
-    <text x="49.63" y="166.00" text-anchor="start" dominant-baseline="middle" fill="#333">[alt] ready</text>
-    <line x1="39.63" y1="230.00" x2="197.63" y2="230.00" stroke="#666" stroke-width="1" stroke-dasharray="5,5" />
-    <rect x="47.63" y="216.00" width="96.00" height="16" fill="white" stroke="none" />
-    <text x="49.63" y="226.00" text-anchor="start" dominant-baseline="middle" fill="#333">[else] retry</text>
+    <rect x="27.63" y="74.00" width="207.19" height="262.00" fill="none" stroke="#666" stroke-width="1" stroke-dasharray="3,3" />
+    <polygon points="27.63,74.00 75.63,74.00 75.63,87.00 67.23,94.00 27.63,94.00" fill="white" stroke="#666" stroke-width="1" />
+    <text x="51.63" y="84.00" text-anchor="middle" dominant-baseline="middle" fill="#333">loop</text>
+    <text x="155.23" y="89.00" text-anchor="middle" dominant-baseline="middle" fill="#333">[Retry until ready]</text>
+    <rect x="39.63" y="152.00" width="158.00" height="156.00" fill="none" stroke="#666" stroke-width="1" stroke-dasharray="3,3" />
+    <polygon points="39.63,152.00 81.63,152.00 81.63,165.00 73.23,172.00 39.63,172.00" fill="white" stroke="#666" stroke-width="1" />
+    <text x="60.63" y="162.00" text-anchor="middle" dominant-baseline="middle" fill="#333">alt</text>
+    <text x="139.63" y="167.00" text-anchor="middle" dominant-baseline="middle" fill="#333">[ready]</text>
+    <line x1="39.63" y1="230.00" x2="197.63" y2="230.00" stroke="#666" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="118.63" y="245.00" text-anchor="middle" dominant-baseline="middle" fill="#333">[retry]</text>
   </g>
   <g class="participants">
     <rect x="10.00" y="10.00" width="67.26" height="44.00" fill="white" stroke="#333" stroke-width="1" />

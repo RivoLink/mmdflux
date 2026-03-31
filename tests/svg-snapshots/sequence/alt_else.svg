@@ -18,12 +18,12 @@
     <line x1="193.63" y1="54.00" x2="193.63" y2="308.00" stroke="#333" stroke-width="1" stroke-dasharray="5,5" />
   </g>
   <g class="blocks">
-    <rect x="31.63" y="124.00" width="174.00" height="156.00" fill="none" stroke="#666" stroke-width="1" />
-    <rect x="39.63" y="128.00" width="120.00" height="16" fill="white" stroke="none" />
-    <text x="41.63" y="138.00" text-anchor="start" dominant-baseline="middle" fill="#333">[alt] available</text>
-    <line x1="31.63" y1="202.00" x2="205.63" y2="202.00" stroke="#666" stroke-width="1" stroke-dasharray="5,5" />
-    <rect x="39.63" y="188.00" width="88.00" height="16" fill="white" stroke="none" />
-    <text x="41.63" y="198.00" text-anchor="start" dominant-baseline="middle" fill="#333">[else] busy</text>
+    <rect x="31.63" y="124.00" width="174.00" height="156.00" fill="none" stroke="#666" stroke-width="1" stroke-dasharray="3,3" />
+    <polygon points="31.63,124.00 73.63,124.00 73.63,137.00 65.23,144.00 31.63,144.00" fill="white" stroke="#666" stroke-width="1" />
+    <text x="52.63" y="134.00" text-anchor="middle" dominant-baseline="middle" fill="#333">alt</text>
+    <text x="139.63" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">[available]</text>
+    <line x1="31.63" y1="202.00" x2="205.63" y2="202.00" stroke="#666" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="118.63" y="217.00" text-anchor="middle" dominant-baseline="middle" fill="#333">[busy]</text>
   </g>
   <g class="participants">
     <rect x="10.00" y="10.00" width="67.26" height="44.00" fill="white" stroke="#333" stroke-width="1" />

@@ -8,9 +8,7 @@ use super::svg_layout::{
     SvgRow, SvgSelfMessage, SvgSequenceLayout,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
-use crate::timeline::sequence::model::{
-    ArrowHead, BlockDividerKind, BlockKind, LineStyle, ParticipantKind,
-};
+use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
 
 const STROKE_COLOR: &str = "#333";
 const FILL_COLOR: &str = "white";
@@ -20,6 +18,14 @@ const ACTIVATION_FILL: &str = "#ddd";
 const ACTOR_STROKE: &str = "#333";
 const BLOCK_STROKE: &str = "#666";
 const BLOCK_LABEL_BG: &str = "white";
+const BLOCK_STROKE_DASH: &str = "3,3";
+const BLOCK_TAB_HEIGHT: f64 = 20.0;
+const BLOCK_TAB_MIN_WIDTH: f64 = 42.0;
+const BLOCK_TAB_PADDING_X: f64 = 8.0;
+const BLOCK_TAB_CUT: f64 = 7.0;
+const BLOCK_TAB_CHAR_WIDTH: f64 = 8.0;
+const BLOCK_HEADER_TEXT_Y: f64 = 15.0;
+const BLOCK_SECTION_TEXT_Y: f64 = 15.0;
 
 /// Render an SVG sequence layout to an SVG string.
 pub fn render(layout: &SvgSequenceLayout) -> String {
@@ -250,15 +256,28 @@ fn render_lifeline(writer: &mut SvgWriter, ll: &SvgLifeline) {
 fn render_block(writer: &mut SvgWriter, block: &SvgBlock) {
     let rect = &block.rect;
     writer.push_line(&format!(
-        "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" />",
+        "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" stroke-dasharray=\"{BLOCK_STROKE_DASH}\" />",
         x = fmt_f64(rect.x),
         y = fmt_f64(rect.y),
         w = fmt_f64(rect.width),
         h = fmt_f64(rect.height),
     ));
 
-    let label = format_block_label(block.kind, &block.label);
-    render_block_label(writer, &label, rect.x + 10.0, rect.y + 14.0);
+    let operator = block.kind.keyword();
+    let tab_width = block_tab_width(operator);
+    render_block_operator_tab(
+        writer,
+        operator,
+        rect.x,
+        rect.y,
+        tab_width,
+        BLOCK_TAB_HEIGHT,
+    );
+
+    if let Some(title) = format_fragment_guard(&block.label) {
+        let title_x = rect.x + tab_width + (rect.width - tab_width) / 2.0;
+        render_centered_block_text(writer, &title, title_x, rect.y + BLOCK_HEADER_TEXT_Y);
+    }
 
     for divider in &block.dividers {
         render_block_divider(writer, rect, divider);
@@ -271,26 +290,51 @@ fn render_block_divider(
     divider: &SvgBlockDivider,
 ) {
     writer.push_line(&format!(
-        "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" stroke-dasharray=\"5,5\" />",
+        "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" stroke-dasharray=\"{BLOCK_STROKE_DASH}\" />",
         x1 = fmt_f64(rect.x),
         x2 = fmt_f64(rect.x + rect.width),
         y = fmt_f64(divider.y),
     ));
 
-    let label = format_divider_label(divider.kind, &divider.label);
-    render_block_label(writer, &label, rect.x + 10.0, divider.y - 4.0);
+    if let Some(label) = format_fragment_guard(&divider.label) {
+        render_centered_block_text(
+            writer,
+            &label,
+            rect.x + rect.width / 2.0,
+            divider.y + BLOCK_SECTION_TEXT_Y,
+        );
+    }
 }
 
-fn render_block_label(writer: &mut SvgWriter, label: &str, x: f64, y: f64) {
-    let width = (label.len() as f64 * 8.0).max(28.0);
+fn render_block_operator_tab(
+    writer: &mut SvgWriter,
+    keyword: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) {
+    let cut = BLOCK_TAB_CUT;
     writer.push_line(&format!(
-        "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"16\" fill=\"{BLOCK_LABEL_BG}\" stroke=\"none\" />",
-        x = fmt_f64(x - 2.0),
-        y = fmt_f64(y - 10.0),
-        w = fmt_f64(width),
+        "<polygon points=\"{x0},{y0} {x1},{y0} {x1},{y1} {x2},{y2} {x0},{y2}\" fill=\"{BLOCK_LABEL_BG}\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" />",
+        x0 = fmt_f64(x),
+        y0 = fmt_f64(y),
+        x1 = fmt_f64(x + width),
+        y1 = fmt_f64(y + height - cut),
+        x2 = fmt_f64(x + width - cut * 1.2),
+        y2 = fmt_f64(y + height),
     ));
     writer.push_line(&format!(
-        "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{label}</text>",
+        "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{label}</text>",
+        x = fmt_f64(x + width / 2.0),
+        y = fmt_f64(y + height / 2.0),
+        label = escape_text(keyword),
+    ));
+}
+
+fn render_centered_block_text(writer: &mut SvgWriter, label: &str, x: f64, y: f64) {
+    writer.push_line(&format!(
+        "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{label}</text>",
         x = fmt_f64(x),
         y = fmt_f64(y),
         label = escape_text(label),
@@ -425,18 +469,16 @@ fn dash_attr(line_style: &LineStyle) -> String {
     }
 }
 
-fn format_block_label(kind: BlockKind, label: &str) -> String {
-    format_badge(kind.keyword(), label)
+fn block_tab_width(keyword: &str) -> f64 {
+    ((keyword.len() as f64) * BLOCK_TAB_CHAR_WIDTH + BLOCK_TAB_PADDING_X * 2.0)
+        .max(BLOCK_TAB_MIN_WIDTH)
 }
 
-fn format_divider_label(kind: BlockDividerKind, label: &str) -> String {
-    format_badge(kind.keyword(), label)
-}
-
-fn format_badge(keyword: &str, label: &str) -> String {
-    if label.is_empty() {
-        format!("[{keyword}]")
+fn format_fragment_guard(label: &str) -> Option<String> {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        None
     } else {
-        format!("[{keyword}] {label}")
+        Some(format!("[{trimmed}]"))
     }
 }
