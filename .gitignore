@@ -13,5 +13,6 @@ AGENTS.local.md
 /.cursor/worktrees.json
 
 /.claude/scheduled_tasks.lock
+/.codex/environments/
 
 __pycache__
