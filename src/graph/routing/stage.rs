@@ -354,12 +354,17 @@ pub(crate) fn build_backward_channel_path(
     const CHANNEL_CLEARANCE: f64 = 8.0;
     const LANE_SPACING: f64 = 8.0;
 
-    let from_rect = geometry.nodes.get(&edge.from).map(|n| n.rect);
-    let to_rect = geometry.nodes.get(&edge.to).map(|n| n.rect);
+    let from_node = geometry.nodes.get(&edge.from);
+    let to_node = geometry.nodes.get(&edge.to);
+    let from_rect = from_node.map(|n| n.rect);
+    let to_rect = to_node.map(|n| n.rect);
 
     let (Some(sr), Some(tr)) = (from_rect, to_rect) else {
         return path;
     };
+
+    let scope_parent = from_node.and_then(|n| n.parent.as_deref());
+    let sg_rect = super::orthogonal::backward::shared_parent_subgraph_rect(edge, geometry);
 
     let lane_offset = CHANNEL_CLEARANCE + (backward_lane_index as f64) * LANE_SPACING;
 
@@ -377,11 +382,17 @@ pub(crate) fn build_backward_channel_path(
                 if node.id == edge.from || node.id == edge.to {
                     continue;
                 }
+                if !super::orthogonal::backward::node_in_scope(&node.id, scope_parent, geometry) {
+                    continue;
+                }
                 let cy = node.rect.center_y();
                 let node_right = node.rect.x + node.rect.width;
                 if cy >= min_y && cy <= max_y {
                     lane_x = lane_x.max(node_right + lane_offset);
                 }
+            }
+            if let Some(sg) = sg_rect {
+                lane_x = lane_x.min(sg.x + sg.width - CHANNEL_CLEARANCE);
             }
 
             vec![
@@ -405,12 +416,18 @@ pub(crate) fn build_backward_channel_path(
                 if node.id == edge.from || node.id == edge.to {
                     continue;
                 }
+                if !super::orthogonal::backward::node_in_scope(&node.id, scope_parent, geometry) {
+                    continue;
+                }
                 let cx = node.rect.center_x();
                 let node_bottom = node.rect.y + node.rect.height;
                 if cx >= min_x && cx <= max_x && node.rect.y < lane_y && node_bottom > corridor_top
                 {
                     lane_y = lane_y.max(node_bottom + lane_offset);
                 }
+            }
+            if let Some(sg) = sg_rect {
+                lane_y = lane_y.min(sg.y + sg.height - CHANNEL_CLEARANCE);
             }
 
             vec![

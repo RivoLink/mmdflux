@@ -264,6 +264,35 @@ pub(super) fn avoid_backward_td_bt_vertical_lane_node_intrusion(
     }
 }
 
+/// If both edge endpoints share the same parent subgraph, return that
+/// subgraph's rect.  Used to constrain backward edge routing channels
+/// to the interior of the containing subgraph.
+pub(in crate::graph::routing) fn shared_parent_subgraph_rect(
+    edge: &LayoutEdge,
+    geometry: &GraphGeometry,
+) -> Option<FRect> {
+    let from_parent = geometry.nodes.get(&edge.from)?.parent.as_deref()?;
+    let to_parent = geometry.nodes.get(&edge.to)?.parent.as_deref()?;
+    if from_parent != to_parent {
+        return None;
+    }
+    geometry.subgraphs.get(from_parent).map(|sg| sg.rect)
+}
+
+/// Check if a node belongs to the given parent subgraph (or has no
+/// parent when `parent_id` is None).
+pub(in crate::graph::routing) fn node_in_scope(
+    node_id: &str,
+    parent_id: Option<&str>,
+    geometry: &GraphGeometry,
+) -> bool {
+    let node_parent = geometry
+        .nodes
+        .get(node_id)
+        .and_then(|n| n.parent.as_deref());
+    node_parent == parent_id
+}
+
 pub(super) fn has_backward_corridor_obstructions(
     edge: &LayoutEdge,
     geometry: &GraphGeometry,
@@ -276,6 +305,11 @@ pub(super) fn has_backward_corridor_obstructions(
         return false;
     };
 
+    let scope_parent = geometry
+        .nodes
+        .get(&edge.from)
+        .and_then(|n| n.parent.as_deref());
+
     match direction {
         Direction::TopDown | Direction::BottomTop => {
             let corridor_left = sr.x.min(tr.x);
@@ -284,6 +318,9 @@ pub(super) fn has_backward_corridor_obstructions(
             let max_y = (sr.y + sr.height).max(tr.y + tr.height);
             geometry.nodes.values().any(|node| {
                 if node.id == edge.from || node.id == edge.to {
+                    return false;
+                }
+                if !node_in_scope(&node.id, scope_parent, geometry) {
                     return false;
                 }
                 let cy = node.rect.center_y();
@@ -301,6 +338,9 @@ pub(super) fn has_backward_corridor_obstructions(
             let max_x = (sr.x + sr.width).max(tr.x + tr.width);
             geometry.nodes.values().any(|node| {
                 if node.id == edge.from || node.id == edge.to {
+                    return false;
+                }
+                if !node_in_scope(&node.id, scope_parent, geometry) {
                     return false;
                 }
                 let cx = node.rect.center_x();
@@ -321,8 +361,11 @@ pub(crate) fn build_backward_orthogonal_channel_path(
 ) -> Option<Vec<FPoint>> {
     const CHANNEL_CLEARANCE: f64 = 12.0;
 
-    let sr = geometry.nodes.get(&edge.from)?.rect;
+    let from_node = geometry.nodes.get(&edge.from)?;
+    let sr = from_node.rect;
     let tr = geometry.nodes.get(&edge.to)?.rect;
+    let scope_parent = from_node.parent.as_deref();
+    let sg_rect = shared_parent_subgraph_rect(edge, geometry);
 
     match direction {
         Direction::TopDown | Direction::BottomTop => {
@@ -339,11 +382,18 @@ pub(crate) fn build_backward_orthogonal_channel_path(
                 if node.id == edge.from || node.id == edge.to {
                     continue;
                 }
+                if !node_in_scope(&node.id, scope_parent, geometry) {
+                    continue;
+                }
                 let cy = node.rect.center_y();
                 let node_right = node.rect.x + node.rect.width;
                 if cy >= min_y && cy <= max_y {
                     lane_x = lane_x.max(node_right + CHANNEL_CLEARANCE);
                 }
+            }
+            // Cap at subgraph right boundary when both endpoints share a parent.
+            if let Some(sg) = sg_rect {
+                lane_x = lane_x.min(sg.x + sg.width - CHANNEL_CLEARANCE);
             }
 
             Some(vec![
@@ -368,12 +418,19 @@ pub(crate) fn build_backward_orthogonal_channel_path(
                 if node.id == edge.from || node.id == edge.to {
                     continue;
                 }
+                if !node_in_scope(&node.id, scope_parent, geometry) {
+                    continue;
+                }
                 let cx = node.rect.center_x();
                 let node_bottom = node.rect.y + node.rect.height;
                 if cx >= min_x && cx <= max_x && node.rect.y < lane_y && node_bottom > corridor_top
                 {
                     lane_y = lane_y.max(node_bottom + CHANNEL_CLEARANCE);
                 }
+            }
+            // Cap at subgraph bottom boundary when both endpoints share a parent.
+            if let Some(sg) = sg_rect {
+                lane_y = lane_y.min(sg.y + sg.height - CHANNEL_CLEARANCE);
             }
 
             Some(vec![
