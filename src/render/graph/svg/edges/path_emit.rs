@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use super::super::writer::fmt_f64;
 use super::super::{MIN_BASIS_VISIBLE_STEM_PX, Point};
 use super::basis::enforce_basis_visible_terminal_stems;
 use super::{
@@ -10,6 +9,7 @@ use super::{
 use crate::format::{CornerStyle, Curve};
 use crate::graph::routing::{EdgeRouting, build_orthogonal_path_float};
 use crate::graph::{Direction, Edge};
+use crate::render::svg::fmt_f64;
 use crate::simplification::PathSimplification;
 
 pub(super) fn points_for_svg_path(

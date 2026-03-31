@@ -585,13 +585,14 @@ fn cli_sequence_diagram_renders() {
 }
 
 #[test]
-fn cli_sequence_svg_errors() {
+fn cli_sequence_svg_renders() {
     mmdflux()
         .args(["--format", "svg"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("do not support svg"));
+        .success()
+        .stdout(predicate::str::contains("<svg"))
+        .stdout(predicate::str::contains("hello"));
 }
 
 // =============================================================================
@@ -700,15 +701,13 @@ fn cli_layout_engine_unknown_fails_for_class() {
 }
 
 #[test]
-fn cli_layout_engine_rejected_for_sequence() {
+fn cli_layout_engine_ignored_for_sequence() {
     mmdflux()
         .args(["--layout-engine", "flux-layered"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "layout engine selection is not supported for sequence diagrams",
-        ));
+        .success()
+        .stdout(predicate::str::contains("hello"));
 }
 
 #[test]

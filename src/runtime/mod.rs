@@ -17,7 +17,6 @@ use crate::errors::{ParseDiagnostic, RenderError};
 use crate::format::OutputFormat;
 use crate::frontends::{InputFrontend, detect_input_frontend};
 use crate::mermaid::ParseError;
-use crate::registry::DiagramFamily;
 
 /// Detect the diagram type from input text.
 ///
@@ -61,19 +60,6 @@ pub fn render_diagram(
         return Err(RenderError {
             message: format!("{diagram_id} diagrams do not support {format} output"),
         });
-    }
-
-    if config.layout_engine.is_some() {
-        let family = registry
-            .get(diagram_id)
-            .map(|d| d.family)
-            .unwrap_or(DiagramFamily::Graph);
-        if family != DiagramFamily::Graph {
-            return Err(RenderError {
-                message: "layout engine selection is not supported for sequence diagrams"
-                    .to_string(),
-            });
-        }
     }
 
     let instance = registry.create(diagram_id).ok_or_else(|| RenderError {

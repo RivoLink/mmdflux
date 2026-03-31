@@ -1,7 +1,7 @@
 //! Shared SVG text emission helpers for graph rendering.
 
-use super::writer::{SvgWriter, escape_text, fmt_f64};
 use crate::graph::measure::ProportionalTextMetrics;
+use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 
 pub(super) fn render_text_centered(
     writer: &mut SvgWriter,

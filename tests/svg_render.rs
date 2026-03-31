@@ -64,6 +64,51 @@ fn svg_runtime_honors_supported_style_options() {
 }
 
 #[test]
+fn basic_sequence_svg_has_participants_and_arrows() {
+    let input = "sequenceDiagram\n    Alice->>Bob: Hello\n    Bob-->>Alice: Hi\n";
+    let svg = render_svg(input, &RenderConfig::default());
+
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("Alice"));
+    assert!(svg.contains("Bob"));
+    assert!(svg.contains("Hello"));
+    assert!(svg.contains("Hi"));
+    assert!(svg.contains("marker-end="));
+    assert!(svg.contains("stroke-dasharray=\"5,5\"")); // lifelines
+    assert!(svg.contains("stroke-dasharray=\"6,4\"")); // dashed message
+}
+
+#[test]
+fn sequence_svg_self_message_renders_path() {
+    let input = "sequenceDiagram\n    Alice->>Alice: Think\n";
+    let svg = render_svg(input, &RenderConfig::default());
+
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("<path d=\"M"));
+    assert!(svg.contains("Think"));
+}
+
+#[test]
+fn sequence_svg_note_renders_note_box() {
+    let input = "sequenceDiagram\n    Alice->>Bob: Hello\n    Note right of Bob: Important\n";
+    let svg = render_svg(input, &RenderConfig::default());
+
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("Important"));
+    assert!(svg.contains("#ffffcc")); // note fill color
+}
+
+#[test]
+fn sequence_svg_activation_renders_rect() {
+    let input = "sequenceDiagram\n    Alice->>Bob: Hello\n    activate Bob\n    Bob-->>Alice: Hi\n    deactivate Bob\n";
+    let svg = render_svg(input, &RenderConfig::default());
+
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("activations")); // group class
+    assert!(svg.contains("#ddd")); // activation fill
+}
+
+#[test]
 fn positioned_mmds_payload_renders_svg_through_runtime() {
     let payload = load_mmds_fixture("positioned/routed-fan-in-ports.json");
     let svg = render_svg(

@@ -3,9 +3,10 @@
 use super::graph_family;
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
+use crate::graph::measure;
 use crate::payload::Diagram;
-use crate::render::diagram::sequence;
 use crate::render::text::CharSet;
+use crate::render::timeline;
 use crate::runtime::config::RenderConfig;
 use crate::timeline::sequence::layout;
 
@@ -28,14 +29,21 @@ pub(in crate::runtime) fn render_payload(
         }
         Diagram::Class(graph) => graph_family::render_graph_family("class", &graph, format, config),
         Diagram::State(graph) => graph_family::render_graph_family("state", &graph, format, config),
-        Diagram::Sequence(model) => {
-            let seq_layout = layout::layout(&model);
-            let charset = match format {
-                OutputFormat::Ascii => CharSet::ascii(),
-                _ => CharSet::unicode(),
-            };
-            Ok(sequence::render(&seq_layout, &charset))
-        }
+        Diagram::Sequence(model) => match format {
+            OutputFormat::Svg => {
+                let metrics = measure::default_proportional_text_metrics();
+                let font_family = "\"trebuchet ms\", verdana, arial, sans-serif";
+                Ok(timeline::render_svg(&model, &metrics, font_family))
+            }
+            _ => {
+                let seq_layout = layout::layout(&model);
+                let charset = match format {
+                    OutputFormat::Ascii => CharSet::ascii(),
+                    _ => CharSet::unicode(),
+                };
+                Ok(timeline::render(&seq_layout, &charset))
+            }
+        },
     }
 }
 

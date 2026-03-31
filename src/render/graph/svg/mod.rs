@@ -15,7 +15,7 @@ use edges::{prepare_rendered_edge_paths, render_edges};
 use labels::render_edge_labels;
 use nodes::{render_nodes, render_subgraphs};
 use self_edges::compute_self_edge_paths;
-use writer::{SvgWriter, render_defs};
+use writer::render_defs;
 
 use crate::format::{Curve, RoutingStyle};
 use crate::graph::Graph;
@@ -23,6 +23,7 @@ use crate::graph::direction_policy::build_override_node_map;
 use crate::graph::geometry::{FPoint, FRect, GraphGeometry};
 use crate::graph::measure::{DEFAULT_PROPORTIONAL_FONT_SIZE, ProportionalTextMetrics};
 use crate::graph::routing::EdgeRouting;
+use crate::render::svg::SvgWriter;
 use crate::simplification::PathSimplification;
 
 const DEFAULT_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial, sans-serif";
