@@ -274,7 +274,11 @@ where
     // Build edge layouts, using waypoints for normalized edges
     let mut edges_by_orig_idx: HashMap<usize, EdgeLayout> = HashMap::new();
 
-    for &(from, to, orig_idx) in &lg.edges {
+    for (edge_pos, &(from, to, orig_idx)) in lg.edges.iter().enumerate() {
+        // Skip excluded edges (nesting edges removed during compound cleanup)
+        if lg.excluded_edges.contains(&edge_pos) {
+            continue;
+        }
         // Skip if this edge is already processed (part of a chain)
         if edges_by_orig_idx.contains_key(&orig_idx) {
             continue;
