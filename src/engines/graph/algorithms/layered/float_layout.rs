@@ -69,11 +69,6 @@ pub(crate) fn build_float_layout_with_flags(
         content_pad_y,
     );
 
-    // Shift external predecessors of direction-override subgraphs to align with
-    // the subgraph center.  Must happen after reconciliation (sublayout positions
-    // finalized) but before overlap resolution and edge rerouting.
-    center_override_subgraphs(diagram, &mut layout);
-
     // Expand parent subgraph bounds to encompass repositioned children.
     let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
     let title_margin = metrics.font_size;
@@ -90,6 +85,11 @@ pub(crate) fn build_float_layout_with_flags(
     // and overlap resolution but before edge rerouting.
     float_router::align_cross_boundary_siblings(diagram, &mut layout);
     expand_parent_bounds(diagram, &mut layout, child_margin, title_margin);
+
+    // Shift external predecessors/successors of subgraph-as-node and
+    // direction-override subgraphs to align with the subgraph center.
+    // Runs after all bound expansions so the centering uses final bounds.
+    center_override_subgraphs(diagram, &mut layout);
 
     // Reroute edges affected by direction-override subgraphs.
     // This must happen after reconciliation moves nodes but before padding,
