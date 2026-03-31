@@ -360,19 +360,7 @@ where
         }
     }
 
-    let result =
-        layered::layout_with_labels(&dgraph, layered_config, |_, dims| *dims, &edge_labels);
-
-    if std::env::var("MMDFLUX_DEBUG_NODE_POS").is_ok_and(|v| v == "1") {
-        for (id, rect) in &result.nodes {
-            eprintln!(
-                "[layered_nodes] {} x={:.2} y={:.2} w={:.2} h={:.2}",
-                id.0, rect.x, rect.y, rect.width, rect.height
-            );
-        }
-    }
-
-    result
+    layered::layout_with_labels(&dgraph, layered_config, |_, dims| *dims, &edge_labels)
 }
 
 #[cfg(test)]

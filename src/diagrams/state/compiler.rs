@@ -38,7 +38,7 @@ fn direction_from_str(dir: Option<&str>) -> Direction {
         Some("LR") => Direction::LeftRight,
         Some("RL") => Direction::RightLeft,
         Some("BT") => Direction::BottomTop,
-        Some("TB") => Direction::TopDown,
+        Some("TB") | Some("TD") => Direction::TopDown,
         _ => Direction::TopDown,
     }
 }

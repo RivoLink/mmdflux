@@ -208,7 +208,7 @@ fn strip_keyword<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
 fn normalize_direction(token: &str) -> Option<String> {
     let upper = token.to_ascii_uppercase();
     match upper.as_str() {
-        "LR" | "RL" | "BT" | "TB" => Some(upper),
+        "LR" | "RL" | "BT" | "TB" | "TD" => Some(upper),
         _ => None,
     }
 }
