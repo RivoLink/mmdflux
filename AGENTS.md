@@ -45,7 +45,7 @@ Rules:
 When fixing a GitHub issue:
 1. Read the issue and comments: `gh issue view <N> --comments`
 2. Create a conventional branch: `fix/description` or `feat/description`
-3. Keep PRs as a **single commit** — use `git commit --amend` and `git push --force-with-lease` when iterating
+3. Keep PRs as a **single commit** — squash before merging, use `git push --force-with-lease` when iterating
 4. Reference the issue in the commit body: `Closes #N`
 5. Post findings back to the issue with `gh issue comment <N>` when investigation reveals useful context
 

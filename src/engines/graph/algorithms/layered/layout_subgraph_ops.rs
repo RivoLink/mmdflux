@@ -494,9 +494,6 @@ pub(crate) fn center_override_subgraphs(diagram: &Graph, layout: &mut layered::L
                 let (eligible_preds, eligible_succs): (Vec<_>, Vec<_>) = eligible
                     .into_iter()
                     .partition(|(id, _, _)| pred_set.contains(id.as_str()));
-                eprintln!(
-                    "[center] sg={sg_id} sg_center={sg_center:.2} preds={eligible_preds:?} succs={eligible_succs:?}"
-                );
                 apply_group_shift(&eligible_preds, &mut node_shifts);
                 apply_group_shift(&eligible_succs, &mut node_shifts);
             }
