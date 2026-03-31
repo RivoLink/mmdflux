@@ -98,3 +98,44 @@ fn layout_box_width_matches_label() {
     let layout = layout_input("sequenceDiagram\nparticipant A as Alice");
     assert_eq!(layout.participants[0].box_width, "Alice".len() + 4);
 }
+
+#[test]
+fn layout_tracks_interaction_blocks() {
+    let layout = layout_input(
+        "\
+sequenceDiagram
+    participant A
+    participant B
+    alt available
+        A->>B: Request
+    else busy
+        B->>A: Retry later
+    end",
+    );
+    assert_eq!(layout.blocks.len(), 1);
+    let block = &layout.blocks[0];
+    assert!(block.left_x < block.right_x);
+    assert_eq!(block.dividers.len(), 1);
+    assert!(block.top_y < block.dividers[0].y);
+    assert!(block.dividers[0].y < block.bottom_y);
+}
+
+#[test]
+fn layout_nested_blocks_have_increasing_depth() {
+    let layout = layout_input(
+        "\
+sequenceDiagram
+    participant A
+    participant B
+    loop outer
+        alt ready
+            A->>B: Request
+        else later
+            B->>A: Retry
+        end
+    end",
+    );
+    assert_eq!(layout.blocks.len(), 2);
+    assert_eq!(layout.blocks[0].depth, 0);
+    assert_eq!(layout.blocks[1].depth, 1);
+}

@@ -4,11 +4,13 @@
 //! `SvgWriter` utilities.
 
 use super::svg_layout::{
-    SvgActivation, SvgLifeline, SvgMessage, SvgNote, SvgParticipant, SvgRow, SvgSelfMessage,
-    SvgSequenceLayout,
+    SvgActivation, SvgBlock, SvgBlockDivider, SvgLifeline, SvgMessage, SvgNote, SvgParticipant,
+    SvgRow, SvgSelfMessage, SvgSequenceLayout,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
-use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
+use crate::timeline::sequence::model::{
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, ParticipantKind,
+};
 
 const STROKE_COLOR: &str = "#333";
 const FILL_COLOR: &str = "white";
@@ -16,6 +18,8 @@ const TEXT_COLOR: &str = "#333";
 const NOTE_FILL: &str = "#ffffcc";
 const ACTIVATION_FILL: &str = "#ddd";
 const ACTOR_STROKE: &str = "#333";
+const BLOCK_STROKE: &str = "#666";
+const BLOCK_LABEL_BG: &str = "white";
 
 /// Render an SVG sequence layout to an SVG string.
 pub fn render(layout: &SvgSequenceLayout) -> String {
@@ -36,6 +40,14 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
         render_lifeline(&mut writer, lifeline);
     }
     writer.end_group();
+
+    if !layout.blocks.is_empty() {
+        writer.start_group("blocks");
+        for block in &layout.blocks {
+            render_block(&mut writer, block);
+        }
+        writer.end_group();
+    }
 
     // Activation bars (behind messages, on top of lifelines)
     if !layout.activations.is_empty() {
@@ -235,6 +247,56 @@ fn render_lifeline(writer: &mut SvgWriter, ll: &SvgLifeline) {
     ));
 }
 
+fn render_block(writer: &mut SvgWriter, block: &SvgBlock) {
+    let rect = &block.rect;
+    writer.push_line(&format!(
+        "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" />",
+        x = fmt_f64(rect.x),
+        y = fmt_f64(rect.y),
+        w = fmt_f64(rect.width),
+        h = fmt_f64(rect.height),
+    ));
+
+    let label = format_block_label(block.kind, &block.label);
+    render_block_label(writer, &label, rect.x + 10.0, rect.y + 14.0);
+
+    for divider in &block.dividers {
+        render_block_divider(writer, rect, divider);
+    }
+}
+
+fn render_block_divider(
+    writer: &mut SvgWriter,
+    rect: &super::svg_layout::SvgRect,
+    divider: &SvgBlockDivider,
+) {
+    writer.push_line(&format!(
+        "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" stroke-dasharray=\"5,5\" />",
+        x1 = fmt_f64(rect.x),
+        x2 = fmt_f64(rect.x + rect.width),
+        y = fmt_f64(divider.y),
+    ));
+
+    let label = format_divider_label(divider.kind, &divider.label);
+    render_block_label(writer, &label, rect.x + 10.0, divider.y - 4.0);
+}
+
+fn render_block_label(writer: &mut SvgWriter, label: &str, x: f64, y: f64) {
+    let width = (label.len() as f64 * 8.0).max(28.0);
+    writer.push_line(&format!(
+        "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"16\" fill=\"{BLOCK_LABEL_BG}\" stroke=\"none\" />",
+        x = fmt_f64(x - 2.0),
+        y = fmt_f64(y - 10.0),
+        w = fmt_f64(width),
+    ));
+    writer.push_line(&format!(
+        "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{label}</text>",
+        x = fmt_f64(x),
+        y = fmt_f64(y),
+        label = escape_text(label),
+    ));
+}
+
 fn render_message(writer: &mut SvgWriter, msg: &SvgMessage) {
     let marker = marker_attr(&msg.arrow_head);
     let dash = dash_attr(&msg.line_style);
@@ -360,5 +422,21 @@ fn dash_attr(line_style: &LineStyle) -> String {
     match line_style {
         LineStyle::Solid => String::new(),
         LineStyle::Dashed => " stroke-dasharray=\"6,4\"".to_string(),
+    }
+}
+
+fn format_block_label(kind: BlockKind, label: &str) -> String {
+    format_badge(kind.keyword(), label)
+}
+
+fn format_divider_label(kind: BlockDividerKind, label: &str) -> String {
+    format_badge(kind.keyword(), label)
+}
+
+fn format_badge(keyword: &str, label: &str) -> String {
+    if label.is_empty() {
+        format!("[{keyword}]")
+    } else {
+        format!("[{keyword}] {label}")
     }
 }

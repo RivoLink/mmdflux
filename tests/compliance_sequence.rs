@@ -210,3 +210,15 @@ fn sequence_rendering_deterministic() {
         assert_eq!(out1, out2, "Non-deterministic output for {fixture}");
     }
 }
+
+#[test]
+fn sequence_interaction_operators_render_block_labels() {
+    let alt = render_sequence_text("alt_else.mmd");
+    let loop_output = render_sequence_text("loop.mmd");
+    let opt = render_sequence_text("opt.mmd");
+
+    assert!(alt.contains("[alt] available"));
+    assert!(alt.contains("[else] busy"));
+    assert!(loop_output.contains("[loop] Every 5 seconds"));
+    assert!(opt.contains("[opt] Extra data needed"));
+}

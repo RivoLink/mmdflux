@@ -7,7 +7,8 @@
 pub mod ast;
 
 use ast::{
-    ActivationModifier, ArrowHead, LineStyle, NotePlacement, ParticipantKind, SequenceStatement,
+    ActivationModifier, ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement,
+    ParticipantKind, SequenceStatement,
 };
 
 use crate::errors::ParseDiagnostic;
@@ -80,6 +81,21 @@ pub fn parse_sequence(
             continue;
         }
 
+        if let Some(stmt) = try_parse_block_start(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
+        if let Some(stmt) = try_parse_block_divider(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
+        if let Some(stmt) = try_parse_block_end(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
         if let Some(stmt) = try_parse_participant(trimmed) {
             statements.push(stmt);
             continue;
@@ -112,6 +128,57 @@ pub fn parse_sequence(
         statements,
         warnings,
     })
+}
+
+fn try_parse_block_start(line: &str) -> Option<SequenceStatement> {
+    parse_keyword_line(line, "loop")
+        .map(|label| SequenceStatement::BlockStart {
+            kind: BlockKind::Loop,
+            label,
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "alt").map(|label| SequenceStatement::BlockStart {
+                kind: BlockKind::Alt,
+                label,
+            })
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "opt").map(|label| SequenceStatement::BlockStart {
+                kind: BlockKind::Opt,
+                label,
+            })
+        })
+}
+
+fn try_parse_block_divider(line: &str) -> Option<SequenceStatement> {
+    parse_keyword_line(line, "else").map(|label| SequenceStatement::BlockDivider {
+        kind: BlockDividerKind::Else,
+        label,
+    })
+}
+
+fn try_parse_block_end(line: &str) -> Option<SequenceStatement> {
+    if line.eq_ignore_ascii_case("end") {
+        Some(SequenceStatement::BlockEnd)
+    } else {
+        None
+    }
+}
+
+fn parse_keyword_line(line: &str, keyword: &str) -> Option<String> {
+    let lower = line.to_lowercase();
+    if lower == keyword {
+        return Some(String::new());
+    }
+
+    if lower.starts_with(keyword) {
+        let rest = &line[keyword.len()..];
+        if rest.starts_with(char::is_whitespace) {
+            return Some(rest.trim().to_string());
+        }
+    }
+
+    None
 }
 
 /// Try to parse a `participant` or `actor` declaration.
@@ -565,6 +632,54 @@ mod tests {
     }
 
     #[test]
+    fn parse_interaction_operators() {
+        let input = "\
+sequenceDiagram
+    alt available
+        A->>B: Request
+    else busy
+        B->>A: Later
+    end
+    loop Every 5s
+        A->>B: Retry
+    end
+    opt extra
+        A->>A: Cache
+    end";
+        let stmts = parse_stmts(input);
+        assert!(matches!(
+            &stmts[0],
+            SequenceStatement::BlockStart {
+                kind: BlockKind::Alt,
+                label
+            } if label == "available"
+        ));
+        assert!(matches!(
+            &stmts[2],
+            SequenceStatement::BlockDivider {
+                kind: BlockDividerKind::Else,
+                label
+            } if label == "busy"
+        ));
+        assert_eq!(stmts[4], SequenceStatement::BlockEnd);
+        assert!(matches!(
+            &stmts[5],
+            SequenceStatement::BlockStart {
+                kind: BlockKind::Loop,
+                label
+            } if label == "Every 5s"
+        ));
+        assert!(matches!(
+            &stmts[8],
+            SequenceStatement::BlockStart {
+                kind: BlockKind::Opt,
+                label
+            } if label == "extra"
+        ));
+        assert_eq!(stmts.last(), Some(&SequenceStatement::BlockEnd));
+    }
+
+    #[test]
     fn parse_full_mvp_example() {
         let input = "\
 sequenceDiagram
@@ -708,11 +823,18 @@ sequenceDiagram
     }
 
     #[test]
-    fn parse_permissive_skips_unknown_with_warnings() {
-        let input = "sequenceDiagram\nloop Start\nparticipant B\nend";
+    fn parse_interaction_operators_do_not_warn() {
+        let input = "sequenceDiagram\nloop Start\nparticipant B\nelse maybe\nend";
         let result = parse_sequence(input).unwrap();
-        // Only participant B is recognized, loop/end are skipped
-        assert_eq!(result.statements.len(), 1);
+        assert_eq!(result.warnings.len(), 0);
+        assert_eq!(result.statements.len(), 4);
+    }
+
+    #[test]
+    fn parse_permissive_skips_unknown_with_warnings() {
+        let input = "sequenceDiagram\npar Start\nparticipant B\nand branch\nend";
+        let result = parse_sequence(input).unwrap();
+        assert_eq!(result.statements.len(), 2);
         assert_eq!(result.warnings.len(), 2);
     }
 
@@ -863,5 +985,27 @@ sequenceDiagram
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parse_block_keywords_case_insensitive() {
+        let stmts = parse_sequence("sequenceDiagram\nALT First\nELSE Second\nEND")
+            .unwrap()
+            .statements;
+        assert!(matches!(
+            &stmts[0],
+            SequenceStatement::BlockStart {
+                kind: BlockKind::Alt,
+                label
+            } if label == "First"
+        ));
+        assert!(matches!(
+            &stmts[1],
+            SequenceStatement::BlockDivider {
+                kind: BlockDividerKind::Else,
+                label
+            } if label == "Second"
+        ));
+        assert_eq!(stmts[2], SequenceStatement::BlockEnd);
     }
 }

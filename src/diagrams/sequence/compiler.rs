@@ -8,7 +8,8 @@ use std::collections::HashMap;
 
 use crate::mermaid::sequence::ast::{ActivationModifier, SequenceStatement};
 use crate::timeline::sequence::model::{
-    NotePlacement, Participant, ParticipantKind, Sequence, SequenceEvent,
+    BlockDividerKind, BlockKind, NotePlacement, Participant, ParticipantKind, Sequence,
+    SequenceEvent,
 };
 
 /// Compile parsed sequence statements into a validated model.
@@ -24,6 +25,7 @@ pub fn compile(
     let mut events: Vec<SequenceEvent> = Vec::new();
     let mut autonumber = false;
     let mut message_counter: usize = 0;
+    let mut block_stack: Vec<BlockKind> = Vec::new();
 
     // First pass: collect explicit participant declarations (preserving order)
     for stmt in statements {
@@ -141,7 +143,38 @@ pub fn compile(
             SequenceStatement::Participant { .. } | SequenceStatement::Autonumber => {
                 // Already handled in first pass
             }
+            SequenceStatement::BlockStart { kind, label } => {
+                block_stack.push(*kind);
+                events.push(SequenceEvent::BlockStart {
+                    kind: *kind,
+                    label: label.clone(),
+                });
+            }
+            SequenceStatement::BlockDivider { kind, label } => {
+                validate_block_divider(&block_stack, *kind)?;
+                events.push(SequenceEvent::BlockDivider {
+                    kind: *kind,
+                    label: label.clone(),
+                });
+            }
+            SequenceStatement::BlockEnd => {
+                block_stack
+                    .pop()
+                    .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
+                        "encountered `end` without an open block".into()
+                    })?;
+                events.push(SequenceEvent::BlockEnd);
+            }
         }
+    }
+
+    if !block_stack.is_empty() {
+        let unclosed = block_stack
+            .iter()
+            .map(|kind| kind.keyword())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!("unclosed sequence block(s): {unclosed}").into());
     }
 
     Ok(Sequence {
@@ -149,6 +182,25 @@ pub fn compile(
         events,
         autonumber,
     })
+}
+
+fn validate_block_divider(
+    block_stack: &[BlockKind],
+    divider: BlockDividerKind,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let Some(current) = block_stack.last() else {
+        return Err(format!("encountered `{}` without an open block", divider.keyword()).into());
+    };
+
+    match (current, divider) {
+        (BlockKind::Alt, BlockDividerKind::Else) => Ok(()),
+        _ => Err(format!(
+            "`{}` is not valid inside `{}` blocks",
+            divider.keyword(),
+            current.keyword()
+        )
+        .into()),
+    }
 }
 
 /// Ensure a participant exists, creating an implicit one if needed.
@@ -438,5 +490,58 @@ sequenceDiagram
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("unknown participant"));
+    }
+
+    #[test]
+    fn compile_interaction_operators_preserve_event_order() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    participant A
+    participant B
+    alt available
+        A->>B: Request
+    else busy
+        B->>A: Retry later
+    end",
+        );
+        assert!(matches!(
+            &model.events[0],
+            SequenceEvent::BlockStart {
+                kind: BlockKind::Alt,
+                label
+            } if label == "available"
+        ));
+        assert!(matches!(&model.events[1], SequenceEvent::Message { .. }));
+        assert!(matches!(
+            &model.events[2],
+            SequenceEvent::BlockDivider {
+                kind: BlockDividerKind::Else,
+                label
+            } if label == "busy"
+        ));
+        assert!(matches!(&model.events[3], SequenceEvent::Message { .. }));
+        assert_eq!(model.events[4], SequenceEvent::BlockEnd);
+    }
+
+    #[test]
+    fn compile_else_outside_alt_errors() {
+        let result = parse_sequence("sequenceDiagram\nloop retry\nelse nope\nend").unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("not valid inside `loop`"));
+    }
+
+    #[test]
+    fn compile_unmatched_end_errors() {
+        let result = parse_sequence("sequenceDiagram\nend").unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("without an open block"));
+    }
+
+    #[test]
+    fn compile_unclosed_block_errors() {
+        let result = parse_sequence("sequenceDiagram\nalt available").unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("unclosed sequence block"));
     }
 }

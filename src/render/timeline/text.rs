@@ -3,12 +3,16 @@
 //! Renders a `SequenceLayout` onto a shared `Canvas` using box-drawing
 //! characters from `CharSet`. Supports both Unicode and ASCII output.
 
+use crate::graph::Stroke;
 use crate::render::text::canvas::Canvas;
 use crate::render::text::chars::CharSet;
+use crate::render::text::connections::Connections;
 use crate::timeline::sequence::layout::{
-    ActivationRect, ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
+    ActivationRect, BlockLayout, ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
 };
-use crate::timeline::sequence::model::{ArrowHead, LineStyle, NotePlacement};
+use crate::timeline::sequence::model::{
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement,
+};
 
 /// Render a sequence layout to a string.
 pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
@@ -25,9 +29,17 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
     let lifeline_start = 3;
     let lifeline_end = layout.height;
     for p in &layout.participants {
-        for y in lifeline_start..lifeline_end {
-            canvas.set(p.center_x, y, charset.vertical);
-        }
+        draw_lifeline(
+            &mut canvas,
+            p.center_x,
+            lifeline_start,
+            lifeline_end,
+            charset,
+        );
+    }
+
+    for block in &layout.blocks {
+        draw_block(&mut canvas, block, charset);
     }
 
     // Draw activation boxes on lifelines
@@ -119,6 +131,223 @@ fn draw_participant_header(canvas: &mut Canvas, p: &ParticipantLayout, cs: &Char
     canvas.set(x + w - 1, 2, cs.corner_br);
 
     canvas.set(p.center_x, 2, cs.tee_down);
+}
+
+fn draw_lifeline(canvas: &mut Canvas, x: usize, y_start: usize, y_end: usize, cs: &CharSet) {
+    for y in y_start..y_end {
+        canvas.set_with_connection(
+            x,
+            y,
+            Connections {
+                up: true,
+                down: true,
+                left: false,
+                right: false,
+            },
+            cs,
+            Stroke::Solid,
+        );
+    }
+}
+
+fn draw_block(canvas: &mut Canvas, block: &BlockLayout, cs: &CharSet) {
+    let left = block.left_x;
+    let right = block.right_x;
+    let top = block.top_y;
+    let bottom = block.bottom_y;
+
+    set_connection(
+        canvas,
+        left,
+        top,
+        Connections {
+            up: false,
+            down: true,
+            left: false,
+            right: true,
+        },
+        Stroke::Solid,
+        cs,
+    );
+    set_connection(
+        canvas,
+        right,
+        top,
+        Connections {
+            up: false,
+            down: true,
+            left: true,
+            right: false,
+        },
+        Stroke::Solid,
+        cs,
+    );
+    set_connection(
+        canvas,
+        left,
+        bottom,
+        Connections {
+            up: true,
+            down: false,
+            left: false,
+            right: true,
+        },
+        Stroke::Solid,
+        cs,
+    );
+    set_connection(
+        canvas,
+        right,
+        bottom,
+        Connections {
+            up: true,
+            down: false,
+            left: true,
+            right: false,
+        },
+        Stroke::Solid,
+        cs,
+    );
+
+    for x in (left + 1)..right {
+        set_connection(
+            canvas,
+            x,
+            top,
+            Connections {
+                up: false,
+                down: false,
+                left: true,
+                right: true,
+            },
+            Stroke::Solid,
+            cs,
+        );
+        set_connection(
+            canvas,
+            x,
+            bottom,
+            Connections {
+                up: false,
+                down: false,
+                left: true,
+                right: true,
+            },
+            Stroke::Solid,
+            cs,
+        );
+    }
+
+    for y in (top + 1)..bottom {
+        set_connection(
+            canvas,
+            left,
+            y,
+            Connections {
+                up: true,
+                down: true,
+                left: false,
+                right: false,
+            },
+            Stroke::Solid,
+            cs,
+        );
+        set_connection(
+            canvas,
+            right,
+            y,
+            Connections {
+                up: true,
+                down: true,
+                left: false,
+                right: false,
+            },
+            Stroke::Solid,
+            cs,
+        );
+    }
+
+    let label = format_block_label(block.kind, &block.label);
+    canvas.write_str(left + 2, top, &label);
+
+    for divider in &block.dividers {
+        draw_block_divider(
+            canvas,
+            left,
+            right,
+            divider.y,
+            divider.kind,
+            &divider.label,
+            cs,
+        );
+    }
+}
+
+fn draw_block_divider(
+    canvas: &mut Canvas,
+    left: usize,
+    right: usize,
+    y: usize,
+    kind: BlockDividerKind,
+    label: &str,
+    cs: &CharSet,
+) {
+    set_connection(
+        canvas,
+        left,
+        y,
+        Connections {
+            up: true,
+            down: true,
+            left: false,
+            right: true,
+        },
+        Stroke::Dotted,
+        cs,
+    );
+    set_connection(
+        canvas,
+        right,
+        y,
+        Connections {
+            up: true,
+            down: true,
+            left: true,
+            right: false,
+        },
+        Stroke::Dotted,
+        cs,
+    );
+
+    for x in (left + 1)..right {
+        set_connection(
+            canvas,
+            x,
+            y,
+            Connections {
+                up: false,
+                down: false,
+                left: true,
+                right: true,
+            },
+            Stroke::Dotted,
+            cs,
+        );
+    }
+
+    let label_text = format_divider_label(kind, label);
+    canvas.write_str(left + 2, y, &label_text);
+}
+
+fn set_connection(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    connections: Connections,
+    stroke: Stroke,
+    cs: &CharSet,
+) {
+    let _ = canvas.set_with_connection(x, y, connections, cs, stroke);
 }
 
 /// Resolve the arrowhead character for the given direction and head type.
@@ -293,6 +522,22 @@ fn format_label(text: &str, number: &Option<usize>) -> String {
             }
         }
         None => text.to_string(),
+    }
+}
+
+fn format_block_label(kind: BlockKind, label: &str) -> String {
+    format_badge(kind.keyword(), label)
+}
+
+fn format_divider_label(kind: BlockDividerKind, label: &str) -> String {
+    format_badge(kind.keyword(), label)
+}
+
+fn format_badge(keyword: &str, label: &str) -> String {
+    if label.is_empty() {
+        format!("[{keyword}]")
+    } else {
+        format!("[{keyword}] {label}")
     }
 }
 

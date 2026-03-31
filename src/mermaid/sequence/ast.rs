@@ -2,7 +2,9 @@
 //!
 //! These represent the raw parsed syntax before validation/compilation
 //! into the `Sequence` model used by the layout engine.
-pub use crate::timeline::sequence::model::{ArrowHead, LineStyle, NotePlacement, ParticipantKind};
+pub use crate::timeline::sequence::model::{
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, ParticipantKind,
+};
 
 /// Activation modifier from `+`/`-` shorthand on message arrows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +45,15 @@ pub enum SequenceStatement {
     Activate { participant: String },
     /// `deactivate <participant>`.
     Deactivate { participant: String },
+    /// `loop label`, `alt label`, `opt label`.
+    BlockStart { kind: BlockKind, label: String },
+    /// `else label`.
+    BlockDivider {
+        kind: BlockDividerKind,
+        label: String,
+    },
+    /// `end`.
+    BlockEnd,
     /// `autonumber`.
     Autonumber,
 }

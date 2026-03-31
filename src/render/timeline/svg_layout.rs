@@ -6,7 +6,8 @@
 
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::timeline::sequence::model::{
-    ArrowHead, LineStyle, NotePlacement, ParticipantKind, Sequence, SequenceEvent,
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, ParticipantKind, Sequence,
+    SequenceEvent,
 };
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,8 @@ const ACTIVATION_WIDTH: f64 = 10.0;
 const DIAGRAM_PADDING: f64 = 10.0;
 /// Extra gap between message label and arrow line.
 const LABEL_ABOVE_GAP: f64 = 4.0;
+/// Vertical reservation for block headers, dividers, and footers.
+const BLOCK_ROW_SPACING: f64 = 28.0;
 
 // ---------------------------------------------------------------------------
 // Layout output types
@@ -50,6 +53,7 @@ pub struct SvgSequenceLayout {
     pub participants: Vec<SvgParticipant>,
     pub lifelines: Vec<SvgLifeline>,
     pub rows: Vec<SvgRow>,
+    pub blocks: Vec<SvgBlock>,
     pub activations: Vec<SvgActivation>,
     pub width: f64,
     pub height: f64,
@@ -135,6 +139,22 @@ pub struct SvgActivation {
     pub depth: usize,
 }
 
+#[derive(Debug)]
+pub struct SvgBlockDivider {
+    pub y: f64,
+    pub kind: BlockDividerKind,
+    pub label: String,
+}
+
+#[derive(Debug)]
+pub struct SvgBlock {
+    pub rect: SvgRect,
+    pub depth: usize,
+    pub kind: BlockKind,
+    pub label: String,
+    pub dividers: Vec<SvgBlockDivider>,
+}
+
 // ---------------------------------------------------------------------------
 // Layout engine
 // ---------------------------------------------------------------------------
@@ -185,6 +205,7 @@ pub fn layout(
             participants: Vec::new(),
             lifelines: Vec::new(),
             rows: Vec::new(),
+            blocks: Vec::new(),
             activations: Vec::new(),
             width: 0.0,
             height: 0.0,
@@ -242,12 +263,14 @@ pub fn layout(
 
     // 5. Walk events and build rows
     let mut rows = Vec::new();
+    let mut blocks = Vec::new();
     let mut cursor_y = DIAGRAM_PADDING + header_height + HEADER_MARGIN;
 
     let num_participants = model.participants.len();
     let mut activation_stacks: Vec<Vec<(f64, usize)>> = vec![Vec::new(); num_participants];
     let mut activation_depth: Vec<usize> = vec![0; num_participants];
     let mut activations: Vec<SvgActivation> = Vec::new();
+    let mut open_blocks: Vec<OpenSvgBlock> = Vec::new();
     let mut last_message_y = cursor_y;
 
     for (ev_idx, event) in model.events.iter().enumerate() {
@@ -293,6 +316,8 @@ pub fn layout(
                         line_style: *line_style,
                         arrow_head: *arrow_head,
                     }));
+                    let (left, right) = svg_row_extent(rows.last().unwrap(), metrics);
+                    update_open_svg_block_extents(&mut open_blocks, left, right);
 
                     cursor_y += SELF_MSG_HEIGHT + EVENT_SPACING;
                 } else {
@@ -322,6 +347,8 @@ pub fn layout(
                         line_style: *line_style,
                         arrow_head: *arrow_head,
                     }));
+                    let (left, right) = svg_row_extent(rows.last().unwrap(), metrics);
+                    update_open_svg_block_extents(&mut open_blocks, left, right);
 
                     cursor_y += EVENT_SPACING;
                 }
@@ -382,6 +409,7 @@ pub fn layout(
                     rect: rect.clone(),
                     text: text.clone(),
                 }));
+                update_open_svg_block_extents(&mut open_blocks, rect.x, rect.x + rect.width);
 
                 cursor_y += rect.height + EVENT_SPACING;
             }
@@ -405,6 +433,41 @@ pub fn layout(
                         activation_depth[*participant].saturating_sub(1);
                 }
             }
+            SequenceEvent::BlockStart { kind, label } => {
+                open_blocks.push(OpenSvgBlock {
+                    top_y: cursor_y,
+                    depth: open_blocks.len(),
+                    kind: *kind,
+                    label: label.clone(),
+                    dividers: Vec::new(),
+                    min_x: None,
+                    max_x: None,
+                });
+                cursor_y += BLOCK_ROW_SPACING;
+            }
+            SequenceEvent::BlockDivider { kind, label } => {
+                if let Some(block) = open_blocks.last_mut() {
+                    block.dividers.push(SvgBlockDivider {
+                        y: cursor_y,
+                        kind: *kind,
+                        label: label.clone(),
+                    });
+                }
+                cursor_y += BLOCK_ROW_SPACING;
+            }
+            SequenceEvent::BlockEnd => {
+                if let Some(block) = open_blocks.pop() {
+                    let finalized =
+                        finalize_svg_block(block, cursor_y, participants.as_slice(), metrics);
+                    update_open_svg_block_extents(
+                        &mut open_blocks,
+                        finalized.rect.x,
+                        finalized.rect.x + finalized.rect.width,
+                    );
+                    blocks.push(finalized);
+                }
+                cursor_y += BLOCK_ROW_SPACING;
+            }
         }
     }
 
@@ -425,6 +488,7 @@ pub fn layout(
 
     // Sort by depth so outer activations render first (behind inner ones).
     activations.sort_by_key(|a| a.depth);
+    blocks.sort_by_key(|block| block.depth);
 
     // 6. Compute lifelines
     let lifeline_end = cursor_y;
@@ -443,39 +507,117 @@ pub fn layout(
         .map(|p| p.rect.x + p.rect.width)
         .fold(0.0_f64, f64::max);
 
-    // Account for self-message arms + labels extending right
-    let self_msg_right = rows
+    let row_right = rows
         .iter()
-        .filter_map(|r| match r {
-            SvgRow::SelfMessage(sm) => {
-                let (lw, _) = metrics.measure_text_with_padding(&sm.label, 0.0, 0.0);
-                Some(sm.x + sm.arm_width + 8.0 + lw)
-            }
-            _ => None,
-        })
+        .map(|row| svg_row_extent(row, metrics).1)
         .fold(0.0_f64, f64::max);
 
-    // Account for notes extending right
-    let note_right = rows
+    let block_right = blocks
         .iter()
-        .filter_map(|r| match r {
-            SvgRow::Note(n) => Some(n.rect.x + n.rect.width),
-            _ => None,
-        })
+        .map(|block| block.rect.x + block.rect.width)
         .fold(0.0_f64, f64::max);
 
-    let width = max_right.max(self_msg_right).max(note_right) + DIAGRAM_PADDING;
+    let width = max_right.max(row_right).max(block_right) + DIAGRAM_PADDING;
     let height = lifeline_end + DIAGRAM_PADDING;
 
     SvgSequenceLayout {
         participants,
         lifelines,
         rows,
+        blocks,
         activations,
         width,
         height,
         font_family: font_family.to_string(),
         font_size: metrics.font_size,
+    }
+}
+
+#[derive(Debug)]
+struct OpenSvgBlock {
+    top_y: f64,
+    depth: usize,
+    kind: BlockKind,
+    label: String,
+    dividers: Vec<SvgBlockDivider>,
+    min_x: Option<f64>,
+    max_x: Option<f64>,
+}
+
+fn update_open_svg_block_extents(open_blocks: &mut [OpenSvgBlock], left: f64, right: f64) {
+    for block in open_blocks {
+        block.min_x = Some(block.min_x.map_or(left, |current| current.min(left)));
+        block.max_x = Some(block.max_x.map_or(right, |current| current.max(right)));
+    }
+}
+
+fn finalize_svg_block(
+    block: OpenSvgBlock,
+    bottom_y: f64,
+    participants: &[SvgParticipant],
+    metrics: &ProportionalTextMetrics,
+) -> SvgBlock {
+    let fallback_center = participants.first().map(|p| p.center_x).unwrap_or(20.0);
+    let raw_left = block.min_x.unwrap_or(fallback_center - 12.0);
+    let raw_right = block.max_x.unwrap_or(fallback_center + 12.0);
+    let inset = block.depth as f64 * 8.0;
+
+    let left_x = raw_left - 12.0 + inset;
+    let mut right_x = raw_right + 12.0 - inset;
+
+    let min_width = block
+        .dividers
+        .iter()
+        .map(|divider| {
+            let label = format_badge(divider.kind.keyword(), &divider.label);
+            metrics.measure_text_with_padding(&label, 12.0, 0.0).0
+        })
+        .fold(
+            metrics
+                .measure_text_with_padding(
+                    &format_badge(block.kind.keyword(), &block.label),
+                    12.0,
+                    0.0,
+                )
+                .0,
+            f64::max,
+        )
+        .max(48.0);
+
+    if right_x < left_x + min_width {
+        right_x = left_x + min_width;
+    }
+
+    SvgBlock {
+        rect: SvgRect {
+            x: left_x,
+            y: block.top_y,
+            width: right_x - left_x,
+            height: (bottom_y - block.top_y).max(BLOCK_ROW_SPACING),
+        },
+        depth: block.depth,
+        kind: block.kind,
+        label: block.label,
+        dividers: block.dividers,
+    }
+}
+
+fn svg_row_extent(row: &SvgRow, metrics: &ProportionalTextMetrics) -> (f64, f64) {
+    match row {
+        SvgRow::Message(msg) => {
+            let (lw, _) = metrics.measure_text_with_padding(&msg.label, 0.0, 0.0);
+            let label_left = msg.label_x - lw / 2.0;
+            let label_right = msg.label_x + lw / 2.0;
+            (
+                msg.from_x.min(msg.to_x).min(label_left),
+                msg.from_x.max(msg.to_x).max(label_right),
+            )
+        }
+        SvgRow::SelfMessage(sm) => {
+            let (lw, _) = metrics.measure_text_with_padding(&sm.label, 0.0, 0.0);
+            (sm.x, (sm.x + sm.arm_width + 8.0 + lw).max(sm.label_x + lw))
+        }
+        SvgRow::Note(note) => (note.rect.x, note.rect.x + note.rect.width),
     }
 }
 
@@ -555,6 +697,14 @@ fn format_label(text: &str, number: &Option<usize>) -> String {
             }
         }
         None => text.to_string(),
+    }
+}
+
+fn format_badge(keyword: &str, label: &str) -> String {
+    if label.is_empty() {
+        format!("[{keyword}]")
+    } else {
+        format!("[{keyword}] {label}")
     }
 }
 
@@ -640,5 +790,57 @@ mod tests {
 
         assert_eq!(layout.rows.len(), 1);
         assert!(matches!(layout.rows[0], SvgRow::SelfMessage(_)));
+    }
+
+    #[test]
+    fn layout_tracks_svg_blocks() {
+        let model = Sequence {
+            participants: vec![
+                Participant {
+                    id: "A".into(),
+                    label: "A".into(),
+                    kind: ParticipantKind::Participant,
+                },
+                Participant {
+                    id: "B".into(),
+                    label: "B".into(),
+                    kind: ParticipantKind::Participant,
+                },
+            ],
+            events: vec![
+                SequenceEvent::BlockStart {
+                    kind: BlockKind::Alt,
+                    label: "available".into(),
+                },
+                SequenceEvent::Message {
+                    from: 0,
+                    to: 1,
+                    line_style: LineStyle::Solid,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Request".into(),
+                    number: None,
+                },
+                SequenceEvent::BlockDivider {
+                    kind: BlockDividerKind::Else,
+                    label: "busy".into(),
+                },
+                SequenceEvent::Message {
+                    from: 1,
+                    to: 0,
+                    line_style: LineStyle::Dashed,
+                    arrow_head: ArrowHead::Open,
+                    text: "Retry later".into(),
+                    number: None,
+                },
+                SequenceEvent::BlockEnd,
+            ],
+            autonumber: false,
+        };
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        assert_eq!(layout.blocks.len(), 1);
+        assert_eq!(layout.blocks[0].dividers.len(), 1);
+        assert!(layout.blocks[0].rect.width > 0.0);
+        assert!(layout.blocks[0].rect.height > 0.0);
     }
 }

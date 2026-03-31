@@ -4,7 +4,8 @@
 //! and notes. Output is consumed by the text renderer.
 
 use super::model::{
-    ArrowHead, LineStyle, NotePlacement, Participant, ParticipantKind, Sequence, SequenceEvent,
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, Participant, ParticipantKind,
+    Sequence, SequenceEvent,
 };
 
 /// Minimum gap between participant centers (characters).
@@ -87,6 +88,27 @@ pub struct ActivationRect {
     pub depth: usize,
 }
 
+/// A divider line inside a block region.
+#[derive(Debug, Clone)]
+pub struct BlockDividerLayout {
+    pub y: usize,
+    pub kind: BlockDividerKind,
+    pub label: String,
+}
+
+/// A labeled interaction block region.
+#[derive(Debug, Clone)]
+pub struct BlockLayout {
+    pub top_y: usize,
+    pub bottom_y: usize,
+    pub left_x: usize,
+    pub right_x: usize,
+    pub depth: usize,
+    pub kind: BlockKind,
+    pub label: String,
+    pub dividers: Vec<BlockDividerLayout>,
+}
+
 /// Complete sequence diagram layout.
 #[derive(Debug, Clone)]
 pub struct SequenceLayout {
@@ -94,6 +116,8 @@ pub struct SequenceLayout {
     pub participants: Vec<ParticipantLayout>,
     /// Positioned event rows.
     pub rows: Vec<RowLayout>,
+    /// Interaction block regions.
+    pub blocks: Vec<BlockLayout>,
     /// Activation rectangles to render on lifelines.
     pub activations: Vec<ActivationRect>,
     /// Total canvas width.
@@ -108,6 +132,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         return SequenceLayout {
             participants: Vec::new(),
             rows: Vec::new(),
+            blocks: Vec::new(),
             activations: Vec::new(),
             width: 0,
             height: 0,
@@ -119,6 +144,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let participants = layout_participants(&model.participants, participant_gap, left_margin);
 
     let mut rows = Vec::new();
+    let mut blocks = Vec::new();
     let mut cursor_y = HEADER_HEIGHT + EVENT_GAP;
 
     // Activation tracking: stack of (y_start, depth) per participant
@@ -126,6 +152,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let mut activation_stacks: Vec<Vec<(usize, usize)>> = vec![Vec::new(); num_participants];
     let mut activation_depth: Vec<usize> = vec![0; num_participants];
     let mut activations: Vec<ActivationRect> = Vec::new();
+    let mut open_blocks: Vec<OpenBlock> = Vec::new();
     // Track the Y of the last message row so activation start/end aligns with
     // the triggering message rather than the cursor after it.
     let mut last_message_y = cursor_y;
@@ -143,7 +170,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                 let is_self = from == to;
                 last_message_y = cursor_y;
                 if is_self {
-                    rows.push(RowLayout::Message {
+                    let row = RowLayout::Message {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
@@ -151,10 +178,13 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         arrow_head: *arrow_head,
                         text: text.clone(),
                         number: *number,
-                    });
+                    };
+                    let (left, right) = row_extent(&row, &participants);
+                    update_open_block_extents(&mut open_blocks, left, right);
+                    rows.push(row);
                     cursor_y += SELF_MSG_HEIGHT + EVENT_GAP;
                 } else {
-                    rows.push(RowLayout::Message {
+                    let row = RowLayout::Message {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
@@ -162,7 +192,10 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         arrow_head: *arrow_head,
                         text: text.clone(),
                         number: *number,
-                    });
+                    };
+                    let (left, right) = row_extent(&row, &participants);
+                    update_open_block_extents(&mut open_blocks, left, right);
+                    rows.push(row);
                     cursor_y += 1 + EVENT_GAP;
                 }
             }
@@ -171,12 +204,15 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                 participants: indices,
                 text,
             } => {
-                rows.push(RowLayout::Note {
+                let row = RowLayout::Note {
                     y: cursor_y,
                     placement: *placement,
                     participant_indices: indices.clone(),
                     text: text.clone(),
-                });
+                };
+                let (left, right) = row_extent(&row, &participants);
+                update_open_block_extents(&mut open_blocks, left, right);
+                rows.push(row);
                 cursor_y += 3 + EVENT_GAP;
             }
             SequenceEvent::ActivateStart { participant } => {
@@ -198,6 +234,40 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         activation_depth[*participant].saturating_sub(1);
                 }
             }
+            SequenceEvent::BlockStart { kind, label } => {
+                open_blocks.push(OpenBlock {
+                    top_y: cursor_y,
+                    depth: open_blocks.len(),
+                    kind: *kind,
+                    label: label.clone(),
+                    dividers: Vec::new(),
+                    min_x: None,
+                    max_x: None,
+                });
+                cursor_y += 1;
+            }
+            SequenceEvent::BlockDivider { kind, label } => {
+                if let Some(block) = open_blocks.last_mut() {
+                    block.dividers.push(BlockDividerLayout {
+                        y: cursor_y,
+                        kind: *kind,
+                        label: label.clone(),
+                    });
+                }
+                cursor_y += 1;
+            }
+            SequenceEvent::BlockEnd => {
+                if let Some(block) = open_blocks.pop() {
+                    let finalized = finalize_block_layout(block, cursor_y, &participants);
+                    update_open_block_extents(
+                        &mut open_blocks,
+                        finalized.left_x,
+                        finalized.right_x,
+                    );
+                    blocks.push(finalized);
+                }
+                cursor_y += 1 + EVENT_GAP;
+            }
         }
     }
 
@@ -214,6 +284,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         }
     }
 
+    blocks.sort_by_key(|block| block.depth);
+
     // Compute total dimensions
     let max_participant_right = participants
         .iter()
@@ -221,77 +293,172 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         .max()
         .unwrap_or(0);
 
-    // Account for self-message loops + labels extending right
-    let self_msg_extra = model
-        .events
+    let max_row_right = rows
         .iter()
-        .filter_map(|e| match e {
-            SequenceEvent::Message {
-                from,
-                to,
-                text,
-                number,
-                ..
-            } if from == to => {
-                let prefix_len = number.map(|n| format!("{n}. ").len()).unwrap_or(0);
-                let label_len = text.len() + prefix_len;
-                // arm (SELF_MSG_WIDTH) + gap (2) + label
-                Some(SELF_MSG_WIDTH + 2 + label_len)
-            }
-            _ => None,
-        })
+        .map(|row| row_extent(row, &participants).1)
         .max()
         .unwrap_or(0);
 
-    // Account for note boxes extending right
-    let note_extra = model
-        .events
-        .iter()
-        .filter_map(|e| match e {
-            SequenceEvent::Note {
-                placement,
-                participants: indices,
-                text,
-            } => {
-                let box_width = text.len() + 4;
-                let box_right = match placement {
-                    NotePlacement::LeftOf => {
-                        // Box right edge at center_x - 1
-                        participants[indices[0]].center_x
-                    }
-                    NotePlacement::RightOf => {
-                        let center_x = participants[indices[0]].center_x;
-                        center_x + 1 + box_width
-                    }
-                    NotePlacement::Over if indices.len() == 2 => {
-                        let cx1 = participants[indices[0]].center_x;
-                        let cx2 = participants[indices[1]].center_x;
-                        let mid = (cx1 + cx2) / 2;
-                        let span_width = box_width.max(cx1.abs_diff(cx2) + 4);
-                        mid.saturating_sub(span_width / 2) + span_width
-                    }
-                    NotePlacement::Over => {
-                        let center_x = participants[indices[0]].center_x;
-                        center_x.saturating_sub(box_width / 2) + box_width
-                    }
-                };
-                Some(box_right)
-            }
-            _ => None,
-        })
-        .max()
-        .unwrap_or(0);
+    let max_block_right = blocks.iter().map(|block| block.right_x).max().unwrap_or(0);
 
-    let base_width = max_participant_right.max(note_extra);
-    let width = base_width + self_msg_extra + 2; // +2 for right margin
+    let width = max_participant_right
+        .max(max_row_right)
+        .max(max_block_right)
+        + 2;
     let height = cursor_y;
 
     SequenceLayout {
         participants,
         rows,
+        blocks,
         activations,
         width,
         height,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct OpenBlock {
+    top_y: usize,
+    depth: usize,
+    kind: BlockKind,
+    label: String,
+    dividers: Vec<BlockDividerLayout>,
+    min_x: Option<usize>,
+    max_x: Option<usize>,
+}
+
+fn update_open_block_extents(open_blocks: &mut [OpenBlock], left: usize, right: usize) {
+    for block in open_blocks {
+        block.min_x = Some(block.min_x.map_or(left, |current| current.min(left)));
+        block.max_x = Some(block.max_x.map_or(right, |current| current.max(right)));
+    }
+}
+
+fn finalize_block_layout(
+    block: OpenBlock,
+    bottom_y: usize,
+    participants: &[ParticipantLayout],
+) -> BlockLayout {
+    let fallback_center = participants.first().map(|p| p.center_x).unwrap_or(1);
+    let raw_left = block.min_x.unwrap_or(fallback_center.saturating_sub(2));
+    let raw_right = block.max_x.unwrap_or(fallback_center + 2);
+
+    let inset = block.depth * 2;
+    let left_x = raw_left.saturating_sub(2).saturating_add(inset);
+    let mut right_x = raw_right.saturating_add(2).saturating_sub(inset);
+
+    let min_width = block
+        .dividers
+        .iter()
+        .map(|divider| block_label_len(divider.kind.keyword(), &divider.label))
+        .fold(
+            block_label_len(block.kind.keyword(), &block.label),
+            usize::max,
+        )
+        .max(6);
+
+    if right_x < left_x + min_width.saturating_sub(1) {
+        right_x = left_x + min_width.saturating_sub(1);
+    }
+
+    BlockLayout {
+        top_y: block.top_y,
+        bottom_y,
+        left_x,
+        right_x,
+        depth: block.depth,
+        kind: block.kind,
+        label: block.label,
+        dividers: block.dividers,
+    }
+}
+
+fn block_label_len(keyword: &str, label: &str) -> usize {
+    let badge_len = keyword.len() + 2;
+    let text_len = if label.is_empty() {
+        badge_len
+    } else {
+        badge_len + 1 + label.len()
+    };
+    text_len + 3
+}
+
+fn row_extent(row: &RowLayout, participants: &[ParticipantLayout]) -> (usize, usize) {
+    match row {
+        RowLayout::Message {
+            from_idx,
+            to_idx,
+            text,
+            number,
+            ..
+        } if from_idx == to_idx => {
+            let center_x = participants[*from_idx].center_x;
+            let right = center_x + SELF_MSG_WIDTH + 2 + format_label_len(text, number);
+            (center_x, right)
+        }
+        RowLayout::Message {
+            from_idx,
+            to_idx,
+            text,
+            number,
+            ..
+        } => {
+            let from_x = participants[*from_idx].center_x;
+            let to_x = participants[*to_idx].center_x;
+            let left = from_x.min(to_x);
+            let right = from_x
+                .max(to_x)
+                .max(left + 1 + format_label_len(text, number));
+            (left, right)
+        }
+        RowLayout::Note {
+            placement,
+            participant_indices,
+            text,
+            ..
+        } => {
+            let box_width = text.len() + 4;
+            match placement {
+                NotePlacement::LeftOf => {
+                    let center_x = participants[participant_indices[0]].center_x;
+                    let left = center_x.saturating_sub(box_width + 1);
+                    (left, left + box_width.saturating_sub(1))
+                }
+                NotePlacement::RightOf => {
+                    let center_x = participants[participant_indices[0]].center_x;
+                    let left = center_x + 2;
+                    (left, left + box_width.saturating_sub(1))
+                }
+                NotePlacement::Over if participant_indices.len() == 2 => {
+                    let cx1 = participants[participant_indices[0]].center_x;
+                    let cx2 = participants[participant_indices[1]].center_x;
+                    let left = cx1.min(cx2);
+                    let right = cx1.max(cx2);
+                    let span_width = box_width.max(right - left + 4);
+                    let box_left = ((left + right) / 2).saturating_sub(span_width / 2);
+                    (box_left, box_left + span_width.saturating_sub(1))
+                }
+                NotePlacement::Over => {
+                    let center_x = participants[participant_indices[0]].center_x;
+                    let left = center_x.saturating_sub(box_width / 2);
+                    (left, left + box_width.saturating_sub(1))
+                }
+            }
+        }
+    }
+}
+
+fn format_label_len(text: &str, number: &Option<usize>) -> usize {
+    match number {
+        Some(n) => {
+            if text.is_empty() {
+                format!("{n}.").len()
+            } else {
+                format!("{n}. {text}").len()
+            }
+        }
+        None => text.len(),
     }
 }
 

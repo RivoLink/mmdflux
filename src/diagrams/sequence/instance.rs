@@ -68,13 +68,19 @@ mod tests {
     }
 
     #[test]
-    fn sequence_instance_reports_warnings_for_skipped_lines() {
+    fn sequence_instance_reports_warnings_for_unknown_lines() {
         let instance = SequenceInstance::new();
-        let warnings =
-            instance.validation_warnings("sequenceDiagram\nloop Start\nparticipant B\nend");
-        assert_eq!(warnings.len(), 2);
-        assert!(warnings[0].message.contains("loop Start"));
-        assert!(warnings[1].message.contains("end"));
+        let warnings = instance.validation_warnings("sequenceDiagram\npar Start\nparticipant B");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].message.contains("par Start"));
+    }
+
+    #[test]
+    fn sequence_instance_accepts_interaction_operators_without_warnings() {
+        let instance = SequenceInstance::new();
+        let warnings = instance
+            .validation_warnings("sequenceDiagram\nalt ready\nparticipant B\nelse later\nend");
+        assert!(warnings.is_empty());
     }
 
     #[test]

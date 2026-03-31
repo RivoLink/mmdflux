@@ -56,6 +56,50 @@ pub enum NotePlacement {
     Over,
 }
 
+/// Block operator kind for interaction regions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockKind {
+    Loop,
+    Alt,
+    Opt,
+    Par,
+    Critical,
+    Break,
+    Rect,
+}
+
+impl BlockKind {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Self::Loop => "loop",
+            Self::Alt => "alt",
+            Self::Opt => "opt",
+            Self::Par => "par",
+            Self::Critical => "critical",
+            Self::Break => "break",
+            Self::Rect => "rect",
+        }
+    }
+}
+
+/// Divider kind used within block operators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockDividerKind {
+    Else,
+    And,
+    Option,
+}
+
+impl BlockDividerKind {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Self::Else => "else",
+            Self::And => "and",
+            Self::Option => "option",
+        }
+    }
+}
+
 /// An event in the sequence (message, note, or activation change).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SequenceEvent {
@@ -93,6 +137,15 @@ pub enum SequenceEvent {
         /// Index into `Sequence::participants`.
         participant: usize,
     },
+    /// Start of a labeled interaction block (loop/alt/opt).
+    BlockStart { kind: BlockKind, label: String },
+    /// Divider between branches within a block (e.g. `else`).
+    BlockDivider {
+        kind: BlockDividerKind,
+        label: String,
+    },
+    /// End of the current interaction block.
+    BlockEnd,
 }
 
 /// The validated sequence diagram model.
