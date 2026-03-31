@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 
 use super::text::render_text_centered;
-use super::writer::SvgWriter;
 use super::{Point, TEXT_COLOR};
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::graph::routing::compute_end_label_positions;
 use crate::graph::{Graph, Stroke};
+use crate::render::svg::SvgWriter;
 
 const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const LABEL_POINT_EPS: f64 = 0.000_001;

@@ -26,12 +26,12 @@ use markers::{
 pub(super) use path_emit::{document_svg_path, polygon_points};
 use path_emit::{path_from_prepared_points, points_for_svg_path};
 
-use super::writer::SvgWriter;
 use super::{Point, Rect};
 use crate::format::{CornerStyle, Curve};
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::routing::EdgeRouting;
 use crate::graph::{Graph, Shape, Stroke};
+use crate::render::svg::SvgWriter;
 use crate::simplification::PathSimplification;
 
 #[allow(clippy::too_many_arguments)]

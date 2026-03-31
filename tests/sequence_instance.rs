@@ -38,7 +38,7 @@ fn sequence_instance_unknown_engine_rejected_at_parse_boundary() {
 }
 
 #[test]
-fn sequence_instance_prepare_rejects_layout_engine_selection() {
+fn sequence_ignores_layout_engine_selection() {
     let config = RenderConfig {
         layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
         ..RenderConfig::default()
@@ -48,14 +48,8 @@ fn sequence_instance_prepare_rejects_layout_engine_selection() {
         mmdflux::OutputFormat::Text,
         &config,
     );
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(
-        err.message
-            .contains("layout engine selection is not supported for sequence diagrams"),
-        "unexpected error: {}",
-        err.message
-    );
+    assert!(result.is_ok(), "sequence should ignore engine selection");
+    assert!(result.unwrap().contains("hello"));
 }
 
 #[test]

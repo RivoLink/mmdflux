@@ -123,14 +123,65 @@ fn sequence_all_fixtures_render_ascii() {
     }
 }
 
+fn render_sequence_svg(fixture: &str) -> String {
+    let path = sequence_fixture_dir().join(fixture);
+    let input = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read fixture {fixture}: {e}"));
+    mmdflux::render_diagram(&input, OutputFormat::Svg, &RenderConfig::default())
+        .expect("Failed to render sequence SVG")
+}
+
+fn sequence_svg_snapshot_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("svg-snapshots")
+        .join("sequence")
+}
+
 #[test]
-fn sequence_svg_not_supported() {
-    let result = mmdflux::render_diagram(
-        "sequenceDiagram\nA->>B: hi",
-        OutputFormat::Svg,
-        &RenderConfig::default(),
-    );
-    assert!(result.is_err());
+fn sequence_svg_snapshots() {
+    let snapshot_dir = sequence_svg_snapshot_dir();
+    let regenerate = std::env::var("GENERATE_SEQUENCE_SVG_SNAPSHOTS").is_ok();
+
+    if regenerate {
+        fs::create_dir_all(&snapshot_dir).unwrap();
+    }
+
+    for fixture in list_sequence_fixtures() {
+        let stem = fixture.trim_end_matches(".mmd");
+        let output = render_sequence_svg(&fixture);
+        let snapshot_path = snapshot_dir.join(format!("{stem}.svg"));
+
+        if regenerate {
+            fs::write(&snapshot_path, &output).unwrap();
+        } else {
+            let expected = fs::read_to_string(&snapshot_path).unwrap_or_else(|_| {
+                panic!(
+                    "Missing sequence SVG snapshot: {}. Set GENERATE_SEQUENCE_SVG_SNAPSHOTS=1 to generate.",
+                    snapshot_path.display()
+                )
+            });
+            assert_eq!(
+                output, expected,
+                "Sequence SVG snapshot mismatch for {fixture}. Set GENERATE_SEQUENCE_SVG_SNAPSHOTS=1 to regenerate."
+            );
+        }
+    }
+}
+
+#[test]
+fn sequence_all_fixtures_render_svg() {
+    for fixture in list_sequence_fixtures() {
+        let output = render_sequence_svg(&fixture);
+        assert!(
+            output.starts_with("<svg"),
+            "SVG output should start with <svg for {fixture}"
+        );
+        assert!(
+            output.contains("</svg>"),
+            "SVG output should contain closing tag for {fixture}"
+        );
+    }
 }
 
 #[test]

@@ -1,10 +1,10 @@
 use std::fmt::Write;
 
-use super::super::writer::fmt_f64;
 use super::super::{Point, STROKE_COLOR};
 use super::{SegmentAxis, points_approx_equal, segment_axis, segment_manhattan_len};
 use crate::format::{CornerStyle, Curve};
 use crate::graph::{Arrow, Direction, Edge, Stroke};
+use crate::render::svg::fmt_f64;
 
 pub(super) fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
     let stroke_width = match edge.stroke {

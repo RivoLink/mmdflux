@@ -5,12 +5,12 @@ use std::fmt::Write;
 use super::bounds::scale_rect;
 use super::edges::{document_svg_path, polygon_points};
 use super::text::render_text_centered;
-use super::writer::{SvgWriter, escape_text, fmt_f64};
 use super::{NODE_FILL, Point, Rect, STROKE_COLOR, SUBGRAPH_STROKE, TEXT_COLOR};
 use crate::graph::geometry::{FRect, GraphGeometry};
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::graph::routing::hexagon_vertices;
 use crate::graph::{Direction, Graph, Node, Shape};
+use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 
 #[derive(Clone, Copy)]
 struct ResolvedSvgNodeStyle<'a> {

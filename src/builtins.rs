@@ -15,7 +15,8 @@ const GRAPH_FAMILY_FORMATS: &[OutputFormat] = &[
     OutputFormat::Mmds,
 ];
 
-const TIMELINE_FAMILY_FORMATS: &[OutputFormat] = &[OutputFormat::Text, OutputFormat::Ascii];
+const TIMELINE_FAMILY_FORMATS: &[OutputFormat] =
+    &[OutputFormat::Text, OutputFormat::Ascii, OutputFormat::Svg];
 
 /// Create the default registry with all built-in diagram types.
 ///
