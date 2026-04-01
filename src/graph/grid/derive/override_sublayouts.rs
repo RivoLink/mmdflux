@@ -122,7 +122,7 @@ pub(super) fn reconcile_sublayouts_draw(
         // edge rendering (2 chars: stem + arrowhead).
         let min_gap = 2;
         if !sub_is_vertical {
-            sub_draw_nodes.sort_by_key(|n| n.1); // sort by x
+            sub_draw_nodes.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0))); // sort by x, then node_id
             for i in 1..sub_draw_nodes.len() {
                 let prev_right = sub_draw_nodes[i - 1].1 + sub_draw_nodes[i - 1].3;
                 let needed = prev_right + min_gap;
@@ -131,7 +131,7 @@ pub(super) fn reconcile_sublayouts_draw(
                 }
             }
         } else {
-            sub_draw_nodes.sort_by_key(|n| n.2); // sort by y
+            sub_draw_nodes.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.cmp(&b.0))); // sort by y, then node_id
             for i in 1..sub_draw_nodes.len() {
                 let prev_bottom = sub_draw_nodes[i - 1].2 + sub_draw_nodes[i - 1].4;
                 let needed = prev_bottom + min_gap;
