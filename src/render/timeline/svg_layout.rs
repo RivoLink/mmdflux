@@ -41,7 +41,17 @@ const DIAGRAM_PADDING: f64 = 10.0;
 /// Extra gap between message label and arrow line.
 const LABEL_ABOVE_GAP: f64 = 4.0;
 /// Vertical reservation for block headers, dividers, and footers.
-const BLOCK_ROW_SPACING: f64 = 28.0;
+const BLOCK_ROW_SPACING: f64 = 64.0;
+/// Horizontal padding between frame borders and enclosed content.
+const BLOCK_SIDE_PADDING: f64 = 32.0;
+/// Character-width estimate for operator tabs.
+const BLOCK_TAB_CHAR_WIDTH: f64 = 8.0;
+/// Horizontal padding inside operator tabs.
+const BLOCK_TAB_PADDING_X: f64 = 8.0;
+/// Minimum width for operator tabs.
+const BLOCK_TAB_MIN_WIDTH: f64 = 42.0;
+/// Gap between the operator tab and centered guard text.
+const BLOCK_HEADER_GAP: f64 = 32.0;
 
 // ---------------------------------------------------------------------------
 // Layout output types
@@ -562,27 +572,28 @@ fn finalize_svg_block(
     let raw_right = block.max_x.unwrap_or(fallback_center + 12.0);
     let inset = block.depth as f64 * 8.0;
 
-    let left_x = raw_left - 12.0 + inset;
-    let mut right_x = raw_right + 12.0 - inset;
+    let left_x = raw_left - BLOCK_SIDE_PADDING + inset;
+    let mut right_x = raw_right + BLOCK_SIDE_PADDING - inset;
+
+    let operator_width = block_tab_width(block.kind.keyword());
+    let header_guard_width = format_fragment_guard(&block.label)
+        .map(|guard| metrics.measure_text_with_padding(&guard, 0.0, 0.0).0)
+        .unwrap_or(0.0);
 
     let min_width = block
         .dividers
         .iter()
         .map(|divider| {
-            let label = format_badge(divider.kind.keyword(), &divider.label);
-            metrics.measure_text_with_padding(&label, 12.0, 0.0).0
+            format_fragment_guard(&divider.label)
+                .map(|guard| metrics.measure_text_with_padding(&guard, BLOCK_SIDE_PADDING, 0.0).0)
+                .unwrap_or(0.0)
         })
         .fold(
-            metrics
-                .measure_text_with_padding(
-                    &format_badge(block.kind.keyword(), &block.label),
-                    12.0,
-                    0.0,
-                )
-                .0,
+            operator_width + header_guard_width + BLOCK_HEADER_GAP + BLOCK_SIDE_PADDING,
             f64::max,
         )
-        .max(48.0);
+        .max(operator_width + BLOCK_SIDE_PADDING * 2.0)
+        .max(64.0);
 
     if right_x < left_x + min_width {
         right_x = left_x + min_width;
@@ -700,12 +711,18 @@ fn format_label(text: &str, number: &Option<usize>) -> String {
     }
 }
 
-fn format_badge(keyword: &str, label: &str) -> String {
-    if label.is_empty() {
-        format!("[{keyword}]")
+fn format_fragment_guard(label: &str) -> Option<String> {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        None
     } else {
-        format!("[{keyword}] {label}")
+        Some(format!("[{trimmed}]"))
     }
+}
+
+fn block_tab_width(keyword: &str) -> f64 {
+    ((keyword.len() as f64) * BLOCK_TAB_CHAR_WIDTH + BLOCK_TAB_PADDING_X * 2.0)
+        .max(BLOCK_TAB_MIN_WIDTH)
 }
 
 #[cfg(test)]

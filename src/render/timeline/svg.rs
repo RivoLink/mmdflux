@@ -289,6 +289,7 @@ fn render_block_divider(
     rect: &super::svg_layout::SvgRect,
     divider: &SvgBlockDivider,
 ) {
+    let _divider_keyword = divider.kind.keyword();
     writer.push_line(&format!(
         "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{BLOCK_STROKE}\" stroke-width=\"1\" stroke-dasharray=\"{BLOCK_STROKE_DASH}\" />",
         x1 = fmt_f64(rect.x),
