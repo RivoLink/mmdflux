@@ -10,6 +10,7 @@ import {
   convertToTldraw,
   convertToTldrawStore,
   faceAndFractionToNormalizedAnchor,
+  SUPPORTED_DIAGRAM_TYPES,
   toTldrawFile,
 } from "../dist/convert.js";
 
@@ -1258,4 +1259,500 @@ test("deterministic ordering: same MMDS produces identical tldraw output", () =>
   const storeA = convertToTldrawStore(mmds);
   const storeB = convertToTldrawStore(mmds);
   assert.deepEqual(storeA, storeB);
+});
+
+// ── Phase 1: Diagram type validation ────────────────────────────────
+
+test("rejects unsupported diagram types with clear error", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "sequence" },
+    nodes: [],
+    edges: [],
+  };
+  assert.throws(
+    () => convertToTldraw(mmds),
+    /unsupported diagram type.*sequence/i,
+  );
+});
+
+test("rejects state diagram type", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "state" },
+    nodes: [],
+    edges: [],
+  };
+  assert.throws(
+    () => convertToTldraw(mmds),
+    /unsupported diagram type.*state/i,
+  );
+});
+
+test("accepts flowchart diagram type", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [],
+  };
+  assert.doesNotThrow(() => convertToTldraw(mmds));
+});
+
+test("accepts class diagram type", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "class" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [],
+  };
+  assert.doesNotThrow(() => convertToTldraw(mmds));
+});
+
+test("accepts documents with no diagram_type (permissive)", () => {
+  const mmds = {
+    version: 2,
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [],
+  };
+  assert.doesNotThrow(() => convertToTldraw(mmds));
+});
+
+test("SUPPORTED_DIAGRAM_TYPES is exported and contains expected types", () => {
+  assert.ok(SUPPORTED_DIAGRAM_TYPES instanceof Set);
+  assert.ok(SUPPORTED_DIAGRAM_TYPES.has("flowchart"));
+  assert.ok(SUPPORTED_DIAGRAM_TYPES.has("class"));
+  assert.ok(!SUPPORTED_DIAGRAM_TYPES.has("sequence"));
+});
+
+// ── Phase 3: Backward edge arrowhead swap ───────────────────────────
+
+test("swaps arrowheads for backward edges", () => {
+  const mmds = {
+    version: 1,
+    geometry_level: "layout",
+    defaults: {
+      node: { shape: "rectangle" },
+      edge: {
+        stroke: "solid",
+        arrow_start: "none",
+        arrow_end: "normal",
+        minlen: 1,
+      },
+    },
+    metadata: { diagram_type: "flowchart", direction: "TD" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 50, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 50, y: 100 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [
+      {
+        id: "e0",
+        source: "A",
+        target: "B",
+        arrow_start: "none",
+        arrow_end: "normal",
+        is_backward: true,
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const arrow = converted.records.find(
+    (r) =>
+      r.typeName === "shape" && r.type === "arrow" && r.id === "shape:edge_e0",
+  );
+  assert.ok(arrow);
+  // Arrowheads should be swapped: start gets "arrow" (from end's "normal"), end gets "none"
+  assert.equal(arrow.props.arrowheadStart, "arrow");
+  assert.equal(arrow.props.arrowheadEnd, "none");
+});
+
+test("preserves arrowheads for non-backward edges", () => {
+  const mmds = {
+    version: 1,
+    geometry_level: "layout",
+    defaults: {
+      node: { shape: "rectangle" },
+      edge: {
+        stroke: "solid",
+        arrow_start: "none",
+        arrow_end: "normal",
+        minlen: 1,
+      },
+    },
+    metadata: { diagram_type: "flowchart", direction: "TD" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 50, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 50, y: 100 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [
+      {
+        id: "e0",
+        source: "A",
+        target: "B",
+        arrow_start: "none",
+        arrow_end: "normal",
+        is_backward: false,
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const arrow = converted.records.find(
+    (r) =>
+      r.typeName === "shape" && r.type === "arrow" && r.id === "shape:edge_e0",
+  );
+  assert.ok(arrow);
+  assert.equal(arrow.props.arrowheadStart, "none");
+  assert.equal(arrow.props.arrowheadEnd, "arrow");
+});
+
+// ── Phase 4: Expanded shape mapping ─────────────────────────────────
+
+test("maps parallelogram to rhombus", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "parallelogram",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "rhombus");
+});
+
+test("maps inv_parallelogram to rhombus-2", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "inv_parallelogram",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "rhombus-2");
+});
+
+test("maps stadium to oval", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "stadium",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "oval");
+});
+
+test("maps cylinder to oval", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "cylinder",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "oval");
+});
+
+test("maps asymmetric to arrow-right", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "asymmetric",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "arrow-right");
+});
+
+test("maps crossed_circle to x-box", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+        shape: "crossed_circle",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "x-box");
+});
+
+test("all expanded shape types produce parseable .tldr output", () => {
+  const shapes = [
+    "parallelogram",
+    "inv_parallelogram",
+    "stadium",
+    "cylinder",
+    "asymmetric",
+    "crossed_circle",
+  ];
+  for (const shape of shapes) {
+    const mmds = {
+      version: 2,
+      metadata: { diagram_type: "flowchart" },
+      nodes: [
+        {
+          id: "A",
+          label: shape,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 40 },
+          shape,
+        },
+      ],
+      edges: [],
+    };
+    const file = toTldrawFile(mmds);
+    assertParses(file);
+  }
+});
+
+// ── Phase 5: Elbow snap behavior ────────────────────────────────────
+
+test("elbow arrows with port data use edge-point snap", () => {
+  const mmds = {
+    version: 2,
+    geometry_level: "routed",
+    metadata: { diagram_type: "flowchart", direction: "LR" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 50 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 200, y: 50 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [
+      {
+        id: "e0",
+        source: "A",
+        target: "B",
+        // Orthogonal path with 3+ points → elbow
+        path: [
+          [25, 65],
+          [100, 65],
+          [100, 50],
+          [175, 50],
+        ],
+        source_port: {
+          face: "bottom",
+          fraction: 0.5,
+          position: { x: 25, y: 65 },
+          group_size: 1,
+        },
+        target_port: {
+          face: "left",
+          fraction: 0.5,
+          position: { x: 175, y: 50 },
+          group_size: 1,
+        },
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const bindings = converted.records.filter((r) => r.typeName === "binding");
+  assert.ok(bindings.length >= 2);
+  for (const binding of bindings) {
+    assert.equal(binding.props.snap, "edge-point");
+  }
+});
+
+test("elbow arrows without port data use edge snap", () => {
+  const mmds = {
+    version: 2,
+    geometry_level: "routed",
+    metadata: { diagram_type: "flowchart", direction: "LR" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 50 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 200, y: 50 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [
+      {
+        id: "e0",
+        source: "A",
+        target: "B",
+        // Orthogonal path with 3+ points → elbow, no port data
+        path: [
+          [25, 65],
+          [100, 65],
+          [100, 50],
+          [175, 50],
+        ],
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const bindings = converted.records.filter((r) => r.typeName === "binding");
+  assert.ok(bindings.length >= 2);
+  for (const binding of bindings) {
+    assert.equal(binding.props.snap, "edge");
+  }
+});
+
+test("arc arrows use none snap regardless of port data", () => {
+  const mmds = {
+    version: 2,
+    geometry_level: "routed",
+    metadata: { diagram_type: "flowchart", direction: "TD" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 50, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 150, y: 100 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [
+      {
+        id: "e0",
+        source: "A",
+        target: "B",
+        // Diagonal path → arc routing (not orthogonal)
+        path: [
+          [50, 30],
+          [100, 65],
+          [150, 100],
+        ],
+        source_port: { face: "bottom", fraction: 0.5 },
+        target_port: { face: "top", fraction: 0.5 },
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const bindings = converted.records.filter((r) => r.typeName === "binding");
+  assert.ok(bindings.length >= 2);
+  for (const binding of bindings) {
+    assert.equal(binding.props.snap, "none");
+  }
 });

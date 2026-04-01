@@ -19,6 +19,8 @@ import {
 } from "@tldraw/editor";
 import { generateKeyBetween } from "fractional-indexing";
 
+export const SUPPORTED_DIAGRAM_TYPES = new Set(["flowchart", "class"]);
+
 export interface ConvertOptions {
   scale?: number;
   /**
@@ -261,9 +263,19 @@ function withMinSizeAroundCenter(
   };
 }
 
-function mapGeoShape(
-  mmdsShape: string,
-): "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid" {
+type GeoStyle =
+  | "rectangle"
+  | "ellipse"
+  | "diamond"
+  | "hexagon"
+  | "trapezoid"
+  | "rhombus"
+  | "rhombus-2"
+  | "oval"
+  | "arrow-right"
+  | "x-box";
+
+function mapGeoShape(mmdsShape: string): GeoStyle {
   switch (mmdsShape) {
     case "diamond":
       return "diamond";
@@ -271,19 +283,25 @@ function mapGeoShape(
       return "hexagon";
     case "trapezoid":
     case "inv_trapezoid":
-    case "parallelogram":
-    case "inv_parallelogram":
     case "manual_input":
-    case "asymmetric":
       return "trapezoid";
-    case "round":
+    case "parallelogram":
+      return "rhombus";
+    case "inv_parallelogram":
+      return "rhombus-2";
     case "stadium":
+    case "cylinder":
+      return "oval";
+    case "asymmetric":
+      return "arrow-right";
+    case "crossed_circle":
+      return "x-box";
+    case "round":
     case "circle":
     case "double_circle":
     case "double-circle":
     case "small_circle":
     case "framed_circle":
-    case "crossed_circle":
       return "ellipse";
     default:
       return "rectangle";
@@ -454,8 +472,8 @@ function nudgeElbowMidPointForBorderCollisions(
 }
 
 // Keep edge labels away from endpoints to avoid overlapping nodes.
-const LABEL_POS_MIN = 0.25;
-const LABEL_POS_MAX = 0.75;
+const LABEL_POS_MIN = 0.15;
+const LABEL_POS_MAX = 0.85;
 
 function computeLabelPositionRatio(path: Point[], labelPos?: Point): number {
   if (!labelPos || path.length < 2) return 0.5;
@@ -605,12 +623,18 @@ function projectToEllipseBoundary(nx: number, ny: number): Point {
   return { x: 0.5, y: dy >= 0 ? 1 : 0 };
 }
 
-function projectToShapeBoundary(
-  p: Point,
-  geo: "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid",
-): Point {
-  if (geo === "rectangle" || geo === "hexagon" || geo === "trapezoid") return p;
-  if (geo === "diamond") return projectToDiamondBoundary(p.x, p.y);
+function projectToShapeBoundary(p: Point, geo: GeoStyle): Point {
+  if (
+    geo === "rectangle" ||
+    geo === "hexagon" ||
+    geo === "trapezoid" ||
+    geo === "arrow-right" ||
+    geo === "x-box"
+  )
+    return p;
+  if (geo === "diamond" || geo === "rhombus" || geo === "rhombus-2")
+    return projectToDiamondBoundary(p.x, p.y);
+  if (geo === "oval") return projectToEllipseBoundary(p.x, p.y);
   return projectToEllipseBoundary(p.x, p.y);
 }
 
@@ -618,7 +642,7 @@ function projectToShapeBoundary(
 export function faceAndFractionToNormalizedAnchor(
   face: MmdsPortFace,
   fraction: number,
-  geo: "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid",
+  geo: GeoStyle,
 ): Point {
   const f = Math.max(0, Math.min(1, fraction));
   let anchor: Point;
@@ -645,7 +669,7 @@ function edgeAnchor(
   pathPoints: Point[],
   isStart: boolean,
   rect: Rect | undefined,
-  geo: "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid",
+  geo: GeoStyle,
 ): Point {
   if (!rect || rect.w <= 0 || rect.h <= 0) {
     return { x: 0.5, y: 0.5 };
@@ -789,6 +813,14 @@ function assignShapeIndices(records: TLRecord[]): void {
       const za = shapeZOrder((a as { type: string }).type);
       const zb = shapeZOrder((b as { type: string }).type);
       if (za !== zb) return za - zb;
+      // Within the frame tier, sort largest-area first so big frames
+      // render behind smaller overlapping siblings.
+      if ((a as { type: string }).type === "frame") {
+        const ap = (a as { props: { w: number; h: number } }).props;
+        const bp = (b as { props: { w: number; h: number } }).props;
+        const areaDiff = bp.w * bp.h - ap.w * ap.h;
+        if (areaDiff !== 0) return areaDiff;
+      }
       return String(a.id).localeCompare(String(b.id));
     });
     const indices = generateSequentialIndices(bucket.length);
@@ -833,6 +865,15 @@ export function convertToTldraw(
 ): TldrawConvertResult {
   const scale = options.scale ?? 1;
   const normalized = normalizeMmds(mmds);
+
+  const diagramType = normalized.metadata?.diagram_type;
+  if (diagramType && !SUPPORTED_DIAGRAM_TYPES.has(diagramType)) {
+    throw new Error(
+      `Unsupported diagram type "${diagramType}" for tldraw conversion. ` +
+        `Supported types: ${[...SUPPORTED_DIAGRAM_TYPES].join(", ")}`,
+    );
+  }
+
   const adaptiveRatio = computeAdaptiveGrowthRatio(normalized.nodes, scale);
   const nodeSpacing = options.nodeSpacing ?? adaptiveRatio;
   const positionScale = autoPositionScale(
@@ -933,10 +974,7 @@ export function convertToTldraw(
   const bindingRecords: TLRecord[] = [];
 
   const absoluteBoundsByShapeId = new Map<string, Rect>();
-  const geoByShapeId = new Map<
-    string,
-    "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid"
-  >();
+  const geoByShapeId = new Map<string, GeoStyle>();
   const nodeShapeIdByNodeId = new Map<string, string>();
 
   for (const node of nodes) {
@@ -1137,8 +1175,12 @@ export function convertToTldraw(
         fill: "none",
         dash: mapDash(edge.stroke),
         size: mapSize(edge.stroke),
-        arrowheadStart: mapArrowhead(edge.arrow_start),
-        arrowheadEnd: mapArrowhead(edge.arrow_end),
+        arrowheadStart: edge.is_backward
+          ? mapArrowhead(edge.arrow_end)
+          : mapArrowhead(edge.arrow_start),
+        arrowheadEnd: edge.is_backward
+          ? mapArrowhead(edge.arrow_start)
+          : mapArrowhead(edge.arrow_end),
         font: "draw",
         start: { x: 0, y: 0 },
         end: { x: end.x - start.x, y: end.y - start.y },
@@ -1182,7 +1224,7 @@ export function convertToTldraw(
           normalizedAnchor: startAnchor,
           isExact: false,
           isPrecise: true,
-          snap: kind === "elbow" ? "edge" : "none",
+          snap: kind === "elbow" ? (startPort ? "edge-point" : "edge") : "none",
         },
         meta: {},
       } as TLRecord);
@@ -1212,7 +1254,7 @@ export function convertToTldraw(
           normalizedAnchor: endAnchor,
           isExact: false,
           isPrecise: true,
-          snap: kind === "elbow" ? "edge" : "none",
+          snap: kind === "elbow" ? (endPort ? "edge-point" : "edge") : "none",
         },
         meta: {},
       } as TLRecord);
