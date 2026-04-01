@@ -70,9 +70,10 @@ mod tests {
     #[test]
     fn sequence_instance_reports_warnings_for_unknown_lines() {
         let instance = SequenceInstance::new();
-        let warnings = instance.validation_warnings("sequenceDiagram\npar Start\nparticipant B");
+        let warnings =
+            instance.validation_warnings("sequenceDiagram\nunsupported directive\nparticipant B");
         assert_eq!(warnings.len(), 1);
-        assert!(warnings[0].message.contains("par Start"));
+        assert!(warnings[0].message.contains("unsupported directive"));
     }
 
     #[test]
@@ -80,6 +81,15 @@ mod tests {
         let instance = SequenceInstance::new();
         let warnings = instance
             .validation_warnings("sequenceDiagram\nalt ready\nparticipant B\nelse later\nend");
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn sequence_instance_accepts_additional_block_operators_without_warnings() {
+        let instance = SequenceInstance::new();
+        let warnings = instance.validation_warnings(
+            "sequenceDiagram\npar notify\nparticipant A\nand\nparticipant B\nend\ncritical connect\noption timeout\nend\nbreak stop\nend",
+        );
         assert!(warnings.is_empty());
     }
 

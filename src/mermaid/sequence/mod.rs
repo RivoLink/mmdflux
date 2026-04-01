@@ -148,13 +148,44 @@ fn try_parse_block_start(line: &str) -> Option<SequenceStatement> {
                 label,
             })
         })
+        .or_else(|| {
+            parse_keyword_line(line, "par").map(|label| SequenceStatement::BlockStart {
+                kind: BlockKind::Par,
+                label,
+            })
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "critical").map(|label| SequenceStatement::BlockStart {
+                kind: BlockKind::Critical,
+                label,
+            })
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "break").map(|label| SequenceStatement::BlockStart {
+                kind: BlockKind::Break,
+                label,
+            })
+        })
 }
 
 fn try_parse_block_divider(line: &str) -> Option<SequenceStatement> {
-    parse_keyword_line(line, "else").map(|label| SequenceStatement::BlockDivider {
-        kind: BlockDividerKind::Else,
-        label,
-    })
+    parse_keyword_line(line, "else")
+        .map(|label| SequenceStatement::BlockDivider {
+            kind: BlockDividerKind::Else,
+            label,
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "and").map(|label| SequenceStatement::BlockDivider {
+                kind: BlockDividerKind::And,
+                label,
+            })
+        })
+        .or_else(|| {
+            parse_keyword_line(line, "option").map(|label| SequenceStatement::BlockDivider {
+                kind: BlockDividerKind::Option,
+                label,
+            })
+        })
 }
 
 fn try_parse_block_end(line: &str) -> Option<SequenceStatement> {
@@ -454,6 +485,48 @@ mod tests {
                 id: "B".to_string(),
                 alias: Some("Bob".to_string()),
             }
+        );
+    }
+
+    #[test]
+    fn parse_additional_block_starts() {
+        let stmts = parse_stmts(
+            "sequenceDiagram\npar notifications\ncritical establish connection\nbreak success",
+        );
+        assert_eq!(
+            stmts,
+            vec![
+                SequenceStatement::BlockStart {
+                    kind: BlockKind::Par,
+                    label: "notifications".to_string(),
+                },
+                SequenceStatement::BlockStart {
+                    kind: BlockKind::Critical,
+                    label: "establish connection".to_string(),
+                },
+                SequenceStatement::BlockStart {
+                    kind: BlockKind::Break,
+                    label: "success".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_additional_block_dividers() {
+        let stmts = parse_stmts("sequenceDiagram\nand\noption Timeout");
+        assert_eq!(
+            stmts,
+            vec![
+                SequenceStatement::BlockDivider {
+                    kind: BlockDividerKind::And,
+                    label: String::new(),
+                },
+                SequenceStatement::BlockDivider {
+                    kind: BlockDividerKind::Option,
+                    label: "Timeout".to_string(),
+                },
+            ]
         );
     }
 
@@ -832,7 +905,7 @@ sequenceDiagram
 
     #[test]
     fn parse_permissive_skips_unknown_with_warnings() {
-        let input = "sequenceDiagram\npar Start\nparticipant B\nand branch\nend";
+        let input = "sequenceDiagram\nunsupported start\nparticipant B\nunsupported branch\nend";
         let result = parse_sequence(input).unwrap();
         assert_eq!(result.statements.len(), 2);
         assert_eq!(result.warnings.len(), 2);

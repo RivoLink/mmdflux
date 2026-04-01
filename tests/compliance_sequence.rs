@@ -216,11 +216,19 @@ fn sequence_interaction_operators_render_block_labels() {
     let alt = render_sequence_text("alt_else.mmd");
     let loop_output = render_sequence_text("loop.mmd");
     let opt = render_sequence_text("opt.mmd");
+    let par = render_sequence_text("par_and.mmd");
+    let critical = render_sequence_text("critical_option.mmd");
+    let break_output = render_sequence_text("break_block.mmd");
 
     assert!(alt.contains("[alt] available"));
     assert!(alt.contains("[else] busy"));
     assert!(loop_output.contains("[loop] Every 5 seconds"));
     assert!(opt.contains("[opt] Extra data needed"));
+    assert!(par.contains("[par] Notifications"));
+    assert!(par.contains("[and]"));
+    assert!(critical.contains("[critical] Establish connection"));
+    assert!(critical.contains("[option] Timeout"));
+    assert!(break_output.contains("[break] Success"));
 }
 
 #[test]

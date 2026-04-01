@@ -193,7 +193,9 @@ fn validate_block_divider(
     };
 
     match (current, divider) {
-        (BlockKind::Alt, BlockDividerKind::Else) => Ok(()),
+        (BlockKind::Alt, BlockDividerKind::Else)
+        | (BlockKind::Par, BlockDividerKind::And)
+        | (BlockKind::Critical, BlockDividerKind::Option) => Ok(()),
         _ => Err(format!(
             "`{}` is not valid inside `{}` blocks",
             divider.keyword(),
@@ -543,5 +545,110 @@ sequenceDiagram
         let result = parse_sequence("sequenceDiagram\nalt available").unwrap();
         let err = compile(&result.statements).unwrap_err().to_string();
         assert!(err.contains("unclosed sequence block"));
+    }
+
+    #[test]
+    fn compile_par_and_preserve_event_order() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    participant Alice
+    participant Bob
+    participant Charlie
+    par Notifications
+        Alice->>Bob: Email
+    and
+        Alice->>Charlie: SMS
+    end",
+        );
+        assert!(matches!(
+            &model.events[0],
+            SequenceEvent::BlockStart {
+                kind: BlockKind::Par,
+                label
+            } if label == "Notifications"
+        ));
+        assert!(matches!(&model.events[1], SequenceEvent::Message { .. }));
+        assert!(matches!(
+            &model.events[2],
+            SequenceEvent::BlockDivider {
+                kind: BlockDividerKind::And,
+                label
+            } if label.is_empty()
+        ));
+        assert!(matches!(&model.events[3], SequenceEvent::Message { .. }));
+        assert_eq!(model.events[4], SequenceEvent::BlockEnd);
+    }
+
+    #[test]
+    fn compile_critical_option_preserve_event_order() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    participant Alice
+    participant Bob
+    critical Establish connection
+        Alice->>Bob: Connect
+    option Timeout
+        Alice->>Alice: Retry
+    end",
+        );
+        assert!(matches!(
+            &model.events[0],
+            SequenceEvent::BlockStart {
+                kind: BlockKind::Critical,
+                label
+            } if label == "Establish connection"
+        ));
+        assert!(matches!(&model.events[1], SequenceEvent::Message { .. }));
+        assert!(matches!(
+            &model.events[2],
+            SequenceEvent::BlockDivider {
+                kind: BlockDividerKind::Option,
+                label
+            } if label == "Timeout"
+        ));
+        assert!(matches!(&model.events[3], SequenceEvent::Message { .. }));
+        assert_eq!(model.events[4], SequenceEvent::BlockEnd);
+    }
+
+    #[test]
+    fn compile_break_preserves_event_order() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    participant A
+    participant B
+    loop Retries
+        A->>B: Try
+        break Success
+            B->>A: Done
+        end
+    end",
+        );
+        assert!(matches!(
+            &model.events[2],
+            SequenceEvent::BlockStart {
+                kind: BlockKind::Break,
+                label
+            } if label == "Success"
+        ));
+        assert!(matches!(&model.events[3], SequenceEvent::Message { .. }));
+        assert_eq!(model.events[4], SequenceEvent::BlockEnd);
+        assert_eq!(model.events[5], SequenceEvent::BlockEnd);
+    }
+
+    #[test]
+    fn compile_and_outside_par_errors() {
+        let result = parse_sequence("sequenceDiagram\ncritical establish\nand\nend").unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("not valid inside `critical`"));
+    }
+
+    #[test]
+    fn compile_option_outside_critical_errors() {
+        let result = parse_sequence("sequenceDiagram\npar notify\noption fallback\nend").unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("not valid inside `par`"));
     }
 }
