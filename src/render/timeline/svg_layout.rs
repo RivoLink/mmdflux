@@ -502,7 +502,7 @@ pub fn layout(
 
     // 6. Compute lifelines
     let lifeline_end = cursor_y;
-    let lifelines: Vec<SvgLifeline> = participants
+    let mut lifelines: Vec<SvgLifeline> = participants
         .iter()
         .map(|p| SvgLifeline {
             x: p.center_x,
@@ -510,6 +510,15 @@ pub fn layout(
             y_end: lifeline_end,
         })
         .collect();
+
+    normalize_sequence_layout_left_edge(
+        &mut participants,
+        &mut lifelines,
+        &mut rows,
+        &mut blocks,
+        &mut activations,
+        metrics,
+    );
 
     // 7. Compute diagram bounds
     let max_right = participants
@@ -540,6 +549,77 @@ pub fn layout(
         height,
         font_family: font_family.to_string(),
         font_size: metrics.font_size,
+    }
+}
+
+fn normalize_sequence_layout_left_edge(
+    participants: &mut [SvgParticipant],
+    lifelines: &mut [SvgLifeline],
+    rows: &mut [SvgRow],
+    blocks: &mut [SvgBlock],
+    activations: &mut [SvgActivation],
+    metrics: &ProportionalTextMetrics,
+) {
+    let participant_left = participants
+        .iter()
+        .map(|participant| participant.rect.x)
+        .fold(f64::INFINITY, f64::min);
+    let row_left = rows
+        .iter()
+        .map(|row| svg_row_extent(row, metrics).0)
+        .fold(f64::INFINITY, f64::min);
+    let block_left = blocks
+        .iter()
+        .map(|block| block.rect.x)
+        .fold(f64::INFINITY, f64::min);
+    let activation_left = activations
+        .iter()
+        .map(|activation| activation.x)
+        .fold(f64::INFINITY, f64::min);
+
+    let min_left = participant_left
+        .min(row_left)
+        .min(block_left)
+        .min(activation_left);
+
+    if !min_left.is_finite() || min_left >= DIAGRAM_PADDING {
+        return;
+    }
+
+    let shift_x = DIAGRAM_PADDING - min_left;
+
+    for participant in participants {
+        participant.center_x += shift_x;
+        participant.rect.x += shift_x;
+    }
+
+    for lifeline in lifelines {
+        lifeline.x += shift_x;
+    }
+
+    for row in rows {
+        match row {
+            SvgRow::Message(message) => {
+                message.from_x += shift_x;
+                message.to_x += shift_x;
+                message.label_x += shift_x;
+            }
+            SvgRow::SelfMessage(message) => {
+                message.x += shift_x;
+                message.label_x += shift_x;
+            }
+            SvgRow::Note(note) => {
+                note.rect.x += shift_x;
+            }
+        }
+    }
+
+    for block in blocks {
+        block.rect.x += shift_x;
+    }
+
+    for activation in activations {
+        activation.x += shift_x;
     }
 }
 
@@ -585,7 +665,11 @@ fn finalize_svg_block(
         .iter()
         .map(|divider| {
             format_fragment_guard(&divider.label)
-                .map(|guard| metrics.measure_text_with_padding(&guard, BLOCK_SIDE_PADDING, 0.0).0)
+                .map(|guard| {
+                    metrics
+                        .measure_text_with_padding(&guard, BLOCK_SIDE_PADDING, 0.0)
+                        .0
+                })
                 .unwrap_or(0.0)
         })
         .fold(
@@ -859,5 +943,80 @@ mod tests {
         assert_eq!(layout.blocks[0].dividers.len(), 1);
         assert!(layout.blocks[0].rect.width > 0.0);
         assert!(layout.blocks[0].rect.height > 0.0);
+        assert!(layout.blocks[0].rect.x >= DIAGRAM_PADDING);
+    }
+
+    #[test]
+    fn layout_normalizes_negative_block_bounds_into_viewbox() {
+        let model = Sequence {
+            participants: vec![
+                Participant {
+                    id: "Alice".into(),
+                    label: "Alice".into(),
+                    kind: ParticipantKind::Participant,
+                },
+                Participant {
+                    id: "Bob".into(),
+                    label: "Bob".into(),
+                    kind: ParticipantKind::Participant,
+                },
+            ],
+            events: vec![
+                SequenceEvent::BlockStart {
+                    kind: BlockKind::Loop,
+                    label: "Retry until ready".into(),
+                },
+                SequenceEvent::Message {
+                    from: 0,
+                    to: 1,
+                    line_style: LineStyle::Solid,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Check".into(),
+                    number: None,
+                },
+                SequenceEvent::BlockStart {
+                    kind: BlockKind::Alt,
+                    label: "ready".into(),
+                },
+                SequenceEvent::Message {
+                    from: 1,
+                    to: 0,
+                    line_style: LineStyle::Solid,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Proceed".into(),
+                    number: None,
+                },
+                SequenceEvent::BlockDivider {
+                    kind: BlockDividerKind::Else,
+                    label: "retry".into(),
+                },
+                SequenceEvent::Message {
+                    from: 1,
+                    to: 0,
+                    line_style: LineStyle::Dashed,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Wait".into(),
+                    number: None,
+                },
+                SequenceEvent::BlockEnd,
+                SequenceEvent::BlockEnd,
+            ],
+            autonumber: false,
+        };
+
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        assert!(
+            layout
+                .blocks
+                .iter()
+                .all(|block| block.rect.x >= DIAGRAM_PADDING)
+        );
+        assert!(
+            layout
+                .participants
+                .iter()
+                .all(|participant| participant.rect.x >= DIAGRAM_PADDING)
+        );
     }
 }
