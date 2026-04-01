@@ -5,7 +5,7 @@
 
 use super::svg_layout::{
     SvgActivation, SvgBlock, SvgBlockDivider, SvgLifeline, SvgMessage, SvgNote, SvgParticipant,
-    SvgRow, SvgSelfMessage, SvgSequenceLayout,
+    SvgParticipantBox, SvgRow, SvgSelfMessage, SvgSequenceLayout,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
@@ -26,6 +26,8 @@ const BLOCK_TAB_CUT: f64 = 7.0;
 const BLOCK_TAB_CHAR_WIDTH: f64 = 8.0;
 const BLOCK_HEADER_TEXT_Y: f64 = 15.0;
 const BLOCK_SECTION_TEXT_Y: f64 = 15.0;
+const PARTICIPANT_BOX_STROKE: &str = "#8a8a8a";
+const PARTICIPANT_BOX_LABEL_BG: &str = "white";
 
 /// Render an SVG sequence layout to an SVG string.
 pub fn render(layout: &SvgSequenceLayout) -> String {
@@ -39,6 +41,14 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
     );
 
     render_defs(&mut writer);
+
+    if !layout.participant_boxes.is_empty() {
+        writer.start_group("participant-boxes");
+        for participant_box in &layout.participant_boxes {
+            render_participant_group_box(&mut writer, participant_box);
+        }
+        writer.end_group();
+    }
 
     // Lifelines (behind everything else)
     writer.start_group("lifelines");
@@ -84,6 +94,55 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
 
     writer.end_svg();
     writer.finish()
+}
+
+fn render_participant_group_box(writer: &mut SvgWriter, participant_box: &SvgParticipantBox) {
+    let rect = &participant_box.rect;
+    let fill = participant_box
+        .color
+        .as_deref()
+        .filter(|color| !color.eq_ignore_ascii_case("transparent"));
+
+    match fill {
+        Some(color) => writer.push_line(&format!(
+            "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"{fill}\" fill-opacity=\"0.14\" stroke=\"{stroke}\" stroke-width=\"1\" />",
+            x = fmt_f64(rect.x),
+            y = fmt_f64(rect.y),
+            w = fmt_f64(rect.width),
+            h = fmt_f64(rect.height),
+            fill = escape_text(color),
+            stroke = PARTICIPANT_BOX_STROKE,
+        )),
+        None => writer.push_line(&format!(
+            "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"1\" />",
+            x = fmt_f64(rect.x),
+            y = fmt_f64(rect.y),
+            w = fmt_f64(rect.width),
+            h = fmt_f64(rect.height),
+            stroke = PARTICIPANT_BOX_STROKE,
+        )),
+    }
+
+    if let Some(label) = participant_box.label.as_deref() {
+        let label_x = rect.x + rect.width / 2.0;
+        let label_y = rect.y + 14.0;
+        let label_bg_width = ((label.chars().count() as f64) * 8.0 + 24.0)
+            .max(48.0)
+            .min(rect.width - 8.0);
+        writer.push_line(&format!(
+            "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"20\" fill=\"{bg}\" stroke=\"none\" />",
+            x = fmt_f64(label_x - label_bg_width / 2.0),
+            y = fmt_f64(rect.y + 2.0),
+            w = fmt_f64(label_bg_width),
+            bg = PARTICIPANT_BOX_LABEL_BG,
+        ));
+        writer.push_line(&format!(
+            "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{label}</text>",
+            x = fmt_f64(label_x),
+            y = fmt_f64(label_y),
+            label = escape_text(label),
+        ));
+    }
 }
 
 // ---------------------------------------------------------------------------

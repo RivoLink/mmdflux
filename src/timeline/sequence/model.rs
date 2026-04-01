@@ -23,6 +23,17 @@ pub struct Participant {
     pub kind: ParticipantKind,
 }
 
+/// A named and/or colored grouping around a contiguous set of participants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParticipantBox {
+    /// Optional display label for the grouping.
+    pub label: Option<String>,
+    /// Optional SVG fill color.
+    pub color: Option<String>,
+    /// Indices into `Sequence::participants`.
+    pub participants: Vec<usize>,
+}
+
 /// Line style for a message arrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineStyle {
@@ -156,6 +167,8 @@ pub enum SequenceEvent {
 pub struct Sequence {
     /// Participants in declaration order.
     pub participants: Vec<Participant>,
+    /// Visual groupings around participant columns.
+    pub participant_boxes: Vec<ParticipantBox>,
     /// Events in source order.
     pub events: Vec<SequenceEvent>,
     /// Whether autonumber is enabled.

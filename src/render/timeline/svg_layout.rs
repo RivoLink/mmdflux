@@ -6,8 +6,8 @@
 
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::timeline::sequence::model::{
-    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, ParticipantKind, Sequence,
-    SequenceEvent,
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, ParticipantBox,
+    ParticipantKind, Sequence, SequenceEvent,
 };
 
 // ---------------------------------------------------------------------------
@@ -18,6 +18,10 @@ use crate::timeline::sequence::model::{
 const PARTICIPANT_PADDING_X: f64 = 16.0;
 /// Vertical padding inside participant boxes.
 const PARTICIPANT_PADDING_Y: f64 = 10.0;
+/// Padding around grouped participant columns.
+const PARTICIPANT_GROUP_PADDING_X: f64 = 18.0;
+/// Vertical padding around grouped participant columns.
+const PARTICIPANT_GROUP_PADDING_Y: f64 = 14.0;
 /// Minimum gap between adjacent participant centers.
 const MIN_PARTICIPANT_GAP: f64 = 150.0;
 /// Vertical space between the bottom of the header and the first event.
@@ -60,6 +64,7 @@ const BLOCK_HEADER_GAP: f64 = 32.0;
 /// Complete proportional layout for SVG rendering.
 #[derive(Debug)]
 pub struct SvgSequenceLayout {
+    pub participant_boxes: Vec<SvgParticipantBox>,
     pub participants: Vec<SvgParticipant>,
     pub lifelines: Vec<SvgLifeline>,
     pub rows: Vec<SvgRow>,
@@ -78,6 +83,14 @@ pub struct SvgParticipant {
     pub rect: SvgRect,
     pub label: String,
     pub kind: ParticipantKind,
+}
+
+/// A vertical grouping behind one or more participant columns.
+#[derive(Debug)]
+pub struct SvgParticipantBox {
+    pub rect: SvgRect,
+    pub label: Option<String>,
+    pub color: Option<String>,
 }
 
 /// Simple rectangle.
@@ -212,6 +225,7 @@ pub fn layout(
 ) -> SvgSequenceLayout {
     if model.participants.is_empty() {
         return SvgSequenceLayout {
+            participant_boxes: Vec::new(),
             participants: Vec::new(),
             lifelines: Vec::new(),
             rows: Vec::new(),
@@ -238,6 +252,9 @@ pub fn layout(
         .collect();
 
     let header_height = box_sizes.iter().map(|(_, h)| *h).fold(0.0_f64, f64::max);
+    let participant_box_header_height =
+        participant_box_header_height(model, metrics, model.participant_boxes.is_empty());
+    let participant_y = DIAGRAM_PADDING + participant_box_header_height;
 
     // 2. Compute participant gap from message labels
     let participant_gap = compute_participant_gap(model, metrics);
@@ -257,7 +274,7 @@ pub fn layout(
             center_x,
             rect: SvgRect {
                 x,
-                y: DIAGRAM_PADDING,
+                y: participant_y,
                 width: bw,
                 height: header_height,
             },
@@ -274,7 +291,7 @@ pub fn layout(
     // 5. Walk events and build rows
     let mut rows = Vec::new();
     let mut blocks = Vec::new();
-    let mut cursor_y = DIAGRAM_PADDING + header_height + HEADER_MARGIN;
+    let mut cursor_y = participant_y + header_height + HEADER_MARGIN;
 
     let num_participants = model.participants.len();
     let mut activation_stacks: Vec<Vec<(f64, usize)>> = vec![Vec::new(); num_participants];
@@ -500,18 +517,31 @@ pub fn layout(
     activations.sort_by_key(|a| a.depth);
     blocks.sort_by_key(|block| block.depth);
 
-    // 6. Compute lifelines
-    let lifeline_end = cursor_y;
+    // 6. Compute lifelines and participant grouping boxes
+    let lifeline_end = cursor_y
+        + if model.participant_boxes.is_empty() {
+            0.0
+        } else {
+            PARTICIPANT_GROUP_PADDING_Y
+        };
     let mut lifelines: Vec<SvgLifeline> = participants
         .iter()
         .map(|p| SvgLifeline {
             x: p.center_x,
-            y_start: DIAGRAM_PADDING + header_height,
+            y_start: p.rect.y + p.rect.height,
             y_end: lifeline_end,
         })
         .collect();
+    let mut participant_boxes = layout_participant_boxes(
+        &model.participant_boxes,
+        &participants,
+        metrics,
+        DIAGRAM_PADDING,
+        lifeline_end + PARTICIPANT_GROUP_PADDING_Y * 0.25,
+    );
 
     normalize_sequence_layout_left_edge(
+        &mut participant_boxes,
         &mut participants,
         &mut lifelines,
         &mut rows,
@@ -521,6 +551,10 @@ pub fn layout(
     );
 
     // 7. Compute diagram bounds
+    let max_participant_box_right = participant_boxes
+        .iter()
+        .map(|participant_box| participant_box.rect.x + participant_box.rect.width)
+        .fold(0.0_f64, f64::max);
     let max_right = participants
         .iter()
         .map(|p| p.rect.x + p.rect.width)
@@ -536,10 +570,19 @@ pub fn layout(
         .map(|block| block.rect.x + block.rect.width)
         .fold(0.0_f64, f64::max);
 
-    let width = max_right.max(row_right).max(block_right) + DIAGRAM_PADDING;
-    let height = lifeline_end + DIAGRAM_PADDING;
+    let width = max_right
+        .max(max_participant_box_right)
+        .max(row_right)
+        .max(block_right)
+        + DIAGRAM_PADDING;
+    let participant_box_bottom = participant_boxes
+        .iter()
+        .map(|participant_box| participant_box.rect.y + participant_box.rect.height)
+        .fold(0.0_f64, f64::max);
+    let height = lifeline_end.max(participant_box_bottom) + DIAGRAM_PADDING;
 
     SvgSequenceLayout {
+        participant_boxes,
         participants,
         lifelines,
         rows,
@@ -553,6 +596,7 @@ pub fn layout(
 }
 
 fn normalize_sequence_layout_left_edge(
+    participant_boxes: &mut [SvgParticipantBox],
     participants: &mut [SvgParticipant],
     lifelines: &mut [SvgLifeline],
     rows: &mut [SvgRow],
@@ -560,6 +604,10 @@ fn normalize_sequence_layout_left_edge(
     activations: &mut [SvgActivation],
     metrics: &ProportionalTextMetrics,
 ) {
+    let participant_box_left = participant_boxes
+        .iter()
+        .map(|participant_box| participant_box.rect.x)
+        .fold(f64::INFINITY, f64::min);
     let participant_left = participants
         .iter()
         .map(|participant| participant.rect.x)
@@ -577,7 +625,8 @@ fn normalize_sequence_layout_left_edge(
         .map(|activation| activation.x)
         .fold(f64::INFINITY, f64::min);
 
-    let min_left = participant_left
+    let min_left = participant_box_left
+        .min(participant_left)
         .min(row_left)
         .min(block_left)
         .min(activation_left);
@@ -587,6 +636,10 @@ fn normalize_sequence_layout_left_edge(
     }
 
     let shift_x = DIAGRAM_PADDING - min_left;
+
+    for participant_box in participant_boxes {
+        participant_box.rect.x += shift_x;
+    }
 
     for participant in participants {
         participant.center_x += shift_x;
@@ -781,6 +834,68 @@ fn compute_left_note_margin(
     max_overhang
 }
 
+fn participant_box_header_height(
+    model: &Sequence,
+    metrics: &ProportionalTextMetrics,
+    no_boxes: bool,
+) -> f64 {
+    if no_boxes {
+        return 0.0;
+    }
+
+    let max_label_height = model
+        .participant_boxes
+        .iter()
+        .filter_map(|participant_box| participant_box.label.as_deref())
+        .map(|label| metrics.measure_text_with_padding(label, 0.0, 0.0).1)
+        .fold(0.0_f64, f64::max);
+
+    (max_label_height + PARTICIPANT_GROUP_PADDING_Y).max(PARTICIPANT_GROUP_PADDING_Y * 2.0)
+}
+
+fn layout_participant_boxes(
+    participant_boxes: &[ParticipantBox],
+    participants: &[SvgParticipant],
+    metrics: &ProportionalTextMetrics,
+    top_y: f64,
+    bottom_y: f64,
+) -> Vec<SvgParticipantBox> {
+    participant_boxes
+        .iter()
+        .filter_map(|participant_box| {
+            let first_idx = *participant_box.participants.first()?;
+            let last_idx = *participant_box.participants.last()?;
+            let first = participants.get(first_idx)?;
+            let last = participants.get(last_idx)?;
+
+            let mut left_x = first.rect.x - PARTICIPANT_GROUP_PADDING_X;
+            let mut right_x = last.rect.x + last.rect.width + PARTICIPANT_GROUP_PADDING_X;
+
+            if let Some(label) = participant_box.label.as_deref() {
+                let (label_width, _) =
+                    metrics.measure_text_with_padding(label, PARTICIPANT_GROUP_PADDING_X, 0.0);
+                let current_width = right_x - left_x;
+                if current_width < label_width {
+                    let missing = label_width - current_width;
+                    left_x -= missing / 2.0;
+                    right_x += missing / 2.0;
+                }
+            }
+
+            Some(SvgParticipantBox {
+                rect: SvgRect {
+                    x: left_x,
+                    y: top_y,
+                    width: right_x - left_x,
+                    height: (bottom_y - top_y).max(PARTICIPANT_GROUP_PADDING_Y * 2.0),
+                },
+                label: participant_box.label.clone(),
+                color: participant_box.color.clone(),
+            })
+        })
+        .collect()
+}
+
 /// Format a message label with optional autonumber prefix.
 fn format_label(text: &str, number: &Option<usize>) -> String {
     match number {
@@ -813,7 +928,9 @@ fn block_tab_width(keyword: &str) -> f64 {
 mod tests {
     use super::*;
     use crate::graph::measure::ProportionalTextMetrics;
-    use crate::timeline::sequence::model::{Participant, ParticipantKind, Sequence};
+    use crate::timeline::sequence::model::{
+        Participant, ParticipantBox, ParticipantKind, Sequence,
+    };
 
     fn test_metrics() -> ProportionalTextMetrics {
         ProportionalTextMetrics::new(16.0, 15.0, 15.0)
@@ -823,6 +940,7 @@ mod tests {
     fn layout_empty_model() {
         let model = Sequence {
             participants: Vec::new(),
+            participant_boxes: Vec::new(),
             events: Vec::new(),
             autonumber: false,
         };
@@ -847,6 +965,7 @@ mod tests {
                     kind: ParticipantKind::Participant,
                 },
             ],
+            participant_boxes: Vec::new(),
             events: vec![SequenceEvent::Message {
                 from: 0,
                 to: 1,
@@ -877,6 +996,7 @@ mod tests {
                 label: "A".into(),
                 kind: ParticipantKind::Participant,
             }],
+            participant_boxes: Vec::new(),
             events: vec![SequenceEvent::Message {
                 from: 0,
                 to: 0,
@@ -908,6 +1028,7 @@ mod tests {
                     kind: ParticipantKind::Participant,
                 },
             ],
+            participant_boxes: Vec::new(),
             events: vec![
                 SequenceEvent::BlockStart {
                     kind: BlockKind::Alt,
@@ -947,6 +1068,48 @@ mod tests {
     }
 
     #[test]
+    fn layout_positions_participant_boxes_behind_headers() {
+        let model = Sequence {
+            participants: vec![
+                Participant {
+                    id: "Alice".into(),
+                    label: "Alice".into(),
+                    kind: ParticipantKind::Participant,
+                },
+                Participant {
+                    id: "Bob".into(),
+                    label: "Bob".into(),
+                    kind: ParticipantKind::Participant,
+                },
+            ],
+            participant_boxes: vec![ParticipantBox {
+                label: Some("Frontend".into()),
+                color: Some("lightblue".into()),
+                participants: vec![0, 1],
+            }],
+            events: vec![SequenceEvent::Message {
+                from: 0,
+                to: 1,
+                line_style: LineStyle::Solid,
+                arrow_head: ArrowHead::Filled,
+                text: "Hello".into(),
+                number: None,
+            }],
+            autonumber: false,
+        };
+
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        assert_eq!(layout.participant_boxes.len(), 1);
+        assert_eq!(
+            layout.participant_boxes[0].label.as_deref(),
+            Some("Frontend")
+        );
+        assert!(layout.participant_boxes[0].rect.x <= layout.participants[0].rect.x);
+        assert!(layout.participants[0].rect.y > DIAGRAM_PADDING);
+    }
+
+    #[test]
     fn layout_normalizes_negative_block_bounds_into_viewbox() {
         let model = Sequence {
             participants: vec![
@@ -961,6 +1124,7 @@ mod tests {
                     kind: ParticipantKind::Participant,
                 },
             ],
+            participant_boxes: Vec::new(),
             events: vec![
                 SequenceEvent::BlockStart {
                     kind: BlockKind::Loop,

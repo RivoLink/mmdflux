@@ -4,8 +4,8 @@
 //! and notes. Output is consumed by the text renderer.
 
 use super::model::{
-    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, Participant, ParticipantKind,
-    Sequence, SequenceEvent,
+    ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement, Participant, ParticipantBox,
+    ParticipantKind, Sequence, SequenceEvent,
 };
 
 /// Minimum gap between participant centers (characters).
@@ -16,6 +16,15 @@ pub(crate) const LABEL_PADDING: usize = 4;
 
 /// Height of the participant header box (top border + label + bottom border).
 pub(crate) const HEADER_HEIGHT: usize = 3;
+
+/// Y offset applied to participant headers when participant boxes are present.
+pub(crate) const PARTICIPANT_BOX_HEADER_OFFSET: usize = 2;
+
+/// Horizontal padding around grouped participant columns.
+const PARTICIPANT_BOX_PADDING_X: usize = 2;
+
+/// Extra bottom padding inside participant boxes.
+const PARTICIPANT_BOX_PADDING_BOTTOM: usize = 1;
 
 /// Vertical gap between events.
 pub(crate) const EVENT_GAP: usize = 1;
@@ -31,6 +40,8 @@ pub const SELF_MSG_WIDTH: usize = 4;
 pub struct ParticipantLayout {
     /// Center X column (where the lifeline is drawn).
     pub center_x: usize,
+    /// Top Y of the header box.
+    pub box_y: usize,
     /// Left X of the header box.
     pub box_x: usize,
     /// Width of the header box.
@@ -40,6 +51,17 @@ pub struct ParticipantLayout {
     /// Participant or Actor.
     #[allow(dead_code)]
     pub kind: ParticipantKind,
+}
+
+/// A positioned box around a group of participant columns.
+#[derive(Debug, Clone)]
+pub struct ParticipantBoxLayout {
+    pub top_y: usize,
+    pub bottom_y: usize,
+    pub left_x: usize,
+    pub right_x: usize,
+    pub label: Option<String>,
+    pub color: Option<String>,
 }
 
 /// A positioned event row in the layout.
@@ -114,6 +136,8 @@ pub struct BlockLayout {
 pub struct SequenceLayout {
     /// Participant positions.
     pub participants: Vec<ParticipantLayout>,
+    /// Participant grouping regions.
+    pub participant_boxes: Vec<ParticipantBoxLayout>,
     /// Positioned event rows.
     pub rows: Vec<RowLayout>,
     /// Interaction block regions.
@@ -131,6 +155,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     if model.participants.is_empty() {
         return SequenceLayout {
             participants: Vec::new(),
+            participant_boxes: Vec::new(),
             rows: Vec::new(),
             blocks: Vec::new(),
             activations: Vec::new(),
@@ -141,11 +166,21 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
 
     let participant_gap = compute_participant_gap(model);
     let left_margin = compute_left_note_margin(model);
-    let participants = layout_participants(&model.participants, participant_gap, left_margin);
+    let participant_header_y = if model.participant_boxes.is_empty() {
+        0
+    } else {
+        PARTICIPANT_BOX_HEADER_OFFSET
+    };
+    let participants = layout_participants(
+        &model.participants,
+        participant_gap,
+        left_margin,
+        participant_header_y,
+    );
 
     let mut rows = Vec::new();
     let mut blocks = Vec::new();
-    let mut cursor_y = HEADER_HEIGHT + EVENT_GAP;
+    let mut cursor_y = participant_header_y + HEADER_HEIGHT + EVENT_GAP;
 
     // Activation tracking: stack of (y_start, depth) per participant
     let num_participants = model.participants.len();
@@ -286,10 +321,27 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
 
     blocks.sort_by_key(|block| block.depth);
 
+    let diagram_bottom = cursor_y
+        + if model.participant_boxes.is_empty() {
+            0
+        } else {
+            PARTICIPANT_BOX_PADDING_BOTTOM
+        };
+    let participant_boxes = layout_participant_boxes(
+        &model.participant_boxes,
+        &participants,
+        diagram_bottom.saturating_sub(1),
+    );
+
     // Compute total dimensions
     let max_participant_right = participants
         .iter()
         .map(|p| p.box_x + p.box_width)
+        .max()
+        .unwrap_or(0);
+    let max_participant_box_right = participant_boxes
+        .iter()
+        .map(|box_layout| box_layout.right_x)
         .max()
         .unwrap_or(0);
 
@@ -302,13 +354,15 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let max_block_right = blocks.iter().map(|block| block.right_x).max().unwrap_or(0);
 
     let width = max_participant_right
+        .max(max_participant_box_right)
         .max(max_row_right)
         .max(max_block_right)
         + 2;
-    let height = cursor_y;
+    let height = diagram_bottom.max(cursor_y);
 
     SequenceLayout {
         participants,
+        participant_boxes,
         rows,
         blocks,
         activations,
@@ -529,6 +583,7 @@ fn layout_participants(
     participants: &[Participant],
     gap: usize,
     left_margin: usize,
+    box_y: usize,
 ) -> Vec<ParticipantLayout> {
     let mut result = Vec::with_capacity(participants.len());
     let mut x = 1 + left_margin; // left margin + space for left-of notes
@@ -539,6 +594,7 @@ fn layout_participants(
 
         result.push(ParticipantLayout {
             center_x,
+            box_y,
             box_x: x,
             box_width,
             label: p.label.clone(),
@@ -556,6 +612,46 @@ fn layout_participants(
     result
 }
 
+fn layout_participant_boxes(
+    participant_boxes: &[ParticipantBox],
+    participants: &[ParticipantLayout],
+    bottom_y: usize,
+) -> Vec<ParticipantBoxLayout> {
+    participant_boxes
+        .iter()
+        .filter_map(|participant_box| {
+            let first_idx = *participant_box.participants.first()?;
+            let last_idx = *participant_box.participants.last()?;
+            let first = participants.get(first_idx)?;
+            let last = participants.get(last_idx)?;
+
+            let mut left_x = first.box_x.saturating_sub(PARTICIPANT_BOX_PADDING_X);
+            let mut right_x = last.box_x + last.box_width - 1 + PARTICIPANT_BOX_PADDING_X;
+            let min_width = participant_box
+                .label
+                .as_ref()
+                .map(|label| label.len() + 4)
+                .unwrap_or(0)
+                .max(6);
+            let current_width = right_x.saturating_sub(left_x) + 1;
+            if current_width < min_width {
+                let extra = min_width - current_width;
+                left_x = left_x.saturating_sub(extra / 2);
+                right_x += extra - extra / 2;
+            }
+
+            Some(ParticipantBoxLayout {
+                top_y: 0,
+                bottom_y,
+                left_x,
+                right_x,
+                label: participant_box.label.clone(),
+                color: participant_box.color.clone(),
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -564,6 +660,7 @@ mod tests {
     fn layout_empty_model() {
         let layout = layout(&Sequence {
             participants: Vec::new(),
+            participant_boxes: Vec::new(),
             events: Vec::new(),
             autonumber: false,
         });

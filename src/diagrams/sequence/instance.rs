@@ -94,6 +94,15 @@ mod tests {
     }
 
     #[test]
+    fn sequence_instance_accepts_participant_boxes_without_warnings() {
+        let instance = SequenceInstance::new();
+        let warnings = instance.validation_warnings(
+            "sequenceDiagram\nbox blue Frontend\nparticipant A\nactor B\nend\nA->>B: hello",
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
     fn sequence_instance_no_warnings_for_clean_input() {
         let instance = SequenceInstance::new();
         let warnings = instance.validation_warnings("sequenceDiagram\nparticipant A\nA->>B: hello");

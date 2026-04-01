@@ -253,3 +253,26 @@ fn sequence_svg_interaction_operators_use_operator_tabs() {
         "expected bracketed else guard"
     );
 }
+
+#[test]
+fn sequence_participant_boxes_render_group_labels() {
+    let output = render_sequence_text("participant_boxes.mmd");
+    let unlabeled = render_sequence_text("participant_box_color_only.mmd");
+
+    assert!(output.contains("Frontend"));
+    assert!(output.contains("Backend"));
+    assert!(unlabeled.contains("Alice"));
+    assert!(unlabeled.contains("Bob"));
+}
+
+#[test]
+fn sequence_svg_participant_boxes_render_group_backgrounds() {
+    let svg = render_sequence_svg("participant_boxes.mmd");
+    let color_only_svg = render_sequence_svg("participant_box_color_only.mmd");
+
+    assert!(svg.contains("participant-boxes"));
+    assert!(svg.contains(">Frontend</text>"));
+    assert!(svg.contains(">Backend</text>"));
+    assert!(svg.contains("fill=\"lightblue\""));
+    assert!(color_only_svg.contains("fill=\"aqua\""));
+}

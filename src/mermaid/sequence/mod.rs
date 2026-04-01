@@ -16,6 +16,7 @@ use crate::errors::ParseDiagnostic;
 /// Result of parsing a sequence diagram.
 ///
 /// Contains the parsed statements and any warnings collected during parsing.
+#[derive(Debug)]
 pub struct SequenceParseResult {
     /// Parsed statements in source order.
     pub statements: Vec<SequenceStatement>,
@@ -67,7 +68,7 @@ pub fn parse_sequence(
     }
 
     // Parse body lines
-    for (line_num, line) in lines {
+    while let Some((line_num, line)) = lines.next() {
         let trimmed = line.trim();
 
         // Skip empty lines and comments
@@ -78,6 +79,15 @@ pub fn parse_sequence(
         // Try each construct in order
         if trimmed.to_lowercase() == "autonumber" {
             statements.push(SequenceStatement::Autonumber);
+            continue;
+        }
+
+        if let Some(box_header) = try_parse_participant_box_start(trimmed) {
+            statements.push(SequenceStatement::ParticipantBoxStart {
+                color: box_header.color,
+                label: box_header.label,
+            });
+            parse_participant_box_body(&mut lines, &mut statements)?;
             continue;
         }
 
@@ -128,6 +138,154 @@ pub fn parse_sequence(
         statements,
         warnings,
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParticipantBoxHeader {
+    color: Option<String>,
+    label: Option<String>,
+}
+
+fn try_parse_participant_box_start(line: &str) -> Option<ParticipantBoxHeader> {
+    let rest = parse_keyword_line(line, "box")?;
+    let (color, label) = parse_participant_box_header(&rest);
+    Some(ParticipantBoxHeader { color, label })
+}
+
+fn parse_participant_box_body<'a, I>(
+    lines: &mut std::iter::Peekable<I>,
+    statements: &mut Vec<SequenceStatement>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    I: Iterator<Item = (usize, &'a str)>,
+{
+    for (line_num, line) in lines.by_ref() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() || trimmed.starts_with("%%") {
+            continue;
+        }
+
+        if try_parse_block_end(trimmed).is_some() {
+            statements.push(SequenceStatement::ParticipantBoxEnd);
+            return Ok(());
+        }
+
+        if let Some(participant) = try_parse_participant(trimmed) {
+            statements.push(participant);
+            continue;
+        }
+
+        return Err(format!(
+            "unsupported line inside participant box at line {}: {trimmed}",
+            line_num + 1
+        )
+        .into());
+    }
+
+    Err("unclosed participant box".into())
+}
+
+fn parse_participant_box_header(rest: &str) -> (Option<String>, Option<String>) {
+    let trimmed = rest.trim();
+    if trimmed.is_empty() {
+        return (None, None);
+    }
+
+    if let Some((color, label)) = split_box_color_and_label(trimmed) {
+        return (
+            Some(color.to_string()),
+            non_empty_option(label.trim().to_string()),
+        );
+    }
+
+    (None, Some(trimmed.to_string()))
+}
+
+fn split_box_color_and_label(rest: &str) -> Option<(&str, &str)> {
+    if let Some(color_len) = functional_color_len(rest) {
+        let color = &rest[..color_len];
+        let label = &rest[color_len..];
+        return Some((color.trim(), label));
+    }
+
+    let first = rest.split_whitespace().next()?;
+    if is_supported_box_color(first) {
+        let label = &rest[first.len()..];
+        return Some((first, label));
+    }
+
+    None
+}
+
+fn functional_color_len(rest: &str) -> Option<usize> {
+    for prefix in ["rgb(", "rgba(", "hsl(", "hsla("] {
+        if !rest
+            .get(..prefix.len())
+            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(prefix))
+        {
+            continue;
+        }
+
+        let mut depth = 0usize;
+        for (idx, ch) in rest.char_indices() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(idx + ch.len_utf8());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn is_supported_box_color(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "aqua"
+            | "black"
+            | "blue"
+            | "brown"
+            | "cyan"
+            | "gold"
+            | "gray"
+            | "green"
+            | "grey"
+            | "indigo"
+            | "lightblue"
+            | "lime"
+            | "magenta"
+            | "maroon"
+            | "navy"
+            | "olive"
+            | "orange"
+            | "pink"
+            | "purple"
+            | "red"
+            | "silver"
+            | "teal"
+            | "transparent"
+            | "violet"
+            | "white"
+            | "yellow"
+    ) || is_hex_color(token)
+}
+
+fn is_hex_color(token: &str) -> bool {
+    let Some(hex) = token.strip_prefix('#') else {
+        return false;
+    };
+
+    matches!(hex.len(), 3 | 4 | 6 | 8) && hex.chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
+fn non_empty_option(value: String) -> Option<String> {
+    if value.is_empty() { None } else { Some(value) }
 }
 
 fn try_parse_block_start(line: &str) -> Option<SequenceStatement> {
@@ -528,6 +686,73 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn parse_participant_box_with_color_and_label() {
+        let stmts = parse_stmts(
+            "sequenceDiagram\nbox blue Frontend\nparticipant A as Alice\nactor B as Bob\nend",
+        );
+        assert_eq!(
+            stmts,
+            vec![
+                SequenceStatement::ParticipantBoxStart {
+                    color: Some("blue".to_string()),
+                    label: Some("Frontend".to_string()),
+                },
+                SequenceStatement::Participant {
+                    kind: ParticipantKind::Participant,
+                    id: "A".to_string(),
+                    alias: Some("Alice".to_string()),
+                },
+                SequenceStatement::Participant {
+                    kind: ParticipantKind::Actor,
+                    id: "B".to_string(),
+                    alias: Some("Bob".to_string()),
+                },
+                SequenceStatement::ParticipantBoxEnd,
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_participant_box_without_color() {
+        let stmts = parse_stmts("sequenceDiagram\nbox Frontend services\nparticipant A\nend");
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::ParticipantBoxStart {
+                color: None,
+                label: Some("Frontend services".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_participant_box_without_label() {
+        let stmts = parse_stmts("sequenceDiagram\nbox aqua\nparticipant A\nend");
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::ParticipantBoxStart {
+                color: Some("aqua".to_string()),
+                label: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_participant_box_errors_on_non_participant_body() {
+        let err = parse_sequence("sequenceDiagram\nbox green Group\nA->>B: nope\nend")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unsupported line inside participant box"));
+    }
+
+    #[test]
+    fn parse_participant_box_requires_end() {
+        let err = parse_sequence("sequenceDiagram\nbox Frontend\nparticipant A")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unclosed participant box"));
     }
 
     #[test]

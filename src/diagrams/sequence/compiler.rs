@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use crate::mermaid::sequence::ast::{ActivationModifier, SequenceStatement};
 use crate::timeline::sequence::model::{
-    BlockDividerKind, BlockKind, NotePlacement, Participant, ParticipantKind, Sequence,
-    SequenceEvent,
+    BlockDividerKind, BlockKind, NotePlacement, Participant, ParticipantBox, ParticipantKind,
+    Sequence, SequenceEvent,
 };
 
 /// Compile parsed sequence statements into a validated model.
@@ -21,28 +21,86 @@ pub fn compile(
     statements: &[SequenceStatement],
 ) -> Result<Sequence, Box<dyn std::error::Error + Send + Sync>> {
     let mut participants: Vec<Participant> = Vec::new();
+    let mut participant_boxes: Vec<ParticipantBox> = Vec::new();
     let mut participant_index: HashMap<String, usize> = HashMap::new();
+    let mut participant_box_index: HashMap<String, usize> = HashMap::new();
     let mut events: Vec<SequenceEvent> = Vec::new();
     let mut autonumber = false;
     let mut message_counter: usize = 0;
     let mut block_stack: Vec<BlockKind> = Vec::new();
+    let mut open_participant_box: Option<OpenParticipantBox> = None;
 
     // First pass: collect explicit participant declarations (preserving order)
     for stmt in statements {
-        if let SequenceStatement::Participant { kind, id, alias } = stmt
-            && !participant_index.contains_key(id)
-        {
-            let idx = participants.len();
-            participants.push(Participant {
-                id: id.clone(),
-                label: alias.as_deref().unwrap_or(id).to_string(),
-                kind: kind.clone(),
-            });
-            participant_index.insert(id.clone(), idx);
+        match stmt {
+            SequenceStatement::Participant { kind, id, alias } => {
+                let idx = if let Some(&existing) = participant_index.get(id) {
+                    existing
+                } else {
+                    let next = participants.len();
+                    participants.push(Participant {
+                        id: id.clone(),
+                        label: alias.as_deref().unwrap_or(id).to_string(),
+                        kind: kind.clone(),
+                    });
+                    participant_index.insert(id.clone(), next);
+                    next
+                };
+
+                if let Some(open_box) = open_participant_box.as_mut() {
+                    if let Some(existing_box_idx) = participant_box_index.get(id) {
+                        let existing = &participant_boxes[*existing_box_idx];
+                        let existing_label = existing.label.as_deref().unwrap_or("unnamed box");
+                        return Err(format!(
+                            "participant `{id}` cannot belong to multiple participant boxes (already assigned to `{existing_label}`)"
+                        )
+                        .into());
+                    }
+
+                    if !open_box.participants.contains(&idx) {
+                        open_box.participants.push(idx);
+                    }
+                }
+            }
+            SequenceStatement::ParticipantBoxStart { color, label } => {
+                if open_participant_box.is_some() {
+                    return Err("nested participant boxes are not supported".into());
+                }
+                open_participant_box = Some(OpenParticipantBox {
+                    color: color.clone(),
+                    label: label.clone(),
+                    participants: Vec::new(),
+                });
+            }
+            SequenceStatement::ParticipantBoxEnd => {
+                let open_box = open_participant_box.take().ok_or_else(
+                    || -> Box<dyn std::error::Error + Send + Sync> {
+                        "encountered participant box `end` without an open box".into()
+                    },
+                )?;
+                if open_box.participants.is_empty() {
+                    return Err("participant boxes must declare at least one participant".into());
+                }
+                let box_idx = participant_boxes.len();
+                for participant_idx in &open_box.participants {
+                    let participant_id = participants[*participant_idx].id.clone();
+                    participant_box_index.insert(participant_id, box_idx);
+                }
+                participant_boxes.push(ParticipantBox {
+                    label: open_box.label,
+                    color: open_box.color,
+                    participants: open_box.participants,
+                });
+            }
+            SequenceStatement::Autonumber => {
+                autonumber = true;
+            }
+            _ => {}
         }
-        if matches!(stmt, SequenceStatement::Autonumber) {
-            autonumber = true;
-        }
+    }
+
+    if open_participant_box.is_some() {
+        return Err("unclosed participant box".into());
     }
 
     // Second pass: process messages and notes, creating implicit participants as needed
@@ -140,7 +198,10 @@ pub fn compile(
                     text: text.clone(),
                 });
             }
-            SequenceStatement::Participant { .. } | SequenceStatement::Autonumber => {
+            SequenceStatement::Participant { .. }
+            | SequenceStatement::ParticipantBoxStart { .. }
+            | SequenceStatement::ParticipantBoxEnd
+            | SequenceStatement::Autonumber => {
                 // Already handled in first pass
             }
             SequenceStatement::BlockStart { kind, label } => {
@@ -179,9 +240,17 @@ pub fn compile(
 
     Ok(Sequence {
         participants,
+        participant_boxes,
         events,
         autonumber,
     })
+}
+
+#[derive(Debug)]
+struct OpenParticipantBox {
+    color: Option<String>,
+    label: Option<String>,
+    participants: Vec<usize>,
 }
 
 fn validate_block_divider(
@@ -263,6 +332,58 @@ mod tests {
     fn compile_actor_kind() {
         let model = compile_input("sequenceDiagram\nactor B as Bob");
         assert_eq!(model.participants[0].kind, ParticipantKind::Actor);
+    }
+
+    #[test]
+    fn compile_participant_boxes_track_membership() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    box blue Frontend
+        participant A as Alice
+        actor B as Bob
+    end
+    participant C as Charlie",
+        );
+
+        assert_eq!(model.participant_boxes.len(), 1);
+        let participant_box = &model.participant_boxes[0];
+        assert_eq!(participant_box.color.as_deref(), Some("blue"));
+        assert_eq!(participant_box.label.as_deref(), Some("Frontend"));
+        assert_eq!(participant_box.participants, vec![0, 1]);
+    }
+
+    #[test]
+    fn compile_participant_box_without_label_preserves_color() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    box aqua
+        participant A
+        participant B
+    end",
+        );
+
+        assert_eq!(model.participant_boxes.len(), 1);
+        assert_eq!(model.participant_boxes[0].color.as_deref(), Some("aqua"));
+        assert_eq!(model.participant_boxes[0].label, None);
+    }
+
+    #[test]
+    fn compile_participant_in_multiple_boxes_errors() {
+        let result = parse_sequence(
+            "\
+sequenceDiagram
+    box Frontend
+        participant A
+    end
+    box Backend
+        participant A
+    end",
+        )
+        .unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("multiple participant boxes"));
     }
 
     #[test]

@@ -8,7 +8,8 @@ use crate::render::text::canvas::Canvas;
 use crate::render::text::chars::CharSet;
 use crate::render::text::connections::Connections;
 use crate::timeline::sequence::layout::{
-    ActivationRect, BlockLayout, ParticipantLayout, RowLayout, SELF_MSG_WIDTH, SequenceLayout,
+    ActivationRect, BlockLayout, ParticipantBoxLayout, ParticipantLayout, RowLayout,
+    SELF_MSG_WIDTH, SequenceLayout,
 };
 use crate::timeline::sequence::model::{
     ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement,
@@ -22,12 +23,25 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
 
     let mut canvas = Canvas::new(layout.width, layout.height);
 
+    for participant_box in &layout.participant_boxes {
+        draw_participant_group_box(&mut canvas, participant_box, charset);
+    }
+
     for p in &layout.participants {
         draw_participant_header(&mut canvas, p, charset);
     }
 
-    let lifeline_start = 3;
-    let lifeline_end = layout.height;
+    let lifeline_start = layout
+        .participants
+        .first()
+        .map(|participant| participant.box_y + 3)
+        .unwrap_or(3);
+    let lifeline_end = layout
+        .participant_boxes
+        .iter()
+        .map(|participant_box| participant_box.bottom_y)
+        .max()
+        .unwrap_or(layout.height);
     for p in &layout.participants {
         draw_lifeline(
             &mut canvas,
@@ -111,26 +125,62 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
 fn draw_participant_header(canvas: &mut Canvas, p: &ParticipantLayout, cs: &CharSet) {
     let x = p.box_x;
     let w = p.box_width;
+    let y = p.box_y;
 
-    canvas.set(x, 0, cs.corner_tl);
+    canvas.set(x, y, cs.corner_tl);
     for i in 1..w - 1 {
-        canvas.set(x + i, 0, cs.horizontal);
+        canvas.set(x + i, y, cs.horizontal);
     }
-    canvas.set(x + w - 1, 0, cs.corner_tr);
+    canvas.set(x + w - 1, y, cs.corner_tr);
 
-    canvas.set(x, 1, cs.vertical);
-    canvas.set(x + 1, 1, ' ');
-    canvas.write_str(x + 2, 1, &p.label);
-    canvas.set(x + 2 + p.label.len(), 1, ' ');
-    canvas.set(x + w - 1, 1, cs.vertical);
+    canvas.set(x, y + 1, cs.vertical);
+    canvas.set(x + 1, y + 1, ' ');
+    canvas.write_str(x + 2, y + 1, &p.label);
+    canvas.set(x + 2 + p.label.len(), y + 1, ' ');
+    canvas.set(x + w - 1, y + 1, cs.vertical);
 
-    canvas.set(x, 2, cs.corner_bl);
+    canvas.set(x, y + 2, cs.corner_bl);
     for i in 1..w - 1 {
-        canvas.set(x + i, 2, cs.horizontal);
+        canvas.set(x + i, y + 2, cs.horizontal);
     }
-    canvas.set(x + w - 1, 2, cs.corner_br);
+    canvas.set(x + w - 1, y + 2, cs.corner_br);
 
-    canvas.set(p.center_x, 2, cs.tee_down);
+    canvas.set(p.center_x, y + 2, cs.tee_down);
+}
+
+fn draw_participant_group_box(
+    canvas: &mut Canvas,
+    participant_box: &ParticipantBoxLayout,
+    cs: &CharSet,
+) {
+    let left = participant_box.left_x;
+    let right = participant_box.right_x;
+    let top = participant_box.top_y;
+    let bottom = participant_box.bottom_y;
+
+    canvas.set(left, top, cs.corner_tl);
+    canvas.set(right, top, cs.corner_tr);
+    canvas.set(left, bottom, cs.corner_bl);
+    canvas.set(right, bottom, cs.corner_br);
+
+    for x in (left + 1)..right {
+        canvas.set(x, top, cs.horizontal);
+        canvas.set(x, bottom, cs.horizontal);
+    }
+
+    for y in (top + 1)..bottom {
+        canvas.set(left, y, cs.vertical);
+        canvas.set(right, y, cs.vertical);
+    }
+
+    if let Some(label) = &participant_box.label {
+        for x in (left + 1)..right {
+            canvas.set(x, top + 1, ' ');
+        }
+        let available_width = right.saturating_sub(left + 1);
+        let label_x = left + 1 + available_width.saturating_sub(label.len()) / 2;
+        canvas.write_str(label_x, top + 1, label);
+    }
 }
 
 fn draw_lifeline(canvas: &mut Canvas, x: usize, y_start: usize, y_end: usize, cs: &CharSet) {

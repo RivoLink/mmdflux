@@ -24,6 +24,13 @@ pub enum SequenceStatement {
         id: String,
         alias: Option<String>,
     },
+    /// `box [color] [label]`.
+    ParticipantBoxStart {
+        color: Option<String>,
+        label: Option<String>,
+    },
+    /// End of a participant box section.
+    ParticipantBoxEnd,
     /// A message between participants (e.g., `A->>B: hello`).
     Message {
         from: String,
