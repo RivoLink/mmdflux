@@ -78,15 +78,16 @@ pub fn parse_state_diagram(
             pos += 1;
             continue;
         }
-        if trimmed.to_ascii_lowercase().starts_with("statediagram-v2") {
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("statediagram-v2") || lower.starts_with("statediagram") {
             pos += 1;
             break;
         }
-        return Err(format!("Expected 'stateDiagram-v2' header, got: {trimmed}").into());
+        return Err(format!("Expected 'stateDiagram' header, got: {trimmed}").into());
     }
 
     if pos == 0 {
-        return Err("Missing 'stateDiagram-v2' header".into());
+        return Err("Missing 'stateDiagram' header".into());
     }
 
     let statements = parse_body(&lines, &mut pos, &mut direction);
@@ -303,12 +304,12 @@ fn try_parse_state_decl(line: &str) -> Option<StateDecl> {
         return None;
     }
 
-    // Check for stereotype: `state id <<fork>>` etc.
-    let stereotype = if rest.contains("<<fork>>") {
+    // Check for stereotype: `state id <<fork>>` or `state id [[fork]]` etc.
+    let stereotype = if rest.contains("<<fork>>") || rest.contains("[[fork]]") {
         Some(StateStereotype::Fork)
-    } else if rest.contains("<<join>>") {
+    } else if rest.contains("<<join>>") || rest.contains("[[join]]") {
         Some(StateStereotype::Join)
-    } else if rest.contains("<<choice>>") {
+    } else if rest.contains("<<choice>>") || rest.contains("[[choice]]") {
         Some(StateStereotype::Choice)
     } else {
         None
@@ -511,5 +512,46 @@ stateDiagram-v2
             panic!("expected state decl");
         };
         assert_eq!(decl.stereotype, Some(StateStereotype::Choice));
+    }
+
+    #[test]
+    fn parse_bracket_stereotype_fork() {
+        let model = parse_state_diagram("stateDiagram-v2\n    state fk [[fork]]").unwrap();
+        let StateStatement::State(decl) = &model.statements[0] else {
+            panic!("expected state decl");
+        };
+        assert_eq!(decl.stereotype, Some(StateStereotype::Fork));
+    }
+
+    #[test]
+    fn parse_bracket_stereotype_join() {
+        let model = parse_state_diagram("stateDiagram-v2\n    state jn [[join]]").unwrap();
+        let StateStatement::State(decl) = &model.statements[0] else {
+            panic!("expected state decl");
+        };
+        assert_eq!(decl.stereotype, Some(StateStereotype::Join));
+    }
+
+    #[test]
+    fn parse_bracket_stereotype_choice() {
+        let model = parse_state_diagram("stateDiagram-v2\n    state ch [[choice]]").unwrap();
+        let StateStatement::State(decl) = &model.statements[0] else {
+            panic!("expected state decl");
+        };
+        assert_eq!(decl.stereotype, Some(StateStereotype::Choice));
+    }
+
+    #[test]
+    fn parse_v1_header() {
+        let model = parse_state_diagram("stateDiagram\n    A --> B").unwrap();
+        assert_eq!(model.statements.len(), 1);
+    }
+
+    #[test]
+    fn detect_v1_header() {
+        assert_eq!(
+            crate::mermaid::detect_diagram_type("stateDiagram\n[*] --> Idle"),
+            Some(crate::mermaid::DiagramType::State)
+        );
     }
 }

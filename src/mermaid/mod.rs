@@ -39,7 +39,7 @@ pub fn detect_diagram_type(input: &str) -> Option<DiagramType> {
         "graph" | "flowchart" => Some(DiagramType::Flowchart),
         "classdiagram" => Some(DiagramType::Class),
         "sequencediagram" => Some(DiagramType::Sequence),
-        "statediagram-v2" => Some(DiagramType::State),
+        "statediagram-v2" | "statediagram" => Some(DiagramType::State),
         _ => None,
     }
 }
@@ -64,6 +64,10 @@ mod tests {
         );
         assert_eq!(
             detect_diagram_type("stateDiagram-v2\n[*] --> Idle"),
+            Some(DiagramType::State)
+        );
+        assert_eq!(
+            detect_diagram_type("stateDiagram\n[*] --> Idle"),
             Some(DiagramType::State)
         );
     }
