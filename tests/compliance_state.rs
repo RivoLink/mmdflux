@@ -147,6 +147,32 @@ fn state_mermaid_layered_composite_preserves_top_down_direction() {
     );
 }
 
+// --- Deterministic layout ---
+
+#[test]
+fn state_direction_override_with_pseudo_states_is_deterministic() {
+    let input = "\
+stateDiagram-v2
+    state Processing {
+        direction LR
+        [*] --> Validating
+        Validating --> Executing : valid
+        Validating --> Failed : invalid
+        Executing --> [*]
+        Failed --> [*]
+    }";
+    let first = mmdflux::render_diagram(input, OutputFormat::Text, &RenderConfig::default())
+        .expect("first render should succeed");
+    for i in 1..=10 {
+        let output = mmdflux::render_diagram(input, OutputFormat::Text, &RenderConfig::default())
+            .expect("render should succeed");
+        assert_eq!(
+            output, first,
+            "render {i} produced different output (non-deterministic layout)"
+        );
+    }
+}
+
 // --- Compliance assertions ---
 
 #[test]
