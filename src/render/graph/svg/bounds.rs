@@ -117,7 +117,13 @@ pub(super) fn compute_svg_bounds(
             continue;
         };
         let edge_idx = edge.index;
-        let use_precomputed = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
+        // Use precomputed label positions only when the edge was NOT re-routed.
+        // Re-routed edges (e.g. backward edges with channel detours) have their
+        // labels placed on the rendered path, which can differ from the
+        // precomputed geometry position.
+        let use_precomputed = edge.from_subgraph.is_none()
+            && edge.to_subgraph.is_none()
+            && !rendered_edge_paths.contains_key(&edge.index);
         let position = if use_precomputed {
             label_positions.get(&edge_idx).copied()
         } else {
