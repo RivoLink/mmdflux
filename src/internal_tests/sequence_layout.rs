@@ -100,6 +100,59 @@ fn layout_box_width_matches_label() {
 }
 
 #[test]
+fn layout_create_participant_moves_header_to_creation_point() {
+    let layout = layout_input(
+        "\
+sequenceDiagram
+    participant A
+    create participant B
+    A->>B: Create
+    B-->>A: Ready",
+    );
+
+    assert!(layout.participants[1].box_y > layout.participants[0].box_y);
+    assert_eq!(
+        layout.participants[1].lifeline_start_y,
+        layout.participants[1].box_y + HEADER_HEIGHT
+    );
+    match &layout.rows[0] {
+        RowLayout::Message {
+            y,
+            from_x,
+            to_x,
+            from_idx,
+            to_idx,
+            ..
+        } => {
+            assert_eq!(*from_idx, 0);
+            assert_eq!(*to_idx, 1);
+            assert_eq!(*to_x, layout.participants[1].box_x);
+            assert_eq!(*y, layout.participants[1].box_y + 1);
+            assert!(from_x < to_x);
+        }
+        _ => panic!("expected create message row"),
+    }
+}
+
+#[test]
+fn layout_destroy_participant_truncates_lifeline() {
+    let layout = layout_input(
+        "\
+sequenceDiagram
+    participant A
+    participant B
+    destroy B
+    A->>B: Goodbye",
+    );
+
+    let destroy_y = layout.participants[1]
+        .destroy_y
+        .expect("destroy marker should be recorded");
+    assert_eq!(layout.participants[1].lifeline_end_y, destroy_y);
+    assert!(layout.participants[1].lifeline_end_y < layout.height);
+}
+
+#[test]
 fn layout_title_offsets_headers() {
     let layout =
         layout_input("sequenceDiagram\ntitle Authentication Flow\nparticipant A\nA->>A: hi");

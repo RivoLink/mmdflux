@@ -35,23 +35,12 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
         draw_participant_header(&mut canvas, p, charset);
     }
 
-    let lifeline_start = layout
-        .participants
-        .first()
-        .map(|participant| participant.box_y + 3)
-        .unwrap_or(3);
-    let lifeline_end = layout
-        .participant_boxes
-        .iter()
-        .map(|participant_box| participant_box.bottom_y)
-        .max()
-        .unwrap_or(layout.height);
     for p in &layout.participants {
         draw_lifeline(
             &mut canvas,
             p.center_x,
-            lifeline_start,
-            lifeline_end,
+            p.lifeline_start_y,
+            p.lifeline_end_y,
             charset,
         );
     }
@@ -71,18 +60,17 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                 y,
                 from_idx,
                 to_idx,
+                from_x,
+                to_x,
                 line_style,
                 arrow_head,
                 text,
                 number,
             } => {
-                let from_x = layout.participants[*from_idx].center_x;
-                let to_x = layout.participants[*to_idx].center_x;
-
                 if from_idx == to_idx {
                     draw_self_message(
                         &mut canvas,
-                        from_x,
+                        *from_x,
                         *y,
                         text,
                         number,
@@ -93,8 +81,8 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                 } else {
                     draw_message(
                         &mut canvas,
-                        from_x,
-                        to_x,
+                        *from_x,
+                        *to_x,
                         *y,
                         text,
                         number,
@@ -120,6 +108,12 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
                     charset,
                 );
             }
+        }
+    }
+
+    for participant in &layout.participants {
+        if let Some(y) = participant.destroy_y {
+            draw_destroy_marker(&mut canvas, participant.center_x, y);
         }
     }
 
@@ -207,6 +201,14 @@ fn draw_lifeline(canvas: &mut Canvas, x: usize, y_start: usize, y_end: usize, cs
             Stroke::Solid,
         );
     }
+}
+
+fn draw_destroy_marker(canvas: &mut Canvas, x: usize, y: usize) {
+    if x > 0 {
+        canvas.set(x - 1, y, 'X');
+    }
+    canvas.set(x, y, 'X');
+    canvas.set(x + 1, y, 'X');
 }
 
 fn draw_block(canvas: &mut Canvas, block: &BlockLayout, cs: &CharSet) {

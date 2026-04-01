@@ -61,6 +61,12 @@ pub struct ParticipantLayout {
     pub box_x: usize,
     /// Width of the header box.
     pub box_width: usize,
+    /// Y row where the participant lifeline starts.
+    pub lifeline_start_y: usize,
+    /// Exclusive Y row where the participant lifeline ends.
+    pub lifeline_end_y: usize,
+    /// Optional Y row for a destruction marker.
+    pub destroy_y: Option<usize>,
     /// Display label.
     pub label: String,
     /// Participant or Actor.
@@ -90,6 +96,10 @@ pub enum RowLayout {
         from_idx: usize,
         /// Target participant index.
         to_idx: usize,
+        /// Rendered message start column.
+        from_x: usize,
+        /// Rendered message end column.
+        to_x: usize,
         /// Solid or dashed line.
         line_style: LineStyle,
         /// Arrowhead shape.
@@ -199,7 +209,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         } else {
             PARTICIPANT_BOX_HEADER_OFFSET
         };
-    let participants = layout_participants(
+    let mut participants = layout_participants(
         &model.participants,
         participant_gap,
         left_margin,
@@ -216,12 +226,16 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let mut activation_depth: Vec<usize> = vec![0; num_participants];
     let mut activations: Vec<ActivationRect> = Vec::new();
     let mut open_blocks: Vec<OpenBlock> = Vec::new();
+    let mut pending_create: Option<usize> = None;
     // Track the Y of the last message row so activation start/end aligns with
     // the triggering message rather than the cursor after it.
     let mut last_message_y = cursor_y;
 
     for event in &model.events {
         match event {
+            SequenceEvent::CreateParticipant { participant } => {
+                pending_create = Some(*participant);
+            }
             SequenceEvent::Message {
                 from,
                 to,
@@ -230,13 +244,30 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                 text,
                 number,
             } => {
+                let created_participant = pending_create.take();
+                if let Some(participant_idx) = created_participant {
+                    let header_y = cursor_y.saturating_sub(1);
+                    let participant = &mut participants[participant_idx];
+                    participant.box_y = header_y;
+                    participant.lifeline_start_y = header_y + HEADER_HEIGHT;
+                    update_open_block_extents(
+                        &mut open_blocks,
+                        participant.box_x,
+                        participant.box_x + participant.box_width.saturating_sub(1),
+                    );
+                }
+
                 let is_self = from == to;
                 last_message_y = cursor_y;
+                let from_x = participants[*from].center_x;
+                let to_x = message_target_x(&participants, *from, *to, created_participant);
                 if is_self {
                     let row = RowLayout::Message {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
+                        from_x,
+                        to_x,
                         line_style: *line_style,
                         arrow_head: *arrow_head,
                         text: text.clone(),
@@ -251,6 +282,8 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                         y: cursor_y,
                         from_idx: *from,
                         to_idx: *to,
+                        from_x,
+                        to_x,
                         line_style: *line_style,
                         arrow_head: *arrow_head,
                         text: text.clone(),
@@ -260,6 +293,9 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                     update_open_block_extents(&mut open_blocks, left, right);
                     rows.push(row);
                     cursor_y += 1 + EVENT_GAP;
+                    if created_participant.is_some() {
+                        cursor_y += 1;
+                    }
                 }
             }
             SequenceEvent::Note {
@@ -296,6 +332,10 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
                     activation_depth[*participant] =
                         activation_depth[*participant].saturating_sub(1);
                 }
+            }
+            SequenceEvent::DestroyParticipant { participant } => {
+                participants[*participant].lifeline_end_y = last_message_y;
+                participants[*participant].destroy_y = Some(last_message_y);
             }
             SequenceEvent::BlockStart { kind, label } => {
                 open_blocks.push(OpenBlock {
@@ -355,6 +395,15 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         } else {
             PARTICIPANT_BOX_PADDING_BOTTOM
         };
+    for participant in &mut participants {
+        if participant.destroy_y.is_none() {
+            participant.lifeline_end_y = if model.participant_boxes.is_empty() {
+                diagram_bottom
+            } else {
+                diagram_bottom.saturating_sub(1)
+            };
+        }
+    }
     let participant_boxes = layout_participant_boxes(
         &model.participant_boxes,
         &participants,
@@ -460,6 +509,24 @@ fn finalize_block_layout(
     }
 }
 
+fn message_target_x(
+    participants: &[ParticipantLayout],
+    from_idx: usize,
+    to_idx: usize,
+    created_participant: Option<usize>,
+) -> usize {
+    let target = &participants[to_idx];
+    if created_participant == Some(to_idx) && from_idx != to_idx {
+        if target.center_x > participants[from_idx].center_x {
+            target.box_x
+        } else {
+            target.box_x + target.box_width.saturating_sub(1)
+        }
+    } else {
+        target.center_x
+    }
+}
+
 fn block_label_len(keyword: &str, label: &str) -> usize {
     let badge_len = keyword.len() + 2;
     let text_len = if label.is_empty() {
@@ -475,26 +542,24 @@ fn row_extent(row: &RowLayout, participants: &[ParticipantLayout]) -> (usize, us
         RowLayout::Message {
             from_idx,
             to_idx,
+            from_x,
             text,
             number,
             ..
         } if from_idx == to_idx => {
-            let center_x = participants[*from_idx].center_x;
-            let right = center_x + SELF_MSG_WIDTH + 2 + format_label_len(text, number);
-            (center_x, right)
+            let right = *from_x + SELF_MSG_WIDTH + 2 + format_label_len(text, number);
+            (*from_x, right)
         }
         RowLayout::Message {
-            from_idx,
-            to_idx,
+            from_x,
+            to_x,
             text,
             number,
             ..
         } => {
-            let from_x = participants[*from_idx].center_x;
-            let to_x = participants[*to_idx].center_x;
-            let left = from_x.min(to_x);
-            let right = from_x
-                .max(to_x)
+            let left = (*from_x).min(*to_x);
+            let right = (*from_x)
+                .max(*to_x)
                 .max(left + 1 + format_label_len(text, number));
             (left, right)
         }
@@ -629,6 +694,9 @@ fn layout_participants(
             box_y,
             box_x: x,
             box_width,
+            lifeline_start_y: box_y + HEADER_HEIGHT,
+            lifeline_end_y: box_y + HEADER_HEIGHT,
+            destroy_y: None,
             label: p.label.clone(),
             kind: p.kind.clone(),
         });

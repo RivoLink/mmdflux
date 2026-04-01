@@ -4,7 +4,7 @@
 //! Resolves participant references, assigns stable ordering, and
 //! applies autonumbering.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::mermaid::sequence::ast::{ActivationModifier, AutonumberMode, SequenceStatement};
 use crate::timeline::sequence::model::{
@@ -24,6 +24,7 @@ pub fn compile(
     let mut participant_boxes: Vec<ParticipantBox> = Vec::new();
     let mut participant_index: HashMap<String, usize> = HashMap::new();
     let mut participant_box_index: HashMap<String, usize> = HashMap::new();
+    let mut created_participants: HashSet<usize> = HashSet::new();
     let mut events: Vec<SequenceEvent> = Vec::new();
     let mut block_stack: Vec<BlockKind> = Vec::new();
     let mut open_participant_box: Option<OpenParticipantBox> = None;
@@ -33,33 +34,44 @@ pub fn compile(
     for stmt in statements {
         match stmt {
             SequenceStatement::Participant { kind, id, alias } => {
-                let idx = if let Some(&existing) = participant_index.get(id) {
-                    existing
-                } else {
-                    let next = participants.len();
-                    participants.push(Participant {
-                        id: id.clone(),
-                        label: alias.as_deref().unwrap_or(id).to_string(),
-                        kind: kind.clone(),
-                    });
-                    participant_index.insert(id.clone(), next);
-                    next
-                };
+                let idx = register_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    kind,
+                    id,
+                    alias.as_deref(),
+                    false,
+                )?;
 
-                if let Some(open_box) = open_participant_box.as_mut() {
-                    if let Some(existing_box_idx) = participant_box_index.get(id) {
-                        let existing = &participant_boxes[*existing_box_idx];
-                        let existing_label = existing.label.as_deref().unwrap_or("unnamed box");
-                        return Err(format!(
-                            "participant `{id}` cannot belong to multiple participant boxes (already assigned to `{existing_label}`)"
-                        )
-                        .into());
-                    }
+                created_participants.remove(&idx);
+                handle_open_participant_box(
+                    &participant_boxes,
+                    &participant_box_index,
+                    &participants,
+                    open_participant_box.as_mut(),
+                    id,
+                    idx,
+                )?;
+            }
+            SequenceStatement::CreateParticipant { kind, id, alias } => {
+                let idx = register_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    kind,
+                    id,
+                    alias.as_deref(),
+                    true,
+                )?;
+                created_participants.insert(idx);
 
-                    if !open_box.participants.contains(&idx) {
-                        open_box.participants.push(idx);
-                    }
-                }
+                handle_open_participant_box(
+                    &participant_boxes,
+                    &participant_box_index,
+                    &participants,
+                    open_participant_box.as_mut(),
+                    id,
+                    idx,
+                )?;
             }
             SequenceStatement::ParticipantBoxStart { color, label } => {
                 if open_participant_box.is_some() {
@@ -104,8 +116,29 @@ pub fn compile(
 
     // Second pass: process messages and notes, creating implicit participants as needed
     let mut autonumber = AutonumberState::default();
+    let mut available_participants: HashSet<usize> = (0..participants.len())
+        .filter(|idx| !created_participants.contains(idx))
+        .collect();
+    let mut destroyed_participants: HashSet<usize> = HashSet::new();
+    let mut pending_create: Option<usize> = None;
+    let mut pending_destroy: Option<usize> = None;
     for stmt in statements {
         match stmt {
+            SequenceStatement::CreateParticipant { id, .. } => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "create participant",
+                )?;
+                let idx = participant_index.get(id.as_str()).copied().ok_or_else(
+                    || -> Box<dyn std::error::Error + Send + Sync> {
+                        format!("Created participant not found: {id}").into()
+                    },
+                )?;
+                pending_create = Some(idx);
+                events.push(SequenceEvent::CreateParticipant { participant: idx });
+            }
             SequenceStatement::Message {
                 from,
                 to,
@@ -114,8 +147,53 @@ pub fn compile(
                 text,
                 activate,
             } => {
-                let from_idx = ensure_participant(&mut participants, &mut participant_index, from);
-                let to_idx = ensure_participant(&mut participants, &mut participant_index, to);
+                let from_idx = ensure_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    &mut available_participants,
+                    from,
+                );
+                let to_idx = ensure_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    &mut available_participants,
+                    to,
+                );
+                validate_message_endpoint(
+                    &participants,
+                    &available_participants,
+                    &destroyed_participants,
+                    pending_create,
+                    from_idx,
+                    EndpointRole::Sender,
+                )?;
+                validate_message_endpoint(
+                    &participants,
+                    &available_participants,
+                    &destroyed_participants,
+                    pending_create,
+                    to_idx,
+                    EndpointRole::Receiver,
+                )?;
+                if let Some(created_idx) = pending_create
+                    && to_idx != created_idx
+                {
+                    return Err(format!(
+                        "the created participant `{}` does not have an associated creating message after its declaration",
+                        participants[created_idx].id
+                    )
+                    .into());
+                }
+                if let Some(destroyed_idx) = pending_destroy
+                    && from_idx != destroyed_idx
+                    && to_idx != destroyed_idx
+                {
+                    return Err(format!(
+                        "the destroyed participant `{}` does not have an associated destroying message after its declaration",
+                        participants[destroyed_idx].id
+                    )
+                    .into());
+                }
 
                 events.push(SequenceEvent::Message {
                     from: from_idx,
@@ -141,20 +219,91 @@ pub fn compile(
                     }
                     None => {}
                 }
+
+                if let Some(created_idx) = pending_create.take() {
+                    available_participants.insert(created_idx);
+                }
+                if let Some(destroyed_idx) = pending_destroy.take() {
+                    events.push(SequenceEvent::DestroyParticipant {
+                        participant: destroyed_idx,
+                    });
+                    available_participants.remove(&destroyed_idx);
+                    destroyed_participants.insert(destroyed_idx);
+                }
             }
             SequenceStatement::Activate { participant: id } => {
-                let idx = ensure_participant(&mut participants, &mut participant_index, id);
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "activate",
+                )?;
+                let idx = ensure_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    &mut available_participants,
+                    id,
+                );
+                validate_participant_state(
+                    &participants,
+                    &available_participants,
+                    &destroyed_participants,
+                    idx,
+                )?;
                 events.push(SequenceEvent::ActivateStart { participant: idx });
             }
             SequenceStatement::Deactivate { participant: id } => {
-                let idx = ensure_participant(&mut participants, &mut participant_index, id);
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "deactivate",
+                )?;
+                let idx = ensure_participant(
+                    &mut participants,
+                    &mut participant_index,
+                    &mut available_participants,
+                    id,
+                );
+                validate_participant_state(
+                    &participants,
+                    &available_participants,
+                    &destroyed_participants,
+                    idx,
+                )?;
                 events.push(SequenceEvent::ActivateEnd { participant: idx });
+            }
+            SequenceStatement::DestroyParticipant { participant: id } => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "destroy participant",
+                )?;
+                let idx = participant_index.get(id.as_str()).copied().ok_or_else(
+                    || -> Box<dyn std::error::Error + Send + Sync> {
+                        format!("Destroy references unknown participant: {id}").into()
+                    },
+                )?;
+                validate_participant_state(
+                    &participants,
+                    &available_participants,
+                    &destroyed_participants,
+                    idx,
+                )?;
+                pending_destroy = Some(idx);
             }
             SequenceStatement::Note {
                 placement,
                 participants: names,
                 text,
             } => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "note",
+                )?;
                 // Validate participant count for each placement
                 match placement {
                     NotePlacement::LeftOf | NotePlacement::RightOf => {
@@ -184,6 +333,12 @@ pub fn compile(
                             format!("Note references unknown participant: {name}").into()
                         },
                     )?;
+                    validate_participant_state(
+                        &participants,
+                        &available_participants,
+                        &destroyed_participants,
+                        idx,
+                    )?;
                     indices.push(idx);
                 }
 
@@ -200,9 +355,21 @@ pub fn compile(
                 // Already handled in first pass
             }
             SequenceStatement::Autonumber(mode) => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    "autonumber",
+                )?;
                 apply_autonumber_mode(&mut autonumber, *mode);
             }
             SequenceStatement::BlockStart { kind, label } => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    kind.keyword(),
+                )?;
                 block_stack.push(*kind);
                 events.push(SequenceEvent::BlockStart {
                     kind: *kind,
@@ -210,6 +377,12 @@ pub fn compile(
                 });
             }
             SequenceStatement::BlockDivider { kind, label } => {
+                ensure_no_pending_lifecycle(
+                    &participants,
+                    pending_create,
+                    pending_destroy,
+                    kind.keyword(),
+                )?;
                 validate_block_divider(&block_stack, *kind)?;
                 events.push(SequenceEvent::BlockDivider {
                     kind: *kind,
@@ -217,6 +390,7 @@ pub fn compile(
                 });
             }
             SequenceStatement::BlockEnd => {
+                ensure_no_pending_lifecycle(&participants, pending_create, pending_destroy, "end")?;
                 block_stack
                     .pop()
                     .ok_or_else(|| -> Box<dyn std::error::Error + Send + Sync> {
@@ -236,6 +410,13 @@ pub fn compile(
         return Err(format!("unclosed sequence block(s): {unclosed}").into());
     }
 
+    ensure_no_pending_lifecycle(
+        &participants,
+        pending_create,
+        pending_destroy,
+        "end of diagram",
+    )?;
+
     Ok(Sequence {
         title,
         participants,
@@ -250,6 +431,149 @@ struct OpenParticipantBox {
     color: Option<String>,
     label: Option<String>,
     participants: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EndpointRole {
+    Sender,
+    Receiver,
+}
+
+fn register_participant(
+    participants: &mut Vec<Participant>,
+    participant_index: &mut HashMap<String, usize>,
+    kind: &ParticipantKind,
+    id: &str,
+    alias: Option<&str>,
+    error_on_existing: bool,
+) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(&existing) = participant_index.get(id) {
+        if error_on_existing {
+            return Err(format!(
+                "participant `{id}` is already declared and cannot be recreated; use aliases to simulate recreation"
+            )
+            .into());
+        }
+        return Ok(existing);
+    }
+
+    let next = participants.len();
+    participants.push(Participant {
+        id: id.to_string(),
+        label: alias.unwrap_or(id).to_string(),
+        kind: kind.clone(),
+    });
+    participant_index.insert(id.to_string(), next);
+    Ok(next)
+}
+
+fn handle_open_participant_box(
+    participant_boxes: &[ParticipantBox],
+    participant_box_index: &HashMap<String, usize>,
+    participants: &[Participant],
+    open_box: Option<&mut OpenParticipantBox>,
+    participant_id: &str,
+    participant_idx: usize,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let Some(open_box) = open_box else {
+        return Ok(());
+    };
+
+    if let Some(existing_box_idx) = participant_box_index.get(participant_id) {
+        let existing = &participant_boxes[*existing_box_idx];
+        let existing_label = existing.label.as_deref().unwrap_or("unnamed box");
+        return Err(format!(
+            "participant `{participant_id}` cannot belong to multiple participant boxes (already assigned to `{existing_label}`)"
+        )
+        .into());
+    }
+
+    if participants.get(participant_idx).is_none() {
+        return Err(format!("participant `{participant_id}` was not registered").into());
+    }
+
+    if !open_box.participants.contains(&participant_idx) {
+        open_box.participants.push(participant_idx);
+    }
+
+    Ok(())
+}
+
+fn ensure_no_pending_lifecycle(
+    participants: &[Participant],
+    pending_create: Option<usize>,
+    pending_destroy: Option<usize>,
+    context: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if let Some(idx) = pending_create {
+        return Err(format!(
+            "the created participant `{}` does not have an associated creating message after its declaration before `{context}`",
+            participants[idx].id
+        )
+        .into());
+    }
+    if let Some(idx) = pending_destroy {
+        return Err(format!(
+            "the destroyed participant `{}` does not have an associated destroying message after its declaration before `{context}`",
+            participants[idx].id
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_participant_state(
+    participants: &[Participant],
+    available_participants: &HashSet<usize>,
+    destroyed_participants: &HashSet<usize>,
+    participant_idx: usize,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if destroyed_participants.contains(&participant_idx) {
+        return Err(format!(
+            "participant `{}` cannot be referenced after it is destroyed",
+            participants[participant_idx].id
+        )
+        .into());
+    }
+    if !available_participants.contains(&participant_idx) {
+        return Err(format!(
+            "participant `{}` cannot be referenced before it is created",
+            participants[participant_idx].id
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_message_endpoint(
+    participants: &[Participant],
+    available_participants: &HashSet<usize>,
+    destroyed_participants: &HashSet<usize>,
+    pending_create: Option<usize>,
+    participant_idx: usize,
+    role: EndpointRole,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if destroyed_participants.contains(&participant_idx) {
+        return Err(format!(
+            "participant `{}` cannot be referenced after it is destroyed",
+            participants[participant_idx].id
+        )
+        .into());
+    }
+
+    if available_participants.contains(&participant_idx) {
+        return Ok(());
+    }
+
+    if pending_create == Some(participant_idx) && role == EndpointRole::Receiver {
+        return Ok(());
+    }
+
+    Err(format!(
+        "participant `{}` cannot be referenced before it is created",
+        participants[participant_idx].id
+    )
+    .into())
 }
 
 fn validate_block_divider(
@@ -278,6 +602,7 @@ fn validate_block_divider(
 fn ensure_participant(
     participants: &mut Vec<Participant>,
     index: &mut HashMap<String, usize>,
+    available_participants: &mut HashSet<usize>,
     id: &str,
 ) -> usize {
     if let Some(&idx) = index.get(id) {
@@ -290,6 +615,7 @@ fn ensure_participant(
         kind: ParticipantKind::Participant,
     });
     index.insert(id.to_string(), idx);
+    available_participants.insert(idx);
     idx
 }
 
@@ -421,6 +747,60 @@ sequenceDiagram
             }
             _ => panic!("expected message"),
         }
+    }
+
+    #[test]
+    fn compile_create_participant_emits_lifecycle_event_before_message() {
+        let model =
+            compile_input("sequenceDiagram\nparticipant A\ncreate participant B\nA->>B: hi");
+
+        assert_eq!(model.participants.len(), 2);
+        assert_eq!(model.participants[1].id, "B");
+        assert_eq!(model.events.len(), 2);
+        assert!(matches!(
+            model.events[0],
+            SequenceEvent::CreateParticipant { participant: 1 }
+        ));
+        assert!(matches!(
+            model.events[1],
+            SequenceEvent::Message { from: 0, to: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn compile_create_participant_requires_next_message_to_target_created_participant() {
+        let result = parse_sequence(
+            "sequenceDiagram\nparticipant A\ncreate participant B\nA->>A: still here",
+        )
+        .unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("created participant `B`"));
+    }
+
+    #[test]
+    fn compile_destroy_participant_emits_lifecycle_event_after_destroying_message() {
+        let model =
+            compile_input("sequenceDiagram\nparticipant A\nparticipant B\ndestroy B\nA->>B: bye");
+
+        assert_eq!(model.events.len(), 2);
+        assert!(matches!(
+            model.events[0],
+            SequenceEvent::Message { from: 0, to: 1, .. }
+        ));
+        assert!(matches!(
+            model.events[1],
+            SequenceEvent::DestroyParticipant { participant: 1 }
+        ));
+    }
+
+    #[test]
+    fn compile_destroyed_participant_cannot_be_referenced_after_destruction() {
+        let result = parse_sequence(
+            "sequenceDiagram\nparticipant A\nparticipant B\ndestroy B\nA->>B: bye\nB->>A: back",
+        )
+        .unwrap();
+        let err = compile(&result.statements).unwrap_err().to_string();
+        assert!(err.contains("cannot be referenced after it is destroyed"));
     }
 
     #[test]

@@ -224,6 +224,16 @@ fn sequence_title_renders_above_participants() {
 }
 
 #[test]
+fn sequence_lifecycle_fixtures_render_create_and_destroy_markers() {
+    let create_output = render_sequence_text("create_participant.mmd");
+    let destroy_output = render_sequence_text("destroy_participant.mmd");
+
+    assert!(create_output.contains("Create Bob"));
+    assert!(create_output.contains("Hello Alice"));
+    assert!(destroy_output.contains("XXX"));
+}
+
+#[test]
 fn sequence_rendering_deterministic() {
     for fixture in list_sequence_fixtures() {
         let out1 = render_sequence_text(&fixture);

@@ -169,6 +169,16 @@ pub enum SequenceEvent {
         /// Index into `Sequence::participants`.
         participant: usize,
     },
+    /// Marks the next message as the participant's creation point.
+    CreateParticipant {
+        /// Index into `Sequence::participants`.
+        participant: usize,
+    },
+    /// Marks the next message as the participant's destruction point.
+    DestroyParticipant {
+        /// Index into `Sequence::participants`.
+        participant: usize,
+    },
     /// Start of a labeled interaction block (loop/alt/opt).
     BlockStart { kind: BlockKind, label: String },
     /// Divider between branches within a block (e.g. `else`).

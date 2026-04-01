@@ -4,8 +4,8 @@
 //! `SvgWriter` utilities.
 
 use super::svg_layout::{
-    SvgActivation, SvgBlock, SvgBlockDivider, SvgLifeline, SvgMessage, SvgNote, SvgParticipant,
-    SvgParticipantBox, SvgRow, SvgSelfMessage, SvgSequenceLayout, SvgTitle,
+    SvgActivation, SvgBlock, SvgBlockDivider, SvgDestroyMarker, SvgLifeline, SvgMessage, SvgNote,
+    SvgParticipant, SvgParticipantBox, SvgRow, SvgSelfMessage, SvgSequenceLayout, SvgTitle,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
@@ -60,6 +60,9 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
     writer.start_group("lifelines");
     for lifeline in &layout.lifelines {
         render_lifeline(&mut writer, lifeline);
+    }
+    for marker in &layout.destroy_markers {
+        render_destroy_marker(&mut writer, marker);
     }
     writer.end_group();
 
@@ -324,6 +327,24 @@ fn render_lifeline(writer: &mut SvgWriter, ll: &SvgLifeline) {
         x = fmt_f64(ll.x),
         y1 = fmt_f64(ll.y_start),
         y2 = fmt_f64(ll.y_end),
+    ));
+}
+
+fn render_destroy_marker(writer: &mut SvgWriter, marker: &SvgDestroyMarker) {
+    let size = 6.0;
+    writer.push_line(&format!(
+        "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"{STROKE_COLOR}\" stroke-width=\"1.5\" />",
+        x1 = fmt_f64(marker.x - size),
+        y1 = fmt_f64(marker.y - size),
+        x2 = fmt_f64(marker.x + size),
+        y2 = fmt_f64(marker.y + size),
+    ));
+    writer.push_line(&format!(
+        "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"{STROKE_COLOR}\" stroke-width=\"1.5\" />",
+        x1 = fmt_f64(marker.x - size),
+        y1 = fmt_f64(marker.y + size),
+        x2 = fmt_f64(marker.x + size),
+        y2 = fmt_f64(marker.y - size),
     ));
 }
 

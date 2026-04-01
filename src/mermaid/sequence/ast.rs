@@ -36,6 +36,12 @@ pub enum SequenceStatement {
         id: String,
         alias: Option<String>,
     },
+    /// `create participant A` or `create actor A as Alice`.
+    CreateParticipant {
+        kind: ParticipantKind,
+        id: String,
+        alias: Option<String>,
+    },
     /// `box [color] [label]`.
     ParticipantBoxStart {
         color: Option<String>,
@@ -64,6 +70,8 @@ pub enum SequenceStatement {
     Activate { participant: String },
     /// `deactivate <participant>`.
     Deactivate { participant: String },
+    /// `destroy <participant>`.
+    DestroyParticipant { participant: String },
     /// `loop label`, `alt label`, `opt label`.
     BlockStart { kind: BlockKind, label: String },
     /// `else label`.

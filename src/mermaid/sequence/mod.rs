@@ -111,7 +111,17 @@ pub fn parse_sequence(
             continue;
         }
 
+        if let Some(stmt) = try_parse_create_participant(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
         if let Some(stmt) = try_parse_participant(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
+        if let Some(stmt) = try_parse_destroy_participant(trimmed) {
             statements.push(stmt);
             continue;
         }
@@ -398,6 +408,40 @@ fn try_parse_title(line: &str) -> Option<SequenceStatement> {
     } else {
         Some(SequenceStatement::Title(title))
     }
+}
+
+fn try_parse_create_participant(line: &str) -> Option<SequenceStatement> {
+    let lower = line.to_ascii_lowercase();
+    let rest = if lower.starts_with("create ") || lower.starts_with("create\t") {
+        line["create".len()..].trim()
+    } else {
+        return None;
+    };
+
+    let participant = try_parse_participant(rest)?;
+    Some(as_created_participant(participant))
+}
+
+fn as_created_participant(statement: SequenceStatement) -> SequenceStatement {
+    match statement {
+        SequenceStatement::Participant { kind, id, alias } => {
+            SequenceStatement::CreateParticipant { kind, id, alias }
+        }
+        other => other,
+    }
+}
+
+fn try_parse_destroy_participant(line: &str) -> Option<SequenceStatement> {
+    let lower = line.to_ascii_lowercase();
+    if lower.starts_with("destroy ") || lower.starts_with("destroy\t") {
+        let participant = line["destroy".len()..].trim();
+        if !participant.is_empty() {
+            return Some(SequenceStatement::DestroyParticipant {
+                participant: participant.to_string(),
+            });
+        }
+    }
+    None
 }
 
 fn parse_keyword_line(line: &str, keyword: &str) -> Option<String> {
@@ -688,6 +732,30 @@ mod tests {
                 kind: ParticipantKind::Actor,
                 id: "B".to_string(),
                 alias: Some("Bob".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_created_participant() {
+        let stmts = parse_stmts("sequenceDiagram\ncreate participant A as Alice");
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::CreateParticipant {
+                kind: ParticipantKind::Participant,
+                id: "A".to_string(),
+                alias: Some("Alice".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_destroy_participant() {
+        let stmts = parse_stmts("sequenceDiagram\ndestroy Alice");
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::DestroyParticipant {
+                participant: "Alice".to_string(),
             }
         );
     }

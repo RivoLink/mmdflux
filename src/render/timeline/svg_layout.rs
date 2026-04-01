@@ -70,6 +70,7 @@ pub struct SvgSequenceLayout {
     pub participant_boxes: Vec<SvgParticipantBox>,
     pub participants: Vec<SvgParticipant>,
     pub lifelines: Vec<SvgLifeline>,
+    pub destroy_markers: Vec<SvgDestroyMarker>,
     pub rows: Vec<SvgRow>,
     pub blocks: Vec<SvgBlock>,
     pub activations: Vec<SvgActivation>,
@@ -118,6 +119,12 @@ pub struct SvgLifeline {
     pub x: f64,
     pub y_start: f64,
     pub y_end: f64,
+}
+
+#[derive(Debug)]
+pub struct SvgDestroyMarker {
+    pub x: f64,
+    pub y: f64,
 }
 
 /// A positioned event in the layout.
@@ -227,6 +234,29 @@ fn activation_edge(center_x: f64, depth: usize, right_side: bool) -> f64 {
     }
 }
 
+fn message_target_x(
+    participants: &[SvgParticipant],
+    from_idx: usize,
+    to_idx: usize,
+    created_participant: Option<usize>,
+    to_depth: usize,
+) -> f64 {
+    let target = &participants[to_idx];
+    if created_participant == Some(to_idx) && from_idx != to_idx {
+        if target.center_x > participants[from_idx].center_x {
+            target.rect.x
+        } else {
+            target.rect.x + target.rect.width
+        }
+    } else {
+        activation_edge(
+            target.center_x,
+            to_depth,
+            target.center_x < participants[from_idx].center_x,
+        )
+    }
+}
+
 /// Compute a proportional SVG layout for a sequence model.
 pub fn layout(
     model: &Sequence,
@@ -239,6 +269,7 @@ pub fn layout(
             participant_boxes: Vec::new(),
             participants: Vec::new(),
             lifelines: Vec::new(),
+            destroy_markers: Vec::new(),
             rows: Vec::new(),
             blocks: Vec::new(),
             activations: Vec::new(),
@@ -316,10 +347,16 @@ pub fn layout(
     let mut activation_depth: Vec<usize> = vec![0; num_participants];
     let mut activations: Vec<SvgActivation> = Vec::new();
     let mut open_blocks: Vec<OpenSvgBlock> = Vec::new();
+    let mut pending_create: Option<usize> = None;
+    let mut lifeline_end_by_participant: Vec<Option<f64>> = vec![None; num_participants];
+    let mut destroy_markers: Vec<SvgDestroyMarker> = Vec::new();
     let mut last_message_y = cursor_y;
 
     for (ev_idx, event) in model.events.iter().enumerate() {
         match event {
+            SequenceEvent::CreateParticipant { participant } => {
+                pending_create = Some(*participant);
+            }
             SequenceEvent::Message {
                 from,
                 to,
@@ -328,6 +365,17 @@ pub fn layout(
                 text,
                 number,
             } => {
+                let created_participant = pending_create.take();
+                if let Some(participant_idx) = created_participant {
+                    let participant = &mut participants[participant_idx];
+                    participant.rect.y = cursor_y - participant.rect.height / 2.0;
+                    update_open_svg_block_extents(
+                        &mut open_blocks,
+                        participant.rect.x,
+                        participant.rect.x + participant.rect.width,
+                    );
+                }
+
                 let label = format_label(text, number);
                 let from_cx = participants[*from].center_x;
                 let to_cx = participants[*to].center_x;
@@ -373,11 +421,8 @@ pub fn layout(
                         from_depth,
                         left_to_right, // right edge if going right
                     );
-                    let to_x = activation_edge(
-                        to_cx,
-                        to_depth,
-                        !left_to_right, // left edge if arrow comes from left
-                    );
+                    let to_x =
+                        message_target_x(&participants, *from, *to, created_participant, to_depth);
 
                     let mid_x = (from_x + to_x) / 2.0;
                     let label_y = cursor_y - LABEL_ABOVE_GAP;
@@ -396,6 +441,10 @@ pub fn layout(
                     update_open_svg_block_extents(&mut open_blocks, left, right);
 
                     cursor_y += EVENT_SPACING;
+                }
+
+                if let Some(participant_idx) = created_participant {
+                    cursor_y += participants[participant_idx].rect.height / 2.0;
                 }
             }
             SequenceEvent::Note {
@@ -478,6 +527,14 @@ pub fn layout(
                         activation_depth[*participant].saturating_sub(1);
                 }
             }
+            SequenceEvent::DestroyParticipant { participant } => {
+                lifeline_end_by_participant[*participant] = Some(last_message_y);
+                destroy_markers.push(SvgDestroyMarker {
+                    x: participants[*participant].center_x,
+                    y: last_message_y,
+                });
+                cursor_y += participants[*participant].rect.height / 2.0;
+            }
             SequenceEvent::BlockStart { kind, label } => {
                 open_blocks.push(OpenSvgBlock {
                     top_y: cursor_y,
@@ -544,10 +601,11 @@ pub fn layout(
         };
     let mut lifelines: Vec<SvgLifeline> = participants
         .iter()
-        .map(|p| SvgLifeline {
+        .enumerate()
+        .map(|(idx, p)| SvgLifeline {
             x: p.center_x,
             y_start: p.rect.y + p.rect.height,
-            y_end: lifeline_end,
+            y_end: lifeline_end_by_participant[idx].unwrap_or(lifeline_end),
         })
         .collect();
     let mut participant_boxes = layout_participant_boxes(
@@ -559,12 +617,15 @@ pub fn layout(
     );
 
     normalize_sequence_layout_left_edge(
-        &mut participant_boxes,
-        &mut participants,
-        &mut lifelines,
-        &mut rows,
-        &mut blocks,
-        &mut activations,
+        SvgLeftEdgeTargets {
+            participant_boxes: &mut participant_boxes,
+            participants: &mut participants,
+            lifelines: &mut lifelines,
+            destroy_markers: &mut destroy_markers,
+            rows: &mut rows,
+            blocks: &mut blocks,
+            activations: &mut activations,
+        },
         metrics,
     );
 
@@ -609,6 +670,7 @@ pub fn layout(
         participant_boxes,
         participants,
         lifelines,
+        destroy_markers,
         rows,
         blocks,
         activations,
@@ -619,15 +681,30 @@ pub fn layout(
     }
 }
 
+struct SvgLeftEdgeTargets<'a> {
+    participant_boxes: &'a mut [SvgParticipantBox],
+    participants: &'a mut [SvgParticipant],
+    lifelines: &'a mut [SvgLifeline],
+    destroy_markers: &'a mut [SvgDestroyMarker],
+    rows: &'a mut [SvgRow],
+    blocks: &'a mut [SvgBlock],
+    activations: &'a mut [SvgActivation],
+}
+
 fn normalize_sequence_layout_left_edge(
-    participant_boxes: &mut [SvgParticipantBox],
-    participants: &mut [SvgParticipant],
-    lifelines: &mut [SvgLifeline],
-    rows: &mut [SvgRow],
-    blocks: &mut [SvgBlock],
-    activations: &mut [SvgActivation],
+    targets: SvgLeftEdgeTargets<'_>,
     metrics: &ProportionalTextMetrics,
 ) {
+    let SvgLeftEdgeTargets {
+        participant_boxes,
+        participants,
+        lifelines,
+        destroy_markers,
+        rows,
+        blocks,
+        activations,
+    } = targets;
+
     let participant_box_left = participant_boxes
         .iter()
         .map(|participant_box| participant_box.rect.x)
@@ -648,12 +725,17 @@ fn normalize_sequence_layout_left_edge(
         .iter()
         .map(|activation| activation.x)
         .fold(f64::INFINITY, f64::min);
+    let destroy_left = destroy_markers
+        .iter()
+        .map(|marker| marker.x - 6.0)
+        .fold(f64::INFINITY, f64::min);
 
     let min_left = participant_box_left
         .min(participant_left)
         .min(row_left)
         .min(block_left)
-        .min(activation_left);
+        .min(activation_left)
+        .min(destroy_left);
 
     if !min_left.is_finite() || min_left >= DIAGRAM_PADDING {
         return;
@@ -672,6 +754,10 @@ fn normalize_sequence_layout_left_edge(
 
     for lifeline in lifelines {
         lifeline.x += shift_x;
+    }
+
+    for marker in destroy_markers {
+        marker.x += shift_x;
     }
 
     for row in rows {
@@ -1157,6 +1243,87 @@ mod tests {
         );
         assert!(layout.participant_boxes[0].rect.x <= layout.participants[0].rect.x);
         assert!(layout.participants[0].rect.y > DIAGRAM_PADDING);
+    }
+
+    #[test]
+    fn layout_moves_created_participant_header_to_creation_message() {
+        let model = Sequence {
+            title: None,
+            participants: vec![
+                Participant {
+                    id: "Alice".into(),
+                    label: "Alice".into(),
+                    kind: ParticipantKind::Participant,
+                },
+                Participant {
+                    id: "Bob".into(),
+                    label: "Bob".into(),
+                    kind: ParticipantKind::Participant,
+                },
+            ],
+            participant_boxes: Vec::new(),
+            events: vec![
+                SequenceEvent::CreateParticipant { participant: 1 },
+                SequenceEvent::Message {
+                    from: 0,
+                    to: 1,
+                    line_style: LineStyle::Solid,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Create".into(),
+                    number: None,
+                },
+            ],
+            autonumber: AutonumberState::default(),
+        };
+
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        assert!(layout.participants[1].rect.y > layout.participants[0].rect.y);
+        assert!(layout.lifelines[1].y_start > layout.participants[1].rect.y);
+        match &layout.rows[0] {
+            SvgRow::Message(message) => {
+                assert_eq!(message.to_x, layout.participants[1].rect.x);
+                assert!(message.from_x < message.to_x);
+            }
+            _ => panic!("expected create message row"),
+        }
+    }
+
+    #[test]
+    fn layout_adds_destroy_marker_and_truncates_lifeline() {
+        let model = Sequence {
+            title: None,
+            participants: vec![
+                Participant {
+                    id: "Alice".into(),
+                    label: "Alice".into(),
+                    kind: ParticipantKind::Participant,
+                },
+                Participant {
+                    id: "Bob".into(),
+                    label: "Bob".into(),
+                    kind: ParticipantKind::Participant,
+                },
+            ],
+            participant_boxes: Vec::new(),
+            events: vec![
+                SequenceEvent::Message {
+                    from: 0,
+                    to: 1,
+                    line_style: LineStyle::Solid,
+                    arrow_head: ArrowHead::Filled,
+                    text: "Bye".into(),
+                    number: None,
+                },
+                SequenceEvent::DestroyParticipant { participant: 1 },
+            ],
+            autonumber: AutonumberState::default(),
+        };
+
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        assert_eq!(layout.destroy_markers.len(), 1);
+        assert_eq!(layout.lifelines[1].y_end, layout.destroy_markers[0].y);
     }
 
     #[test]
