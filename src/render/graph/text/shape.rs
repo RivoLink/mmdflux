@@ -548,7 +548,7 @@ fn render_glyph(
     };
     let glyph_len = glyph.chars().count();
     let mid_y = y + height / 2;
-    let start_x = x + (width.saturating_sub(glyph_len)) / 2;
+    let start_x = x + (width / 2).saturating_sub(glyph_len / 2);
     canvas.write_str(start_x, mid_y, glyph);
     merge_text_fg(canvas, start_x, mid_y, glyph, style.stroke);
 }
