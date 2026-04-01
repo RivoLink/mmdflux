@@ -19,7 +19,7 @@ import {
 } from "@tldraw/editor";
 import { generateKeyBetween } from "fractional-indexing";
 
-export const SUPPORTED_DIAGRAM_TYPES = new Set(["flowchart", "class"]);
+export const SUPPORTED_DIAGRAM_TYPES = new Set(["flowchart", "class", "state"]);
 
 export interface ConvertOptions {
   scale?: number;
@@ -130,6 +130,17 @@ function transformLabel(label: string): string {
     .split("\n")
     .map((line) => (line === "---" ? "" : line))
     .join("\n");
+}
+
+/** Return fill/color overrides for shapes that should be filled (state start markers, fork/join bars). */
+function mapNodeFill(shape: string): { fill?: string; color?: string } {
+  switch (shape) {
+    case "small_circle":
+    case "fork_join":
+      return { fill: "solid", color: "black" };
+    default:
+      return {};
+  }
 }
 
 /**
@@ -991,13 +1002,15 @@ export function convertToTldraw(
   }
 
   const nodes = [...normalized.nodes].sort((a, b) => a.id.localeCompare(b.id));
-  const subgraphs = [...normalized.subgraphs].sort((a, b) => {
-    const depthDiff =
-      subgraphDepth(a, normalized.subgraph_by_id) -
-      subgraphDepth(b, normalized.subgraph_by_id);
-    if (depthDiff !== 0) return depthDiff;
-    return a.id.localeCompare(b.id);
-  });
+  const subgraphs = [...normalized.subgraphs]
+    .filter((sg) => !sg.invisible)
+    .sort((a, b) => {
+      const depthDiff =
+        subgraphDepth(a, normalized.subgraph_by_id) -
+        subgraphDepth(b, normalized.subgraph_by_id);
+      if (depthDiff !== 0) return depthDiff;
+      return a.id.localeCompare(b.id);
+    });
   const edges = normalized.edges
     .filter((edge) => edge.stroke !== "invisible")
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -1091,6 +1104,7 @@ export function convertToTldraw(
       } as TLRecord);
     } else {
       const geo = mapGeoShape(node.shape);
+      const fillOverrides = mapNodeFill(node.shape);
       geoByShapeId.set(shapeId, geo);
       shapeRecords.push({
         ...common,
@@ -1104,8 +1118,8 @@ export function convertToTldraw(
           growY: 0,
           scale: 1,
           labelColor: "black",
-          color: "black",
-          fill: "none",
+          color: fillOverrides.color ?? "black",
+          fill: fillOverrides.fill ?? "none",
           size: "m",
           font: "draw",
           align: "middle",

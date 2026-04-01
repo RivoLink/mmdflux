@@ -214,6 +214,10 @@ export function normalizeMmds(doc: MmdsDocument): NormalizedMmdsDocument {
                   height: asFiniteNumber(subgraph.bounds.height) ?? 0,
                 }
               : undefined,
+          invisible:
+            typeof subgraph.invisible === "boolean"
+              ? subgraph.invisible
+              : undefined,
         };
       })
     : [];

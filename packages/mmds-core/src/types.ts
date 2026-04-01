@@ -76,6 +76,7 @@ export interface MmdsSubgraph {
   parent?: string;
   direction?: MmdsDirection;
   bounds?: MmdsBounds;
+  invisible?: boolean;
 }
 
 export interface MmdsDefaults {

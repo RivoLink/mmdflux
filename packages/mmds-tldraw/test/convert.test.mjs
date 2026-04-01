@@ -1288,19 +1288,6 @@ test("rejects unsupported diagram types with clear error", () => {
   );
 });
 
-test("rejects state diagram type", () => {
-  const mmds = {
-    version: 2,
-    metadata: { diagram_type: "state" },
-    nodes: [],
-    edges: [],
-  };
-  assert.throws(
-    () => convertToTldraw(mmds),
-    /unsupported diagram type.*state/i,
-  );
-});
-
 test("accepts flowchart diagram type", () => {
   const mmds = {
     version: 2,
@@ -1883,4 +1870,156 @@ test("edge label with newline produces valid output", () => {
   // Should produce valid parseable output
   const file = toTldrawFile(mmds);
   assertParses(file);
+});
+
+// ── Plan 0136 Phase 1: State diagram tldraw support ─────────────────
+
+test("accepts state diagram type", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "state" },
+    nodes: [
+      {
+        id: "start",
+        label: "",
+        position: { x: 50, y: 0 },
+        size: { width: 20, height: 20 },
+        shape: "small_circle",
+      },
+      {
+        id: "Active",
+        label: "Active",
+        position: { x: 50, y: 80 },
+        size: { width: 60, height: 30 },
+        shape: "round",
+      },
+    ],
+    edges: [{ id: "e0", source: "start", target: "Active" }],
+  };
+  assert.doesNotThrow(() => convertToTldraw(mmds));
+});
+
+test("state start marker (small_circle) gets filled style", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "state" },
+    nodes: [
+      {
+        id: "start",
+        label: "",
+        position: { x: 50, y: 0 },
+        size: { width: 20, height: 20 },
+        shape: "small_circle",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.geo, "ellipse");
+  assert.equal(geo.props.fill, "solid");
+  assert.equal(geo.props.color, "black");
+});
+
+test("state fork_join gets filled style", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "state" },
+    nodes: [
+      {
+        id: "fork1",
+        label: "",
+        position: { x: 50, y: 50 },
+        size: { width: 80, height: 8 },
+        shape: "fork_join",
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const geo = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+  assert.ok(geo);
+  assert.equal(geo.props.fill, "solid");
+  assert.equal(geo.props.color, "black");
+});
+
+test("invisible subgraphs are not rendered as frames", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "state" },
+    nodes: [
+      {
+        id: "s1",
+        label: "S1",
+        position: { x: 50, y: 50 },
+        size: { width: 60, height: 30 },
+      },
+      {
+        id: "s2",
+        label: "S2",
+        position: { x: 50, y: 120 },
+        size: { width: 60, height: 30 },
+      },
+      {
+        id: "n1",
+        label: "note",
+        position: { x: 150, y: 50 },
+        size: { width: 80, height: 30 },
+        shape: "note_rect",
+      },
+    ],
+    edges: [],
+    subgraphs: [
+      {
+        id: "note_group",
+        title: "",
+        children: ["n1"],
+        invisible: true,
+      },
+      {
+        id: "compound",
+        title: "Active",
+        children: ["s1", "s2"],
+      },
+    ],
+  };
+  const converted = convertToTldraw(mmds);
+  const frames = converted.records.filter(
+    (r) => r.typeName === "shape" && r.type === "frame",
+  );
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].props.name, "Active");
+});
+
+test("state diagram fixture produces parseable .tldr", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "positioned",
+    "state-basic.json",
+  );
+  const file = toTldrawFile(mmds);
+  assertParses(file);
+
+  // Should have frames for compound state (not invisible note group)
+  const frames = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "frame",
+  );
+  assert.ok(
+    frames.length >= 1,
+    "should have at least one frame for compound state",
+  );
+
+  // Should have filled start markers
+  const filledGeos = file.records.filter(
+    (r) =>
+      r.typeName === "shape" && r.type === "geo" && r.props.fill === "solid",
+  );
+  assert.ok(filledGeos.length >= 1, "should have filled start/end markers");
 });
