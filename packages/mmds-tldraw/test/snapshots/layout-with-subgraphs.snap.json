@@ -106,7 +106,7 @@
     "parentId": "page:page",
     "index": "a1",
     "x": -31.799999999999997,
-    "y": 28.400000000000006,
+    "y": 17.400000000000006,
     "rotation": 0,
     "isLocked": false,
     "opacity": 1,
@@ -117,7 +117,7 @@
       "dash": "solid",
       "url": "",
       "w": 106,
-      "h": 28,
+      "h": 50,
       "growY": 0,
       "scale": 1,
       "labelColor": "black",
@@ -160,7 +160,7 @@
       "dash": "solid",
       "url": "",
       "w": 92,
-      "h": 28,
+      "h": 50,
       "growY": 0,
       "scale": 1,
       "labelColor": "black",
@@ -203,7 +203,7 @@
       "dash": "solid",
       "url": "",
       "w": 92,
-      "h": 28,
+      "h": 50,
       "growY": 0,
       "scale": 1,
       "labelColor": "black",
@@ -236,13 +236,13 @@
     "parentId": "page:page",
     "index": "a0",
     "x": 99.60000000000002,
-    "y": 42.80000000000001,
+    "y": 31.80000000000001,
     "rotation": 0,
     "isLocked": false,
     "opacity": 1,
     "props": {
       "w": 248.79999999999995,
-      "h": 194,
+      "h": 216,
       "name": "Phase 1",
       "color": "grey"
     },
@@ -261,7 +261,7 @@
     "opacity": 1,
     "props": {
       "w": 139.99999999999997,
-      "h": 72,
+      "h": 94,
       "name": "Phase 2",
       "color": "grey"
     },
@@ -276,8 +276,8 @@
     "props": {
       "terminal": "end",
       "normalizedAnchor": {
-        "x": 1.544658121217609e-16,
-        "y": 0.03061224489795933
+        "x": 0,
+        "y": 0.23714285714285693
       },
       "isExact": false,
       "isPrecise": true,
@@ -294,7 +294,7 @@
     "props": {
       "terminal": "end",
       "normalizedAnchor": {
-        "x": 0.37826086956521754,
+        "x": 0.2826086956521742,
         "y": 0
       },
       "isExact": false,
@@ -312,8 +312,8 @@
     "props": {
       "terminal": "start",
       "normalizedAnchor": {
-        "x": 0.5,
-        "y": 1
+        "x": 1,
+        "y": 0.5
       },
       "isExact": false,
       "isPrecise": true,
@@ -330,7 +330,7 @@
     "props": {
       "terminal": "start",
       "normalizedAnchor": {
-        "x": 0.6217391304347825,
+        "x": 0.717391304347826,
         "y": 1
       },
       "isExact": false,

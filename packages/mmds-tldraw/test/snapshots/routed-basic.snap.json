@@ -62,7 +62,7 @@
     "parentId": "page:page",
     "index": "a1",
     "x": 7,
-    "y": 24.66666666666667,
+    "y": 19.66666666666667,
     "rotation": 0,
     "isLocked": false,
     "opacity": 1,
@@ -73,7 +73,7 @@
       "dash": "solid",
       "url": "",
       "w": 120,
-      "h": 40,
+      "h": 50,
       "growY": 0,
       "scale": 1,
       "labelColor": "black",
@@ -105,7 +105,7 @@
     "parentId": "shape:sg_sg1",
     "index": "a0",
     "x": 33.5,
-    "y": 53,
+    "y": 48,
     "rotation": 0,
     "isLocked": false,
     "opacity": 1,
@@ -116,7 +116,7 @@
       "dash": "solid",
       "url": "",
       "w": 134,
-      "h": 40,
+      "h": 50,
       "growY": 0,
       "scale": 1,
       "labelColor": "black",
@@ -170,7 +170,7 @@
     "props": {
       "terminal": "end",
       "normalizedAnchor": {
-        "x": 0.48258706467661683,
+        "x": 0.5199004975124377,
         "y": 0
       },
       "isExact": false,
@@ -188,7 +188,7 @@
     "props": {
       "terminal": "start",
       "normalizedAnchor": {
-        "x": 0.49027777777777787,
+        "x": 0.5111111111111112,
         "y": 1
       },
       "isExact": false,

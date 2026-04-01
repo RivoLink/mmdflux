@@ -98,9 +98,38 @@ function toPoints(
 const CHAR_WIDTH_EST = 14;
 const MIN_LABEL_PAD_X = 36;
 const MIN_LABEL_PAD_Y = 28;
+const LINE_HEIGHT_EST = 22;
+
+function maxLineLength(label: string): number {
+  let max = 0;
+  for (const line of label.split("\n")) {
+    if (line.length > max) max = line.length;
+  }
+  return max || 1;
+}
+
+function lineCount(label: string): number {
+  let count = 1;
+  for (let i = 0; i < label.length; i++) {
+    if (label[i] === "\n") count++;
+  }
+  return count;
+}
 
 function tldrawEnforcedMinWidth(label: string): number {
-  return label.length * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
+  return maxLineLength(label) * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
+}
+
+function tldrawEnforcedMinHeight(label: string): number {
+  return lineCount(label) * LINE_HEIGHT_EST + MIN_LABEL_PAD_Y;
+}
+
+/** Replace class-diagram `---` separator lines with empty lines for visual paragraph breaks. */
+function transformLabel(label: string): string {
+  return label
+    .split("\n")
+    .map((line) => (line === "---" ? "" : line))
+    .join("\n");
 }
 
 /**
@@ -136,7 +165,7 @@ function scaleNodeRect(
 
   // Ensure minimum size for label so text doesn't wrap to single chars per line.
   const minW = tldrawEnforcedMinWidth(node.label);
-  const minH = MIN_LABEL_PAD_Y;
+  const minH = tldrawEnforcedMinHeight(node.label);
   if (width < minW || height < minH) {
     width = Math.max(width, minW);
     height = Math.max(height, minH);
@@ -178,7 +207,10 @@ function autoPositionScale(
   // Pre-compute fixed (scale-independent) node sizes.
   const sizes = nodes.map((n) => {
     let w = Math.max(n.size.width * sizeScale, tldrawEnforcedMinWidth(n.label));
-    let h = Math.max(n.size.height * sizeScale, MIN_LABEL_PAD_Y);
+    let h = Math.max(
+      n.size.height * sizeScale,
+      tldrawEnforcedMinHeight(n.label),
+    );
     if (n.shape === "diamond") {
       const side = Math.max(w, h);
       w = side;
@@ -1052,7 +1084,7 @@ export function convertToTldraw(
           font: "draw",
           textAlign: "middle",
           w: Math.max(8, absRect.w),
-          richText: toRichText(node.label),
+          richText: toRichText(transformLabel(node.label)),
           scale: 1,
           autoSize: false,
         },
@@ -1078,7 +1110,7 @@ export function convertToTldraw(
           font: "draw",
           align: "middle",
           verticalAlign: "middle",
-          richText: toRichText(node.label),
+          richText: toRichText(transformLabel(node.label)),
         },
       } as TLRecord);
     }

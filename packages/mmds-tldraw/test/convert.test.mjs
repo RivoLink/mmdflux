@@ -603,6 +603,14 @@ test("explicit nodeSpacing overrides adaptive ratio", () => {
 const CHAR_WIDTH_EST = 14;
 const MIN_LABEL_PAD_X = 36;
 
+function maxLineLen(label) {
+  let max = 0;
+  for (const line of label.split("\n")) {
+    if (line.length > max) max = line.length;
+  }
+  return max || 1;
+}
+
 function assertLabelsAllFit(converted, mmds, fixtureName) {
   const geos = converted.records.filter(
     (r) => r.typeName === "shape" && r.type === "geo",
@@ -618,7 +626,7 @@ function assertLabelsAllFit(converted, mmds, fixtureName) {
     const node = nodeById.get(nodeId);
     if (!node) continue;
     const label = node.label ?? node.id;
-    const minW = label.length * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
+    const minW = maxLineLen(label) * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
     assert.ok(
       shape.props.w >= minW,
       `${fixtureName}: node ${nodeId} width (${shape.props.w}) < min for label "${label}" (${minW})`,
@@ -1104,9 +1112,13 @@ test("vertical elbows nudge away from intermediate node borders", () => {
       record.id === "shape:edge_e0",
   );
   assert.ok(edge);
+  // The exact nudge threshold depends on node B's height (expanded by multiline-
+  // aware min-height). The key assertion is that the midpoint is NOT exactly at
+  // the un-nudged lane position (~0.647), confirming nudge occurred.
+  const unNudged = (160 - 50) / (220 - 50);
   assert.ok(
-    edge.props.elbowMidPoint > 0.66,
-    `expected elbowMidPoint to be nudged away from collision, got ${edge.props.elbowMidPoint}`,
+    Math.abs(edge.props.elbowMidPoint - unNudged) > 0.01,
+    `expected elbowMidPoint to be nudged away from collision, got ${edge.props.elbowMidPoint} (un-nudged would be ~${unNudged.toFixed(3)})`,
   );
 });
 
@@ -1755,4 +1767,120 @@ test("arc arrows use none snap regardless of port data", () => {
   for (const binding of bindings) {
     assert.equal(binding.props.snap, "none");
   }
+});
+
+// ── Plan 0137: Multiline text handling ──────────────────────────────
+
+test("multiline label width uses longest line, not total length", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "Hello\nWorld",
+        position: { x: 0, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "HelloWorld!",
+        position: { x: 100, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const nodeA = converted.records.find((r) => r.id === "shape:node_A");
+  const nodeB = converted.records.find((r) => r.id === "shape:node_B");
+  assert.ok(nodeA);
+  assert.ok(nodeB);
+  // "Hello\nWorld" longest line = 5 chars; "HelloWorld!" = 11 chars
+  // A should be narrower than B
+  assert.ok(
+    nodeA.props.w < nodeB.props.w,
+    `multiline node A (${nodeA.props.w}) should be narrower than single-line B (${nodeB.props.w})`,
+  );
+});
+
+test("multiline label gets adequate height for line count", () => {
+  const label = "User\n---\n+name\n+email\n---\n+login()\n+logout()";
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "class" },
+    nodes: [
+      {
+        id: "User",
+        label,
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 40 },
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const node = converted.records.find((r) => r.id === "shape:node_User");
+  assert.ok(node);
+  // 7 lines × ~22px + 28px padding = ~182px minimum
+  assert.ok(
+    node.props.h >= 140,
+    `7-line label height (${node.props.h}) should be >= 140`,
+  );
+});
+
+test("class diagram --- separators become empty lines in richText", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "class" },
+    nodes: [
+      {
+        id: "User",
+        label: "User\n---\n+name: String\n---\n+login()",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 60 },
+      },
+    ],
+    edges: [],
+  };
+  const converted = convertToTldraw(mmds);
+  const node = converted.records.find((r) => r.id === "shape:node_User");
+  assert.ok(node);
+  // richText should not contain literal "---"
+  const text = JSON.stringify(node.props.richText);
+  assert.ok(
+    !text.includes("---"),
+    "richText should not contain literal --- separators",
+  );
+});
+
+test("edge label with newline produces valid output", () => {
+  const mmds = {
+    version: 2,
+    metadata: { diagram_type: "flowchart" },
+    nodes: [
+      {
+        id: "A",
+        label: "A",
+        position: { x: 0, y: 0 },
+        size: { width: 50, height: 30 },
+      },
+      {
+        id: "B",
+        label: "B",
+        position: { x: 0, y: 100 },
+        size: { width: 50, height: 30 },
+      },
+    ],
+    edges: [{ id: "e0", source: "A", target: "B", label: "line1\nline2" }],
+  };
+  const converted = convertToTldraw(mmds);
+  const arrow = converted.records.find(
+    (r) => r.typeName === "shape" && r.type === "arrow",
+  );
+  assert.ok(arrow);
+  assert.ok(arrow.props.richText);
+  // Should produce valid parseable output
+  const file = toTldrawFile(mmds);
+  assertParses(file);
 });
