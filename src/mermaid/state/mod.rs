@@ -31,8 +31,8 @@ pub enum StateStatement {
 pub struct StateDecl {
     /// State identifier.
     pub id: String,
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Description lines (accumulated from repeated `Id : desc` statements).
+    pub descriptions: Vec<String>,
     /// Optional alias (from `state "label" as id`).
     pub alias: Option<String>,
     /// Optional stereotype (fork, join, choice).
@@ -267,7 +267,7 @@ fn try_parse_inline_description(line: &str) -> Option<StateDecl> {
 
     Some(StateDecl {
         id: id.to_string(),
-        description: Some(description.to_string()),
+        descriptions: vec![description.to_string()],
         alias: None,
         stereotype: None,
         children: Vec::new(),
@@ -291,7 +291,7 @@ fn try_parse_state_decl(line: &str) -> Option<StateDecl> {
         let id = alias.clone().unwrap_or_else(|| description.clone());
         return Some(StateDecl {
             id,
-            description: Some(description),
+            descriptions: vec![description],
             alias,
             stereotype: None,
             children: Vec::new(),
@@ -317,7 +317,7 @@ fn try_parse_state_decl(line: &str) -> Option<StateDecl> {
 
     Some(StateDecl {
         id: id.to_string(),
-        description: None,
+        descriptions: Vec::new(),
         alias: None,
         stereotype,
         children: Vec::new(),
@@ -393,7 +393,7 @@ mod tests {
             panic!("expected state decl");
         };
         assert_eq!(decl.id, "waiting");
-        assert_eq!(decl.description, Some("Waiting".to_string()));
+        assert_eq!(decl.descriptions, vec!["Waiting".to_string()]);
         assert_eq!(decl.alias, Some("waiting".to_string()));
     }
 
@@ -481,7 +481,7 @@ stateDiagram-v2
             panic!("expected state decl");
         };
         assert_eq!(decl.id, "Active");
-        assert_eq!(decl.description, Some("The system is active".to_string()));
+        assert_eq!(decl.descriptions, vec!["The system is active".to_string()]);
     }
 
     #[test]

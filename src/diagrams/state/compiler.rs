@@ -179,30 +179,29 @@ fn ensure_state_node_with_decl(
 
     let display_name = decl.alias.as_deref().unwrap_or(&decl.id);
     // Pseudo-state shapes (fork/join bars, choice diamonds) are unlabeled.
-    let label = if shape == Shape::ForkJoin || shape == Shape::Diamond {
-        String::new()
-    } else {
-        match &decl.description {
-            Some(desc) => desc.clone(),
-            None => display_name.to_string(),
-        }
-    };
+    let is_unlabeled_shape = shape == Shape::ForkJoin || shape == Shape::Diamond;
 
     if seen_nodes.contains(&decl.id) {
         // Update existing node with stereotype/description if needed.
         if let Some(node) = graph.nodes.get_mut(&decl.id) {
             if shape != Shape::Round {
                 node.shape = shape;
-                node.label = label.clone();
+                node.label = String::new();
             }
-            if decl.description.is_some() {
-                node.label = label;
+            if !decl.descriptions.is_empty() && !is_unlabeled_shape {
+                // Accumulate descriptions for multi-line rendering.
+                append_descriptions(&mut node.label, &decl.descriptions, display_name);
             }
             if parent.is_some() && node.parent.is_none() {
                 node.parent = parent.map(|s| s.to_string());
             }
         }
     } else {
+        let label = if is_unlabeled_shape {
+            String::new()
+        } else {
+            build_description_label(&decl.descriptions, display_name)
+        };
         let mut node = Node::new(&decl.id).with_label(label).with_shape(shape);
         node.parent = parent.map(|s| s.to_string());
         graph.add_node(node);
@@ -232,6 +231,51 @@ fn resolve_star_node(
         seen_nodes.insert(id.clone());
     }
     id
+}
+
+/// Build a label from descriptions for a new node.
+///
+/// - No descriptions → use display name
+/// - One description → use that description (simple box, matching Mermaid)
+/// - Two+ descriptions → first description as title, `---` separator, rest as body
+fn build_description_label(descriptions: &[String], display_name: &str) -> String {
+    match descriptions.len() {
+        0 => display_name.to_string(),
+        1 => descriptions[0].clone(),
+        _ => {
+            let mut parts = vec![descriptions[0].clone(), Node::SEPARATOR.to_string()];
+            parts.extend(descriptions[1..].iter().cloned());
+            parts.join("\n")
+        }
+    }
+}
+
+/// Append new descriptions to an existing node's label, adding a separator
+/// when this creates a multi-section box.
+fn append_descriptions(label: &mut String, new_descs: &[String], display_name: &str) {
+    if new_descs.is_empty() {
+        return;
+    }
+    // If the label was just the display name (no prior descriptions), replace it.
+    if *label == display_name {
+        *label = build_description_label(new_descs, display_name);
+        return;
+    }
+    // Already has content — check if it already has a separator (multi-section).
+    let has_separator = label.contains(Node::SEPARATOR);
+    if has_separator {
+        // Append to the body section.
+        for desc in new_descs {
+            label.push('\n');
+            label.push_str(desc);
+        }
+    } else {
+        // Current label is a single description. Adding more triggers two-section box.
+        let existing = label.clone();
+        let mut all = vec![existing];
+        all.extend(new_descs.iter().cloned());
+        *label = build_description_label(&all, display_name);
+    }
 }
 
 /// Ensure a basic Round state node exists for implicit state creation.
@@ -546,5 +590,65 @@ stateDiagram-v2
         // 3 named states + 1 start + 1 end = 5 nodes
         assert_eq!(graph.nodes.len(), 5);
         assert_eq!(graph.edges.len(), 4);
+    }
+
+    #[test]
+    fn compiler_multiline_descriptions_create_separator() {
+        let input = "\
+stateDiagram-v2
+    Server : Listening on port 8080
+    Server : Accepts TCP connections
+    [*] --> Server";
+        let graph = compile_state(input);
+        let label = &graph.nodes["Server"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "Listening on port 8080");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        assert_eq!(lines[2], "Accepts TCP connections");
+    }
+
+    #[test]
+    fn compiler_single_description_no_separator() {
+        let input = "\
+stateDiagram-v2
+    Active : The system is active
+    [*] --> Active";
+        let graph = compile_state(input);
+        assert!(!graph.nodes["Active"].label.contains(Node::SEPARATOR));
+        assert_eq!(graph.nodes["Active"].label, "The system is active");
+    }
+
+    #[test]
+    fn compiler_three_descriptions() {
+        let input = "\
+stateDiagram-v2
+    Server : Line 1
+    Server : Line 2
+    Server : Line 3";
+        let graph = compile_state(input);
+        let label = &graph.nodes["Server"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines.len(), 4); // Line1, ---, Line2, Line3
+        assert_eq!(lines[0], "Line 1");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        assert_eq!(lines[2], "Line 2");
+        assert_eq!(lines[3], "Line 3");
+    }
+
+    #[test]
+    fn compiler_description_after_implicit_creation() {
+        // Transition creates node implicitly, then description arrives.
+        let input = "\
+stateDiagram-v2
+    [*] --> Server
+    Server : Listening
+    Server : Accepting";
+        let graph = compile_state(input);
+        let label = &graph.nodes["Server"].label;
+        assert!(label.contains(Node::SEPARATOR));
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "Listening");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        assert_eq!(lines[2], "Accepting");
     }
 }
