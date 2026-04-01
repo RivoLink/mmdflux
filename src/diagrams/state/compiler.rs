@@ -30,109 +30,53 @@ pub fn compile(model: &StateModel) -> Graph {
         "__root",
     );
 
-    create_note_groups(&mut graph);
+    create_note_nodes(&mut graph);
     resolve_subgraph_edges(&mut graph);
 
     graph
 }
 
-/// Create invisible compound subgraphs for note annotations.
+/// Convert note annotations into standalone graph nodes with constraint edges.
 ///
-/// For each note in `graph.notes`, wraps the target state + a new `NoteRect`
-/// node in an invisible subgraph with a perpendicular direction override and
-/// a dotted edge. The layout engine positions them as a unit.
+/// For each note in `graph.notes`, creates a `NoteRect` node at the same
+/// hierarchy level as the target state, plus a dotted constraint edge.
+/// Edge direction encodes position: "right of" = state→note (downstream),
+/// "left of" = note→state (upstream). In TD mode this produces below/above
+/// placement; in LR mode it produces right/left — matching Mermaid.
 ///
-/// If a state already has a note group (from a previous note), the new note
-/// node is added to the existing group instead of creating a nested one.
-fn create_note_groups(graph: &mut Graph) {
+/// No invisible subgraph or compound group is needed. The layout engine
+/// positions the note via the constraint edge alone.
+fn create_note_nodes(graph: &mut Graph) {
     let notes: Vec<GraphNote> = std::mem::take(&mut graph.notes);
 
     for (i, note) in notes.iter().enumerate() {
         let state_id = &note.target;
 
-        // Skip if target state doesn't exist.
         if !graph.nodes.contains_key(state_id) {
             continue;
         }
 
         let note_node_id = format!("{state_id}____note_{i}");
 
-        // Check if this state already has a note group.
-        let existing_group_id = graph
-            .subgraphs
-            .values()
-            .find(|sg| sg.invisible && sg.nodes.contains(&state_id.to_string()))
-            .map(|sg| sg.id.clone());
-
-        // Create the note node.
-        let parent_for_note = existing_group_id
-            .clone()
-            .unwrap_or_else(|| format!("{state_id}____note_group_{i}"));
+        // Place note at the same hierarchy level as the target state.
+        let state_parent = graph.nodes.get(state_id).and_then(|n| n.parent.clone());
         let mut note_node = Node::new(&note_node_id)
             .with_label(&note.text)
             .with_shape(Shape::NoteRect);
-        note_node.parent = Some(parent_for_note.clone());
+        note_node.parent = state_parent.clone();
         graph.add_node(note_node);
 
-        let group_id = if let Some(ref existing_id) = existing_group_id {
-            // Add note node to existing group.
-            if let Some(sg) = graph.subgraphs.get_mut(existing_id) {
-                sg.nodes.push(note_node_id.clone());
-            }
-            existing_id.clone()
-        } else {
-            let group_id = parent_for_note;
+        // Add note to the same parent subgraph's children list.
+        if let Some(ref parent_id) = state_parent
+            && let Some(parent_sg) = graph.subgraphs.get_mut(parent_id)
+        {
+            parent_sg.nodes.push(note_node_id.clone());
+        }
 
-            // Get state's current parent before re-parenting.
-            let state_parent = graph.nodes.get(state_id).and_then(|n| n.parent.clone());
-
-            // Re-parent state into the note group.
-            if let Some(node) = graph.nodes.get_mut(state_id) {
-                node.parent = Some(group_id.clone());
-            }
-
-            // Update parent subgraph's children list: replace state with note group.
-            if let Some(ref parent_id) = state_parent
-                && let Some(parent_sg) = graph.subgraphs.get_mut(parent_id)
-                && let Some(pos) = parent_sg.nodes.iter().position(|n| n == state_id)
-            {
-                parent_sg.nodes[pos] = group_id.clone();
-            }
-
-            // Direction perpendicular to main graph direction.
-            let group_dir = match graph.direction {
-                Direction::TopDown | Direction::BottomTop => Some(Direction::LeftRight),
-                Direction::LeftRight | Direction::RightLeft => Some(Direction::TopDown),
-            };
-
-            graph.subgraphs.insert(
-                group_id.clone(),
-                Subgraph {
-                    id: group_id.clone(),
-                    title: String::new(),
-                    nodes: vec![state_id.to_string(), note_node_id.clone()],
-                    parent: state_parent,
-                    dir: group_dir,
-                    invisible: true,
-                },
-            );
-            graph.subgraph_order.push(group_id.clone());
-            group_id
-        };
-
-        // Edge direction for positioning within the note group.
-        // TD/BT main: note group is LR → edge controls left/right placement.
-        // LR/RL main: note group is TD → edge controls top/bottom placement.
-        let is_horizontal = matches!(graph.direction, Direction::LeftRight | Direction::RightLeft);
-        let (from, to) = match (note.position, is_horizontal) {
-            // TD: right of → state left, note right
-            (NotePosition::Right, false) => (state_id.to_string(), note_node_id.clone()),
-            // TD: left of → note left, state right
-            (NotePosition::Left, false) => (note_node_id.clone(), state_id.to_string()),
-            // LR: right of (= above) → note first rank, state second rank
-            (NotePosition::Right, true) => (note_node_id.clone(), state_id.to_string()),
-            // LR: left of (= below) → state first rank, note second rank
-            (NotePosition::Left, true) => (state_id.to_string(), note_node_id.clone()),
+        // Constraint edge: "right of" = downstream, "left of" = upstream.
+        let (from, to) = match note.position {
+            NotePosition::Right => (state_id.to_string(), note_node_id.clone()),
+            NotePosition::Left => (note_node_id.clone(), state_id.to_string()),
         };
 
         graph.add_edge(
@@ -140,10 +84,6 @@ fn create_note_groups(graph: &mut Graph) {
                 .with_stroke(Stroke::Dotted)
                 .with_arrows(Arrow::None, Arrow::None),
         );
-
-        // Ensure note-group edges are not resolved as cross-subgraph edges.
-        // The note group's internal edge connects siblings, not boundary-crossing nodes.
-        let _ = &group_id;
     }
 }
 
@@ -780,14 +720,14 @@ stateDiagram-v2
     }
 
     #[test]
-    fn compiler_note_creates_compound_group() {
+    fn compiler_note_creates_standalone_node_with_constraint_edge() {
         let input = "\
 stateDiagram-v2
     [*] --> Active
     note right of Active : This is a note";
         let graph = compile_state(input);
 
-        // Note becomes a NoteRect graph node.
+        // Note becomes a standalone NoteRect graph node.
         let note_node = graph
             .nodes
             .values()
@@ -795,23 +735,16 @@ stateDiagram-v2
             .expect("note node should exist");
         assert_eq!(note_node.label, "This is a note");
 
-        // Invisible note group wraps state + note.
-        let group = graph
-            .subgraphs
-            .values()
-            .find(|sg| sg.invisible)
-            .expect("invisible note group should exist");
-        assert!(group.nodes.contains(&"Active".to_string()));
-        assert!(group.nodes.contains(&note_node.id));
-        assert_eq!(group.dir, Some(Direction::LeftRight)); // perpendicular to TD
-
-        // Active is re-parented into the note group.
-        assert_eq!(
-            graph.nodes["Active"].parent.as_deref(),
-            Some(group.id.as_str())
+        // No invisible subgroup — note is a standalone node.
+        assert!(
+            !graph.subgraphs.values().any(|sg| sg.invisible),
+            "should not create invisible subgraphs"
         );
 
-        // Dotted edge connects state and note (no arrowheads).
+        // Note is at the same hierarchy level as Active (both top-level).
+        assert_eq!(note_node.parent, graph.nodes["Active"].parent);
+
+        // Dotted constraint edge connects state and note (no arrowheads).
         let dotted_edge = graph
             .edges
             .iter()
@@ -819,7 +752,7 @@ stateDiagram-v2
             .expect("dotted edge should exist");
         assert_eq!(dotted_edge.arrow_start, Arrow::None);
         assert_eq!(dotted_edge.arrow_end, Arrow::None);
-        // Right of in TD → state is "from", note is "to".
+        // Right of in TD → state is "from", note is "to" (downstream).
         assert_eq!(dotted_edge.from, "Active");
         assert_eq!(dotted_edge.to, note_node.id);
 

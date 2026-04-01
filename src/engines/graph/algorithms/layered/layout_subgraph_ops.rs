@@ -774,12 +774,23 @@ pub(crate) fn resolve_sublayout_overlaps(
         }
 
         // Find the maximum shift needed to clear overlapping external nodes.
+        // Only consider nodes that actually overlap with the subgraph on the
+        // x-axis — nodes at entirely different horizontal positions don't need
+        // to be pushed down.
+        let sg_left = sg_bounds.x;
+        let sg_right = sg_bounds.x + sg_bounds.width;
         let mut max_shift = 0.0f64;
         for (nid, rect) in &layout.nodes {
             if sg_node_set.contains(nid.0.as_str())
                 || nid.0 == *sg_id
                 || internal_subgraph_ids.contains(nid.0.as_str())
             {
+                continue;
+            }
+            // Skip nodes that don't overlap horizontally with the subgraph.
+            let node_left = rect.x;
+            let node_right = rect.x + rect.width;
+            if node_right < sg_left || node_left > sg_right {
                 continue;
             }
             // Only consider nodes whose center is below the subgraph center
