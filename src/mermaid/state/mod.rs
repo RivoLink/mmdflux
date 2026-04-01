@@ -24,6 +24,26 @@ pub enum StateStatement {
     Transition(StateTransition),
     /// Direction directive.
     Direction(String),
+    /// Note attached to a state.
+    Note(StateNote),
+}
+
+/// A note attached to a state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateNote {
+    /// The state this note is attached to.
+    pub state_id: String,
+    /// Note placement relative to the state.
+    pub position: NotePosition,
+    /// Note text content.
+    pub text: String,
+}
+
+/// Position of a note relative to its attached state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotePosition {
+    Left,
+    Right,
 }
 
 /// An explicit state declaration.
@@ -128,6 +148,12 @@ fn parse_body(
             continue;
         }
 
+        // Note: `note right of State : text` or multi-line `note ... end note`
+        if let Some(note) = try_parse_note(trimmed, lines, pos) {
+            statements.push(StateStatement::Note(note));
+            continue;
+        }
+
         // Direction directive.
         if let Some(rest) = strip_keyword(trimmed, "direction") {
             if let Some(dir) = normalize_direction(rest.trim()) {
@@ -172,6 +198,81 @@ fn parse_body(
     }
 
     statements
+}
+
+/// Try to parse a note statement.
+///
+/// Single-line: `note right of State : text`
+/// Multi-line:  `note right of State\n  text...\nend note`
+fn try_parse_note(first_line: &str, lines: &[&str], pos: &mut usize) -> Option<StateNote> {
+    let lower = first_line.to_lowercase();
+    if !lower.starts_with("note ") {
+        return None;
+    }
+
+    let rest = first_line["note ".len()..].trim();
+
+    // Parse position and state ID: `right of StateId` or `left of StateId`
+    let (position, after_pos) = if let Some(r) = strip_keyword_ci(rest, "right of") {
+        (NotePosition::Right, r)
+    } else if let Some(r) = strip_keyword_ci(rest, "left of") {
+        (NotePosition::Left, r)
+    } else {
+        return None;
+    };
+
+    let after_pos = after_pos.trim();
+
+    // Single-line form: `note right of State : text`
+    if let Some(colon_pos) = after_pos.find(':') {
+        let state_id = after_pos[..colon_pos].trim();
+        let text = after_pos[colon_pos + 1..].trim();
+        if state_id.is_empty() {
+            return None;
+        }
+        *pos += 1;
+        return Some(StateNote {
+            state_id: state_id.to_string(),
+            position,
+            text: text.to_string(),
+        });
+    }
+
+    // Multi-line form: state ID is the rest of the line, text until `end note`
+    let state_id = after_pos.trim();
+    if state_id.is_empty() {
+        return None;
+    }
+
+    *pos += 1;
+    let mut text_lines = Vec::new();
+    while *pos < lines.len() {
+        let line = strip_inline_comment(lines[*pos].trim());
+        if line.to_lowercase() == "end note" {
+            *pos += 1;
+            break;
+        }
+        text_lines.push(line.to_string());
+        *pos += 1;
+    }
+
+    Some(StateNote {
+        state_id: state_id.to_string(),
+        position,
+        text: text_lines.join("\n"),
+    })
+}
+
+/// Case-insensitive keyword prefix strip (returns rest after the keyword + whitespace).
+fn strip_keyword_ci<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
+    let lower = line.to_lowercase();
+    if lower.starts_with(keyword) {
+        let rest = &line[keyword.len()..];
+        if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+            return Some(rest.trim_start());
+        }
+    }
+    None
 }
 
 /// Strip an inline `%%` comment from a line, returning the content before it.
@@ -553,5 +654,46 @@ stateDiagram-v2
             crate::mermaid::detect_diagram_type("stateDiagram\n[*] --> Idle"),
             Some(crate::mermaid::DiagramType::State)
         );
+    }
+
+    #[test]
+    fn parse_note_single_line() {
+        let input = "stateDiagram-v2\n    note right of State1 : Important info";
+        let model = parse_state_diagram(input).unwrap();
+        assert_eq!(model.statements.len(), 1);
+        let StateStatement::Note(note) = &model.statements[0] else {
+            panic!("expected note");
+        };
+        assert_eq!(note.state_id, "State1");
+        assert_eq!(note.position, NotePosition::Right);
+        assert_eq!(note.text, "Important info");
+    }
+
+    #[test]
+    fn parse_note_left_of() {
+        let input = "stateDiagram-v2\n    note left of State2 : Left note";
+        let model = parse_state_diagram(input).unwrap();
+        let StateStatement::Note(note) = &model.statements[0] else {
+            panic!("expected note");
+        };
+        assert_eq!(note.position, NotePosition::Left);
+        assert_eq!(note.state_id, "State2");
+    }
+
+    #[test]
+    fn parse_note_multiline() {
+        let input = "\
+stateDiagram-v2
+    note right of State1
+        Line one
+        Line two
+    end note";
+        let model = parse_state_diagram(input).unwrap();
+        let StateStatement::Note(note) = &model.statements[0] else {
+            panic!("expected note");
+        };
+        assert_eq!(note.state_id, "State1");
+        assert_eq!(note.position, NotePosition::Right);
+        assert_eq!(note.text, "Line one\nLine two");
     }
 }

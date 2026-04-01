@@ -149,6 +149,7 @@ fn render_svg_with_geometry_context(
     );
     let padding = options.diagram_padding;
     let (min_x, min_y, max_x, max_y) = bounds.finalize(geom.bounds.width, geom.bounds.height);
+
     let width = (max_x - min_x + padding * 2.0) * scale;
     let height = (max_y - min_y + padding * 2.0) * scale;
     let offset_x = (-min_x + padding) * scale;

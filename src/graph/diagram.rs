@@ -35,6 +35,29 @@ pub struct Subgraph {
     pub parent: Option<String>,
     /// Direction override for this subgraph (None = inherit from parent).
     pub dir: Option<Direction>,
+    /// Invisible subgraph: participates in compound layout but renders no border or title.
+    /// Used for note groups that wrap a state + note pair.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub invisible: bool,
+}
+
+/// Position of a note annotation relative to its target node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotePosition {
+    Left,
+    Right,
+}
+
+/// A note annotation attached to a graph node.
+/// Notes are rendered as post-layout annotations, not as graph nodes.
+#[derive(Debug, Clone)]
+pub struct GraphNote {
+    /// Target node ID this note is attached to.
+    pub target: String,
+    /// Position relative to the target node.
+    pub position: NotePosition,
+    /// Note text content (may contain newlines).
+    pub text: String,
 }
 
 /// A complete flowchart diagram.
@@ -50,6 +73,8 @@ pub struct Graph {
     pub subgraphs: HashMap<String, Subgraph>,
     /// Subgraph IDs in parse order (inner-first / post-order).
     pub subgraph_order: Vec<String>,
+    /// Note annotations (rendered post-layout, not as graph nodes).
+    pub notes: Vec<GraphNote>,
 }
 
 impl Graph {
@@ -61,6 +86,7 @@ impl Graph {
             edges: Vec::new(),
             subgraphs: HashMap::new(),
             subgraph_order: Vec::new(),
+            notes: Vec::new(),
         }
     }
 
@@ -192,6 +218,7 @@ mod tests {
             nodes: vec!["A".to_string(), "B".to_string()],
             parent: None,
             dir: None,
+            invisible: false,
         };
         assert_eq!(sg.id, "sg1");
         assert_eq!(sg.title, "My Group");
@@ -206,6 +233,7 @@ mod tests {
             nodes: vec!["A".to_string()],
             parent: Some("outer".to_string()),
             dir: None,
+            invisible: false,
         };
         assert_eq!(sg.parent, Some("outer".to_string()));
     }
@@ -234,6 +262,7 @@ mod tests {
                 nodes: vec![],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         assert!(diagram.has_subgraphs());
@@ -252,6 +281,7 @@ mod tests {
                 nodes: vec!["A".to_string(), "B".to_string()],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         g
@@ -277,6 +307,7 @@ mod tests {
                 nodes: vec!["A".to_string()],
                 parent: Some("sg1".to_string()),
                 dir: None,
+                invisible: false,
             },
         );
         // "inner" is a subgraph, so it should be skipped; "A" or "B" returned.
@@ -296,6 +327,7 @@ mod tests {
                 nodes: vec![],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         assert!(g.find_non_cluster_child("sg1").is_none());
@@ -324,6 +356,7 @@ mod tests {
                 nodes: vec!["A".to_string(), "B".to_string(), "C".to_string()],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         let sink = g.find_subgraph_sink("sg1");
@@ -346,6 +379,7 @@ mod tests {
                 nodes: vec!["A".to_string(), "B".to_string()],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         let sink = g.find_subgraph_sink("sg1");

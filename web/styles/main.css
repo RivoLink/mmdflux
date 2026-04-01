@@ -993,6 +993,12 @@ body {
 :root[data-theme="dark"] .preview-output svg rect.subgraph {
   stroke: #5c738d;
 }
+:root[data-theme="dark"] .preview-output svg [fill="#fff5ad"] {
+  fill: #3d3a1e;
+}
+:root[data-theme="dark"] .preview-output svg [stroke="#aaaa33"] {
+  stroke: #8a8a2a;
+}
 
 @media (max-width: 1120px) {
   .render-settings-grid {

@@ -736,10 +736,22 @@ pub(crate) fn resolve_sublayout_overlaps(
     layout: &mut layered::LayoutResult,
     min_gap: f64,
 ) {
-    for (sg_id, sg) in &diagram.subgraphs {
-        if sg.dir.is_none() {
-            continue;
-        }
+    // Process subgraphs in deterministic depth-then-id order so overlap shifts
+    // are applied consistently regardless of HashMap iteration order.
+    let mut sorted_sg_ids: Vec<&String> = diagram
+        .subgraphs
+        .keys()
+        .filter(|id| diagram.subgraphs[*id].dir.is_some())
+        .collect();
+    sorted_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+
+    for sg_id in sorted_sg_ids {
+        let sg = &diagram.subgraphs[sg_id];
         let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
             continue;
         };

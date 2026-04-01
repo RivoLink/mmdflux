@@ -55,7 +55,13 @@ pub(super) fn render_subgraphs(
     let mut subgraphs: Vec<_> = geom
         .subgraphs
         .iter()
-        .filter_map(|(id, sg_geom)| diagram.subgraphs.get(id).map(|_| (id, sg_geom)))
+        .filter_map(|(id, sg_geom)| {
+            diagram
+                .subgraphs
+                .get(id)
+                .filter(|sg| !sg.invisible)
+                .map(|_| (id, sg_geom))
+        })
         .collect();
 
     subgraphs.sort_by(|a, b| a.1.depth.cmp(&b.1.depth).then_with(|| a.0.cmp(b.0)));
@@ -710,6 +716,17 @@ fn render_node_shape(
             );
             let inner = format!("<path d=\"{inner_d}\"{inner_style} />");
             writer.push_line(&inner);
+        }
+        Shape::NoteRect => {
+            let line = format!(
+                "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#fff5ad\" stroke=\"#aaaa33\" stroke-width=\"{sw}\" />",
+                x = fmt_f64(rect.x),
+                y = fmt_f64(rect.y),
+                w = fmt_f64(rect.width),
+                h = fmt_f64(rect.height),
+                sw = stroke_width
+            );
+            writer.push_line(&line);
         }
         Shape::TextBlock => {
             // Borderless: only text will be drawn.

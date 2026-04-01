@@ -62,6 +62,7 @@ fn process_statements(
                         nodes: node_ids,
                         parent: parent_subgraph.map(|s| s.to_string()),
                         dir: sg_spec.dir.map(convert_direction),
+                        invisible: false,
                     },
                 );
                 diagram.subgraph_order.push(sg_spec.id.clone());

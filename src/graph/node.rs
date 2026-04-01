@@ -67,6 +67,8 @@ pub enum Shape {
     TextBlock,
     /// Fork/join bar: @{shape: fork}
     ForkJoin,
+    /// Note rectangle (for state diagram notes)
+    NoteRect,
 }
 
 /// A node in the flowchart diagram.

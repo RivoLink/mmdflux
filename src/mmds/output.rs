@@ -304,6 +304,7 @@ fn build_output(
                 parent: sg.parent.clone(),
                 direction: sg.dir.map(|d| direction_str(d).to_string()),
                 bounds,
+                invisible: sg.invisible,
             }
         })
         .collect();
@@ -568,6 +569,7 @@ fn shape_str(shape: Shape) -> &'static str {
         Shape::CrossedCircle => "crossed_circle",
         Shape::TextBlock => "text_block",
         Shape::ForkJoin => "fork_join",
+        Shape::NoteRect => "note_rect",
     }
 }
 
@@ -825,6 +827,9 @@ pub struct Subgraph {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub bounds: Option<Bounds>,
+    /// Invisible subgraph (participates in layout, renders no border).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub invisible: bool,
 }
 
 fn default_node_shape() -> String {

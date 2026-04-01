@@ -1732,6 +1732,7 @@ fn compact_lr_backward_route_yields_to_subgraph_border_in_corridor() {
             height: 6,
             title: "Blocker".to_string(),
             depth: 0,
+            invisible: false,
         },
     );
 

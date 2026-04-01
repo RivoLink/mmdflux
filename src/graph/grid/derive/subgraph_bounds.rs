@@ -86,6 +86,7 @@ pub(super) fn subgraph_bounds_to_draw(
                 height: final_height,
                 title: sg.title.clone(),
                 depth,
+                invisible: sg.invisible,
             },
         );
     }

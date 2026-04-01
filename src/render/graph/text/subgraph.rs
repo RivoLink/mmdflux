@@ -21,6 +21,11 @@ pub fn render_subgraph_borders(
     sorted_bounds.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.title.cmp(&b.title)));
 
     for bounds in sorted_bounds {
+        // Invisible subgraphs participate in layout but render no border.
+        if bounds.invisible {
+            continue;
+        }
+
         let x = bounds.x;
         let y = bounds.y;
         let w = bounds.width;
@@ -108,6 +113,7 @@ mod tests {
             height: 5,
             title: "Group".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -148,6 +154,7 @@ mod tests {
             height: 5,
             title: "Group".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -175,6 +182,7 @@ mod tests {
             height: 5,
             title: "Test".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -203,6 +211,7 @@ mod tests {
             height: 5,
             title: "Group".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -238,6 +247,7 @@ mod tests {
             height: 5,
             title: "TopGroup".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -266,6 +276,7 @@ mod tests {
             height: 5,
             title: "Very Long Title".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -294,6 +305,7 @@ mod tests {
             height: 5,
             title: " ".to_string(),
             depth: 0,
+            invisible: false,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);

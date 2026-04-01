@@ -247,6 +247,7 @@ pub(super) fn reconcile_sublayouts_draw(
                 height: sg_needed_h,
                 title: sg.title.clone(),
                 depth,
+                invisible: sg.invisible,
             },
         );
 
@@ -855,6 +856,7 @@ pub(super) fn layout_compound_parent_members(
                 height: sg_final_h,
                 title: sg.title.clone(),
                 depth,
+                invisible: sg.invisible,
             },
         );
 

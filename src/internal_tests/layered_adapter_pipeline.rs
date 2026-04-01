@@ -247,6 +247,7 @@ fn layered_adapter_maps_subgraph_bounds() {
             nodes: vec!["A".into(), "B".into()],
             parent: None,
             dir: None,
+            invisible: false,
         },
     );
 
@@ -302,6 +303,7 @@ fn layered_adapter_skips_compound_nodes() {
             nodes: vec!["A".into()],
             parent: None,
             dir: None,
+            invisible: false,
         },
     );
 

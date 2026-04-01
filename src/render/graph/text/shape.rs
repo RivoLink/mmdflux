@@ -125,6 +125,10 @@ pub fn categorize_shape(shape: Shape) -> ShapeCategory {
             },
         },
         Shape::Diamond | Shape::Hexagon => ShapeCategory::Diamond,
+        Shape::NoteRect => ShapeCategory::Box {
+            corners: NodeCornerStyle::Square,
+            modifier: BoxModifier::default(),
+        },
         Shape::TextBlock => ShapeCategory::Borderless,
         Shape::ForkJoin => ShapeCategory::Bar,
         Shape::SmallCircle => ShapeCategory::Glyph(GlyphKind::SmallCircle),

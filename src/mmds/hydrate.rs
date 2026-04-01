@@ -63,6 +63,7 @@ pub fn from_output(output: &Output) -> Result<Graph, HydrationError> {
                 nodes: subgraph.children.clone(),
                 parent: subgraph.parent.clone(),
                 dir,
+                invisible: false,
             },
         );
         diagram.subgraph_order.push(subgraph.id.clone());
@@ -750,6 +751,7 @@ fn parse_shape(value: &str) -> Option<Shape> {
         "crossed_circle" => Some(Shape::CrossedCircle),
         "text_block" => Some(Shape::TextBlock),
         "fork_join" => Some(Shape::ForkJoin),
+        "note_rect" => Some(Shape::NoteRect),
         _ => None,
     }
 }
@@ -981,6 +983,7 @@ mod tests {
                 nodes: vec!["A".to_string()],
                 parent: None,
                 dir: None,
+                invisible: false,
             },
         );
         diagram.subgraphs.insert(
@@ -991,6 +994,7 @@ mod tests {
                 nodes: vec!["B".to_string()],
                 parent: Some("outer".to_string()),
                 dir: None,
+                invisible: false,
             },
         );
 

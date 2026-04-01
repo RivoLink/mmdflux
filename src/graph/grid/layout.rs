@@ -79,6 +79,8 @@ pub struct SubgraphBounds {
     pub title: String,
     /// Nesting depth (0 = top-level, 1 = nested once, etc.)
     pub depth: usize,
+    /// Invisible subgraph: participates in layout but renders no border or title.
+    pub invisible: bool,
 }
 
 /// Draw-coordinate data for a self-edge loop.

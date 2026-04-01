@@ -177,6 +177,7 @@ fn apply_namespaces(model: &ClassModel, diagram: &mut Graph) {
                 nodes: Vec::new(),
                 parent: namespace.parent.clone(),
                 dir: None,
+                invisible: false,
             },
         );
         diagram.subgraph_order.push(namespace.id.clone());

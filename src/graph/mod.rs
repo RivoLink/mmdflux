@@ -19,7 +19,7 @@ pub mod routing;
 pub mod space;
 pub mod style;
 
-pub use diagram::{Direction, Graph, Subgraph};
+pub use diagram::{Direction, Graph, GraphNote, NotePosition, Subgraph};
 pub use edge::{Arrow, Edge, Stroke};
 pub use geometry::GeometryLevel;
 pub use node::{Node, Shape};
