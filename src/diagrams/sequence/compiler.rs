@@ -6,10 +6,10 @@
 
 use std::collections::HashMap;
 
-use crate::mermaid::sequence::ast::{ActivationModifier, SequenceStatement};
+use crate::mermaid::sequence::ast::{ActivationModifier, AutonumberMode, SequenceStatement};
 use crate::timeline::sequence::model::{
-    BlockDividerKind, BlockKind, NotePlacement, Participant, ParticipantBox, ParticipantKind,
-    Sequence, SequenceEvent,
+    AutonumberState, BlockDividerKind, BlockKind, NotePlacement, Participant, ParticipantBox,
+    ParticipantKind, Sequence, SequenceEvent,
 };
 
 /// Compile parsed sequence statements into a validated model.
@@ -25,10 +25,9 @@ pub fn compile(
     let mut participant_index: HashMap<String, usize> = HashMap::new();
     let mut participant_box_index: HashMap<String, usize> = HashMap::new();
     let mut events: Vec<SequenceEvent> = Vec::new();
-    let mut autonumber = false;
-    let mut message_counter: usize = 0;
     let mut block_stack: Vec<BlockKind> = Vec::new();
     let mut open_participant_box: Option<OpenParticipantBox> = None;
+    let mut title: Option<String> = None;
 
     // First pass: collect explicit participant declarations (preserving order)
     for stmt in statements {
@@ -92,8 +91,8 @@ pub fn compile(
                     participants: open_box.participants,
                 });
             }
-            SequenceStatement::Autonumber => {
-                autonumber = true;
+            SequenceStatement::Title(next_title) => {
+                title = Some(next_title.clone());
             }
             _ => {}
         }
@@ -104,6 +103,7 @@ pub fn compile(
     }
 
     // Second pass: process messages and notes, creating implicit participants as needed
+    let mut autonumber = AutonumberState::default();
     for stmt in statements {
         match stmt {
             SequenceStatement::Message {
@@ -117,18 +117,13 @@ pub fn compile(
                 let from_idx = ensure_participant(&mut participants, &mut participant_index, from);
                 let to_idx = ensure_participant(&mut participants, &mut participant_index, to);
 
-                message_counter += 1;
                 events.push(SequenceEvent::Message {
                     from: from_idx,
                     to: to_idx,
                     line_style: *line_style,
                     arrow_head: *arrow_head,
                     text: text.clone(),
-                    number: if autonumber {
-                        Some(message_counter)
-                    } else {
-                        None
-                    },
+                    number: next_message_number(&mut autonumber),
                 });
 
                 // Emit activation events from +/- shorthand.
@@ -201,8 +196,11 @@ pub fn compile(
             SequenceStatement::Participant { .. }
             | SequenceStatement::ParticipantBoxStart { .. }
             | SequenceStatement::ParticipantBoxEnd
-            | SequenceStatement::Autonumber => {
+            | SequenceStatement::Title(_) => {
                 // Already handled in first pass
+            }
+            SequenceStatement::Autonumber(mode) => {
+                apply_autonumber_mode(&mut autonumber, *mode);
             }
             SequenceStatement::BlockStart { kind, label } => {
                 block_stack.push(*kind);
@@ -239,6 +237,7 @@ pub fn compile(
     }
 
     Ok(Sequence {
+        title,
         participants,
         participant_boxes,
         events,
@@ -294,6 +293,31 @@ fn ensure_participant(
     idx
 }
 
+fn apply_autonumber_mode(state: &mut AutonumberState, mode: AutonumberMode) {
+    match mode {
+        AutonumberMode::On { start, step } => {
+            if let Some(start) = start {
+                state.next = start;
+            }
+            state.step = step.unwrap_or(1);
+            state.enabled = true;
+        }
+        AutonumberMode::Off => {
+            state.enabled = false;
+        }
+    }
+}
+
+fn next_message_number(state: &mut AutonumberState) -> Option<usize> {
+    if !state.enabled {
+        return None;
+    }
+
+    let number = state.next;
+    state.next = state.next.saturating_add(state.step.max(1));
+    Some(number)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,7 +334,7 @@ mod tests {
         let model = compile_input("sequenceDiagram\n");
         assert!(model.participants.is_empty());
         assert!(model.events.is_empty());
-        assert!(!model.autonumber);
+        assert_eq!(model.autonumber, AutonumberState::default());
     }
 
     #[test]
@@ -459,7 +483,9 @@ sequenceDiagram
         let model = compile_input(
             "sequenceDiagram\nautonumber\nparticipant A\nparticipant B\nA->>B: first\nB->>A: second",
         );
-        assert!(model.autonumber);
+        assert!(model.autonumber.enabled);
+        assert_eq!(model.autonumber.next, 3);
+        assert_eq!(model.autonumber.step, 1);
         match &model.events[0] {
             SequenceEvent::Message { number, .. } => assert_eq!(*number, Some(1)),
             _ => panic!("expected message"),
@@ -473,11 +499,57 @@ sequenceDiagram
     #[test]
     fn compile_no_autonumber_no_numbers() {
         let model = compile_input("sequenceDiagram\nA->>B: hi");
-        assert!(!model.autonumber);
+        assert_eq!(model.autonumber, AutonumberState::default());
         match &model.events[0] {
             SequenceEvent::Message { number, .. } => assert_eq!(*number, None),
             _ => panic!("expected message"),
         }
+    }
+
+    #[test]
+    fn compile_autonumber_start_step_off_and_resume() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    autonumber 5 2
+    participant A
+    participant B
+    A->>B: first
+    B->>A: second
+    autonumber off
+    A->>B: third
+    autonumber
+    A->>B: fourth",
+        );
+
+        let numbers: Vec<_> = model
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                SequenceEvent::Message { number, .. } => Some(*number),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(numbers, vec![Some(5), Some(7), None, Some(9)]);
+        assert_eq!(
+            model.autonumber,
+            AutonumberState {
+                enabled: true,
+                next: 10,
+                step: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn compile_title() {
+        let model = compile_input(
+            "\
+sequenceDiagram
+    title Authentication Flow
+    A->>B: Login",
+        );
+        assert_eq!(model.title.as_deref(), Some("Authentication Flow"));
     }
 
     #[test]
@@ -547,7 +619,7 @@ sequenceDiagram
         assert_eq!(model.participants[0].label, "Alice");
         assert_eq!(model.participants[1].label, "Bob");
         assert_eq!(model.events.len(), 4);
-        assert!(model.autonumber);
+        assert!(model.autonumber.enabled);
     }
 
     #[test]

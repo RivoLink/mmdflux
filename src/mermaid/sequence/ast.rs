@@ -15,6 +15,18 @@ pub enum ActivationModifier {
     Deactivate,
 }
 
+/// Autonumber control statement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutonumberMode {
+    /// Enable autonumbering, optionally overriding the next value and step.
+    On {
+        start: Option<usize>,
+        step: Option<usize>,
+    },
+    /// Disable autonumbering while preserving the next value.
+    Off,
+}
+
 /// A parsed sequence diagram statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SequenceStatement {
@@ -62,5 +74,7 @@ pub enum SequenceStatement {
     /// `end`.
     BlockEnd,
     /// `autonumber`.
-    Autonumber,
+    Autonumber(AutonumberMode),
+    /// `title <text>`.
+    Title(String),
 }

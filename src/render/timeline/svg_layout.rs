@@ -42,6 +42,8 @@ const NOTE_GAP: f64 = 10.0;
 const ACTIVATION_WIDTH: f64 = 10.0;
 /// Padding around the entire diagram.
 const DIAGRAM_PADDING: f64 = 10.0;
+/// Vertical reservation for an optional diagram title.
+const TITLE_VERTICAL_SPACE: f64 = 34.0;
 /// Extra gap between message label and arrow line.
 const LABEL_ABOVE_GAP: f64 = 4.0;
 /// Vertical reservation for block headers, dividers, and footers.
@@ -64,6 +66,7 @@ const BLOCK_HEADER_GAP: f64 = 32.0;
 /// Complete proportional layout for SVG rendering.
 #[derive(Debug)]
 pub struct SvgSequenceLayout {
+    pub title: Option<SvgTitle>,
     pub participant_boxes: Vec<SvgParticipantBox>,
     pub participants: Vec<SvgParticipant>,
     pub lifelines: Vec<SvgLifeline>,
@@ -74,6 +77,13 @@ pub struct SvgSequenceLayout {
     pub height: f64,
     pub font_family: String,
     pub font_size: f64,
+}
+
+/// A centered diagram title rendered above the participants.
+#[derive(Debug)]
+pub struct SvgTitle {
+    pub text: String,
+    pub y: f64,
 }
 
 /// A positioned participant header box.
@@ -225,6 +235,7 @@ pub fn layout(
 ) -> SvgSequenceLayout {
     if model.participants.is_empty() {
         return SvgSequenceLayout {
+            title: None,
             participant_boxes: Vec::new(),
             participants: Vec::new(),
             lifelines: Vec::new(),
@@ -237,6 +248,12 @@ pub fn layout(
             font_size: metrics.font_size,
         };
     }
+
+    let title = model.title.as_ref().map(|text| SvgTitle {
+        text: text.clone(),
+        y: DIAGRAM_PADDING + metrics.font_size / 2.0,
+    });
+    let title_offset = title.as_ref().map(|_| TITLE_VERTICAL_SPACE).unwrap_or(0.0);
 
     // 1. Measure participant boxes
     let box_sizes: Vec<(f64, f64)> = model
@@ -254,7 +271,8 @@ pub fn layout(
     let header_height = box_sizes.iter().map(|(_, h)| *h).fold(0.0_f64, f64::max);
     let participant_box_header_height =
         participant_box_header_height(model, metrics, model.participant_boxes.is_empty());
-    let participant_y = DIAGRAM_PADDING + participant_box_header_height;
+    let participant_box_y = DIAGRAM_PADDING + title_offset;
+    let participant_y = participant_box_y + participant_box_header_height;
 
     // 2. Compute participant gap from message labels
     let participant_gap = compute_participant_gap(model, metrics);
@@ -536,7 +554,7 @@ pub fn layout(
         &model.participant_boxes,
         &participants,
         metrics,
-        DIAGRAM_PADDING,
+        participant_box_y,
         lifeline_end + PARTICIPANT_GROUP_PADDING_Y * 0.25,
     );
 
@@ -569,11 +587,16 @@ pub fn layout(
         .iter()
         .map(|block| block.rect.x + block.rect.width)
         .fold(0.0_f64, f64::max);
+    let title_width = title
+        .as_ref()
+        .map(|title| metrics.measure_text_with_padding(&title.text, 0.0, 0.0).0)
+        .unwrap_or(0.0);
 
     let width = max_right
         .max(max_participant_box_right)
         .max(row_right)
         .max(block_right)
+        .max(title_width + DIAGRAM_PADDING)
         + DIAGRAM_PADDING;
     let participant_box_bottom = participant_boxes
         .iter()
@@ -582,6 +605,7 @@ pub fn layout(
     let height = lifeline_end.max(participant_box_bottom) + DIAGRAM_PADDING;
 
     SvgSequenceLayout {
+        title,
         participant_boxes,
         participants,
         lifelines,
@@ -929,7 +953,7 @@ mod tests {
     use super::*;
     use crate::graph::measure::ProportionalTextMetrics;
     use crate::timeline::sequence::model::{
-        Participant, ParticipantBox, ParticipantKind, Sequence,
+        AutonumberState, Participant, ParticipantBox, ParticipantKind, Sequence,
     };
 
     fn test_metrics() -> ProportionalTextMetrics {
@@ -939,10 +963,11 @@ mod tests {
     #[test]
     fn layout_empty_model() {
         let model = Sequence {
+            title: None,
             participants: Vec::new(),
             participant_boxes: Vec::new(),
             events: Vec::new(),
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
         let layout = layout(&model, &test_metrics(), "sans-serif");
         assert_eq!(layout.width, 0.0);
@@ -951,8 +976,30 @@ mod tests {
     }
 
     #[test]
+    fn layout_reserves_space_for_title() {
+        let model = Sequence {
+            title: Some("Authentication Flow".into()),
+            participants: vec![Participant {
+                id: "Alice".into(),
+                label: "Alice".into(),
+                kind: ParticipantKind::Participant,
+            }],
+            participant_boxes: Vec::new(),
+            events: Vec::new(),
+            autonumber: AutonumberState::default(),
+        };
+
+        let layout = layout(&model, &test_metrics(), "sans-serif");
+
+        let title = layout.title.expect("title should be present");
+        assert!(title.y >= DIAGRAM_PADDING);
+        assert!(layout.participants[0].rect.y > DIAGRAM_PADDING);
+    }
+
+    #[test]
     fn layout_two_participants_one_message() {
         let model = Sequence {
+            title: None,
             participants: vec![
                 Participant {
                     id: "Alice".into(),
@@ -974,7 +1021,7 @@ mod tests {
                 text: "Hello".into(),
                 number: None,
             }],
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
         let layout = layout(&model, &test_metrics(), "sans-serif");
 
@@ -991,6 +1038,7 @@ mod tests {
     #[test]
     fn self_message_produces_self_message_row() {
         let model = Sequence {
+            title: None,
             participants: vec![Participant {
                 id: "A".into(),
                 label: "A".into(),
@@ -1005,7 +1053,7 @@ mod tests {
                 text: "self".into(),
                 number: None,
             }],
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
         let layout = layout(&model, &test_metrics(), "sans-serif");
 
@@ -1016,6 +1064,7 @@ mod tests {
     #[test]
     fn layout_tracks_svg_blocks() {
         let model = Sequence {
+            title: None,
             participants: vec![
                 Participant {
                     id: "A".into(),
@@ -1056,7 +1105,7 @@ mod tests {
                 },
                 SequenceEvent::BlockEnd,
             ],
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
         let layout = layout(&model, &test_metrics(), "sans-serif");
 
@@ -1070,6 +1119,7 @@ mod tests {
     #[test]
     fn layout_positions_participant_boxes_behind_headers() {
         let model = Sequence {
+            title: None,
             participants: vec![
                 Participant {
                     id: "Alice".into(),
@@ -1095,7 +1145,7 @@ mod tests {
                 text: "Hello".into(),
                 number: None,
             }],
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
 
         let layout = layout(&model, &test_metrics(), "sans-serif");
@@ -1112,6 +1162,7 @@ mod tests {
     #[test]
     fn layout_normalizes_negative_block_bounds_into_viewbox() {
         let model = Sequence {
+            title: None,
             participants: vec![
                 Participant {
                     id: "Alice".into(),
@@ -1165,7 +1216,7 @@ mod tests {
                 SequenceEvent::BlockEnd,
                 SequenceEvent::BlockEnd,
             ],
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         };
 
         let layout = layout(&model, &test_metrics(), "sans-serif");

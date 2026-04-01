@@ -203,6 +203,27 @@ fn sequence_autonumber_prefixes() {
 }
 
 #[test]
+fn sequence_autonumber_controls_apply_start_step_and_resume() {
+    let output = render_sequence_text("autonumber_controls.mmd");
+    assert!(output.contains("10. Login request"));
+    assert!(output.contains("12. Challenge"));
+    assert!(output.contains("Background ping"));
+    assert!(output.contains("14. Session ready"));
+    assert!(!output.contains("13. Background ping"));
+}
+
+#[test]
+fn sequence_title_renders_above_participants() {
+    let output = render_sequence_text("title.mmd");
+    let mut lines = output.lines();
+    assert_eq!(lines.next().map(str::trim), Some("Authentication Flow"));
+    assert!(
+        output.contains("Alice") && output.contains("Bob"),
+        "participant headers should remain present"
+    );
+}
+
+#[test]
 fn sequence_rendering_deterministic() {
     for fixture in list_sequence_fixtures() {
         let out1 = render_sequence_text(&fixture);
@@ -275,4 +296,13 @@ fn sequence_svg_participant_boxes_render_group_backgrounds() {
     assert!(svg.contains(">Backend</text>"));
     assert!(svg.contains("fill=\"lightblue\""));
     assert!(color_only_svg.contains("fill=\"aqua\""));
+}
+
+#[test]
+fn sequence_svg_title_renders() {
+    let svg = render_sequence_svg("title.mmd");
+
+    assert!(svg.contains("<g class=\"title\">"));
+    assert!(svg.contains(">Authentication Flow</text>"));
+    assert!(svg.contains(">Login request</text>"));
 }

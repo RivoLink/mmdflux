@@ -9,7 +9,7 @@ use crate::render::text::chars::CharSet;
 use crate::render::text::connections::Connections;
 use crate::timeline::sequence::layout::{
     ActivationRect, BlockLayout, ParticipantBoxLayout, ParticipantLayout, RowLayout,
-    SELF_MSG_WIDTH, SequenceLayout,
+    SELF_MSG_WIDTH, SequenceLayout, TitleLayout,
 };
 use crate::timeline::sequence::model::{
     ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement,
@@ -22,6 +22,10 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
     }
 
     let mut canvas = Canvas::new(layout.width, layout.height);
+
+    if let Some(title) = &layout.title {
+        draw_title(&mut canvas, title);
+    }
 
     for participant_box in &layout.participant_boxes {
         draw_participant_group_box(&mut canvas, participant_box, charset);
@@ -120,6 +124,11 @@ pub fn render(layout: &SequenceLayout, charset: &CharSet) -> String {
     }
 
     canvas.to_string()
+}
+
+fn draw_title(canvas: &mut Canvas, title: &TitleLayout) {
+    let x = canvas.width().saturating_sub(title.text.len()) / 2;
+    canvas.write_str(x, title.y, &title.text);
 }
 
 fn draw_participant_header(canvas: &mut Canvas, p: &ParticipantLayout, cs: &CharSet) {

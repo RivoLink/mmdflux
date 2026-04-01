@@ -17,6 +17,12 @@ pub(crate) const LABEL_PADDING: usize = 4;
 /// Height of the participant header box (top border + label + bottom border).
 pub(crate) const HEADER_HEIGHT: usize = 3;
 
+/// Height reserved for an optional diagram title row.
+const TITLE_HEIGHT: usize = 1;
+
+/// Gap between the optional title row and participant content.
+const TITLE_GAP: usize = 1;
+
 /// Y offset applied to participant headers when participant boxes are present.
 pub(crate) const PARTICIPANT_BOX_HEADER_OFFSET: usize = 2;
 
@@ -34,6 +40,15 @@ pub(crate) const SELF_MSG_HEIGHT: usize = 3;
 
 /// Width of the self-message loop arm.
 pub const SELF_MSG_WIDTH: usize = 4;
+
+/// Layout data for an optional diagram title.
+#[derive(Debug, Clone)]
+pub struct TitleLayout {
+    /// Title text displayed above participants.
+    pub text: String,
+    /// Y row for the centered title text.
+    pub y: usize,
+}
 
 /// Layout data for one participant.
 #[derive(Debug, Clone)]
@@ -134,6 +149,8 @@ pub struct BlockLayout {
 /// Complete sequence diagram layout.
 #[derive(Debug, Clone)]
 pub struct SequenceLayout {
+    /// Optional centered diagram title.
+    pub title: Option<TitleLayout>,
     /// Participant positions.
     pub participants: Vec<ParticipantLayout>,
     /// Participant grouping regions.
@@ -154,6 +171,7 @@ pub struct SequenceLayout {
 pub fn layout(model: &Sequence) -> SequenceLayout {
     if model.participants.is_empty() {
         return SequenceLayout {
+            title: None,
             participants: Vec::new(),
             participant_boxes: Vec::new(),
             rows: Vec::new(),
@@ -164,13 +182,23 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
         };
     }
 
+    let title = model.title.as_ref().map(|text| TitleLayout {
+        text: text.clone(),
+        y: 0,
+    });
+    let title_offset = title
+        .as_ref()
+        .map(|_| TITLE_HEIGHT + TITLE_GAP)
+        .unwrap_or(0);
     let participant_gap = compute_participant_gap(model);
     let left_margin = compute_left_note_margin(model);
-    let participant_header_y = if model.participant_boxes.is_empty() {
-        0
-    } else {
-        PARTICIPANT_BOX_HEADER_OFFSET
-    };
+    let participant_box_y = title_offset;
+    let participant_header_y = participant_box_y
+        + if model.participant_boxes.is_empty() {
+            0
+        } else {
+            PARTICIPANT_BOX_HEADER_OFFSET
+        };
     let participants = layout_participants(
         &model.participants,
         participant_gap,
@@ -330,6 +358,7 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     let participant_boxes = layout_participant_boxes(
         &model.participant_boxes,
         &participants,
+        participant_box_y,
         diagram_bottom.saturating_sub(1),
     );
 
@@ -353,14 +382,17 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
 
     let max_block_right = blocks.iter().map(|block| block.right_x).max().unwrap_or(0);
 
+    let title_width = title.as_ref().map(|title| title.text.len()).unwrap_or(0);
     let width = max_participant_right
         .max(max_participant_box_right)
         .max(max_row_right)
         .max(max_block_right)
+        .max(title_width)
         + 2;
     let height = diagram_bottom.max(cursor_y);
 
     SequenceLayout {
+        title,
         participants,
         participant_boxes,
         rows,
@@ -615,6 +647,7 @@ fn layout_participants(
 fn layout_participant_boxes(
     participant_boxes: &[ParticipantBox],
     participants: &[ParticipantLayout],
+    top_y: usize,
     bottom_y: usize,
 ) -> Vec<ParticipantBoxLayout> {
     participant_boxes
@@ -641,7 +674,7 @@ fn layout_participant_boxes(
             }
 
             Some(ParticipantBoxLayout {
-                top_y: 0,
+                top_y,
                 bottom_y,
                 left_x,
                 right_x,
@@ -655,18 +688,39 @@ fn layout_participant_boxes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::timeline::sequence::model::AutonumberState;
 
     #[test]
     fn layout_empty_model() {
         let layout = layout(&Sequence {
+            title: None,
             participants: Vec::new(),
             participant_boxes: Vec::new(),
             events: Vec::new(),
-            autonumber: false,
+            autonumber: AutonumberState::default(),
         });
         assert!(layout.participants.is_empty());
         assert!(layout.rows.is_empty());
         assert_eq!(layout.width, 0);
         assert_eq!(layout.height, 0);
+    }
+
+    #[test]
+    fn layout_reserves_space_for_title() {
+        let layout = layout(&Sequence {
+            title: Some("Authentication Flow".into()),
+            participants: vec![Participant {
+                id: "A".into(),
+                label: "A".into(),
+                kind: ParticipantKind::Participant,
+            }],
+            participant_boxes: Vec::new(),
+            events: Vec::new(),
+            autonumber: AutonumberState::default(),
+        });
+
+        let title = layout.title.expect("title should be present");
+        assert_eq!(title.y, 0);
+        assert!(layout.participants[0].box_y >= TITLE_HEIGHT + TITLE_GAP);
     }
 }

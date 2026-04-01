@@ -34,6 +34,27 @@ pub struct ParticipantBox {
     pub participants: Vec<usize>,
 }
 
+/// Autonumber state tracked across sequence compilation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutonumberState {
+    /// Whether autonumbering is currently enabled.
+    pub enabled: bool,
+    /// Next message number to assign when enabled.
+    pub next: usize,
+    /// Step between successive message numbers.
+    pub step: usize,
+}
+
+impl Default for AutonumberState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            next: 1,
+            step: 1,
+        }
+    }
+}
+
 /// Line style for a message arrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineStyle {
@@ -165,12 +186,14 @@ pub enum SequenceEvent {
 /// by index. This is the input to the timeline layout engine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sequence {
+    /// Optional diagram title.
+    pub title: Option<String>,
     /// Participants in declaration order.
     pub participants: Vec<Participant>,
     /// Visual groupings around participant columns.
     pub participant_boxes: Vec<ParticipantBox>,
     /// Events in source order.
     pub events: Vec<SequenceEvent>,
-    /// Whether autonumber is enabled.
-    pub autonumber: bool,
+    /// Final autonumber state after compiling all statements.
+    pub autonumber: AutonumberState,
 }

@@ -7,8 +7,8 @@
 pub mod ast;
 
 use ast::{
-    ActivationModifier, ArrowHead, BlockDividerKind, BlockKind, LineStyle, NotePlacement,
-    ParticipantKind, SequenceStatement,
+    ActivationModifier, ArrowHead, AutonumberMode, BlockDividerKind, BlockKind, LineStyle,
+    NotePlacement, ParticipantKind, SequenceStatement,
 };
 
 use crate::errors::ParseDiagnostic;
@@ -77,8 +77,13 @@ pub fn parse_sequence(
         }
 
         // Try each construct in order
-        if trimmed.to_lowercase() == "autonumber" {
-            statements.push(SequenceStatement::Autonumber);
+        if let Some(stmt) = try_parse_autonumber(trimmed) {
+            statements.push(stmt);
+            continue;
+        }
+
+        if let Some(stmt) = try_parse_title(trimmed) {
+            statements.push(stmt);
             continue;
         }
 
@@ -351,6 +356,47 @@ fn try_parse_block_end(line: &str) -> Option<SequenceStatement> {
         Some(SequenceStatement::BlockEnd)
     } else {
         None
+    }
+}
+
+fn try_parse_autonumber(line: &str) -> Option<SequenceStatement> {
+    let rest = parse_keyword_line(line, "autonumber")?;
+
+    if rest.is_empty() {
+        return Some(SequenceStatement::Autonumber(AutonumberMode::On {
+            start: None,
+            step: None,
+        }));
+    }
+
+    if rest.eq_ignore_ascii_case("off") {
+        return Some(SequenceStatement::Autonumber(AutonumberMode::Off));
+    }
+
+    let mut parts = rest.split_whitespace();
+    let start = parts.next()?.parse::<usize>().ok()?;
+    let step = parts.next().map(str::parse::<usize>).transpose().ok()?;
+
+    if parts.next().is_some() {
+        return None;
+    }
+
+    Some(SequenceStatement::Autonumber(AutonumberMode::On {
+        start: Some(start),
+        step,
+    }))
+}
+
+fn try_parse_title(line: &str) -> Option<SequenceStatement> {
+    let title = parse_keyword_line(line, "title").or_else(|| {
+        line.to_ascii_lowercase()
+            .strip_prefix("title:")
+            .map(|_| line["title:".len()..].trim().to_string())
+    })?;
+    if title.is_empty() {
+        None
+    } else {
+        Some(SequenceStatement::Title(title))
     }
 }
 
@@ -926,7 +972,46 @@ mod tests {
     fn parse_autonumber() {
         let stmts = parse_stmts("sequenceDiagram\nautonumber");
         assert_eq!(stmts.len(), 1);
-        assert_eq!(stmts[0], SequenceStatement::Autonumber);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Autonumber(AutonumberMode::On {
+                start: None,
+                step: None,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_autonumber_variants() {
+        let stmts = parse_stmts("sequenceDiagram\nautonumber 5 2\nautonumber off");
+        assert_eq!(
+            stmts,
+            vec![
+                SequenceStatement::Autonumber(AutonumberMode::On {
+                    start: Some(5),
+                    step: Some(2),
+                }),
+                SequenceStatement::Autonumber(AutonumberMode::Off),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_title() {
+        let stmts = parse_stmts("sequenceDiagram\ntitle Authentication Flow");
+        assert_eq!(
+            stmts,
+            vec![SequenceStatement::Title("Authentication Flow".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_legacy_title() {
+        let stmts = parse_stmts("sequenceDiagram\ntitle: Authentication Flow");
+        assert_eq!(
+            stmts,
+            vec![SequenceStatement::Title("Authentication Flow".to_string())]
+        );
     }
 
     #[test]
@@ -990,7 +1075,13 @@ sequenceDiagram
     Note over A: done";
         let stmts = parse_stmts(input);
         assert_eq!(stmts.len(), 7);
-        assert_eq!(stmts[0], SequenceStatement::Autonumber);
+        assert_eq!(
+            stmts[0],
+            SequenceStatement::Autonumber(AutonumberMode::On {
+                start: None,
+                step: None,
+            })
+        );
         assert!(matches!(&stmts[1], SequenceStatement::Participant { id, .. } if id == "A"));
         assert!(matches!(&stmts[2], SequenceStatement::Participant { id, .. } if id == "B"));
         assert!(

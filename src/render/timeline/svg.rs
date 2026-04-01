@@ -5,7 +5,7 @@
 
 use super::svg_layout::{
     SvgActivation, SvgBlock, SvgBlockDivider, SvgLifeline, SvgMessage, SvgNote, SvgParticipant,
-    SvgParticipantBox, SvgRow, SvgSelfMessage, SvgSequenceLayout,
+    SvgParticipantBox, SvgRow, SvgSelfMessage, SvgSequenceLayout, SvgTitle,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 use crate::timeline::sequence::model::{ArrowHead, LineStyle, ParticipantKind};
@@ -41,6 +41,12 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
     );
 
     render_defs(&mut writer);
+
+    if let Some(title) = &layout.title {
+        writer.start_group("title");
+        render_title(&mut writer, layout, title);
+        writer.end_group();
+    }
 
     if !layout.participant_boxes.is_empty() {
         writer.start_group("participant-boxes");
@@ -94,6 +100,15 @@ pub fn render(layout: &SvgSequenceLayout) -> String {
 
     writer.end_svg();
     writer.finish()
+}
+
+fn render_title(writer: &mut SvgWriter, layout: &SvgSequenceLayout, title: &SvgTitle) {
+    writer.push_line(&format!(
+        "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{TEXT_COLOR}\">{title}</text>",
+        x = fmt_f64(layout.width / 2.0),
+        y = fmt_f64(title.y),
+        title = escape_text(&title.text),
+    ));
 }
 
 fn render_participant_group_box(writer: &mut SvgWriter, participant_box: &SvgParticipantBox) {

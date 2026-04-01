@@ -100,6 +100,17 @@ fn layout_box_width_matches_label() {
 }
 
 #[test]
+fn layout_title_offsets_headers() {
+    let layout =
+        layout_input("sequenceDiagram\ntitle Authentication Flow\nparticipant A\nA->>A: hi");
+    assert_eq!(
+        layout.title.as_ref().map(|title| title.text.as_str()),
+        Some("Authentication Flow")
+    );
+    assert!(layout.participants[0].box_y > 0);
+}
+
+#[test]
 fn layout_tracks_interaction_blocks() {
     let layout = layout_input(
         "\
