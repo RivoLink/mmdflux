@@ -132,26 +132,28 @@ pub fn run(lg: &mut LayoutGraph) {
 
     // Note: dagre.js does not add sibling-compound separation edges here.
 
-    // Add exit constraints: for edges where the source is inside a compound
-    // but the target is outside, constrain the target to be ranked after the
-    // compound's bottom border.  Without this, the ranker may place external
-    // successors at a rank inside the compound span (same rank as an internal
-    // node), causing them to render inside the subgraph box.
+    // Add exit constraints for forward (non-reversed) cross-boundary edges.
+    // For edges where the source is inside a compound but the target is
+    // outside, constrain the target to be ranked after the compound's
+    // bottom border.
+    //
+    // Reversed back-edges are skipped: the original code applied the
+    // constraint on the pre-reversal direction, which created a
+    // contradictory ranking constraint (forcing the target node below the
+    // wrong compound's border).  The reversed edge's own minlen and the
+    // nesting structure are sufficient without an explicit exit constraint.
+    // See issue #152.
     for ei in 0..orig_edge_count {
+        if lg.reversed_edges.contains(&ei) {
+            continue;
+        }
         let (from, to, _) = lg.edges[ei];
-        let from_parent = lg.parents[from];
-        let Some(compound_idx) = from_parent else {
-            continue;
-        };
-        if !lg.compound_nodes.contains(&compound_idx) {
-            continue;
-        }
-        // Check target is outside this compound.
-        let to_inside = is_descendant(lg, to, compound_idx);
-        if to_inside {
-            continue;
-        }
-        if let Some(&bot_idx) = lg.border_bottom.get(&compound_idx) {
+        if let Some(compound_idx) = lg.parents[from]
+            && lg.compound_nodes.contains(&compound_idx)
+            && !is_descendant(lg, to, compound_idx)
+            && to != compound_idx
+            && let Some(&bot_idx) = lg.border_bottom.get(&compound_idx)
+        {
             let e = lg.add_nesting_edge_with_minlen(bot_idx, to, 0.0, 1);
             lg.nesting_edges.insert(e);
         }
@@ -747,4 +749,124 @@ mod tests {
         assert!(lg.min_rank.is_empty());
         assert!(lg.max_rank.is_empty());
     }
+
+    // --- Cross-boundary constraint tests (issue #152) ---
+
+    /// Helper: build two sibling compounds with a cross-boundary edge.
+    /// sg_a{a}, sg_b{b}, edge b->a (original direction).
+    fn build_sibling_compounds_with_cross_edge() -> LayoutGraph {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("a", (10.0, 10.0));
+        g.add_node("b", (10.0, 10.0));
+        g.add_node("sg_a", (0.0, 0.0));
+        g.add_node("sg_b", (0.0, 0.0));
+        g.add_edge("b", "a"); // edge index 0: b -> a
+        g.set_parent("a", "sg_a");
+        g.set_parent("b", "sg_b");
+        LayoutGraph::from_digraph(&g, |_, dims| *dims)
+    }
+
+    #[test]
+    fn test_exit_constraint_skips_reversed_edge() {
+        // Edge b->a (index 0) is reversed. Reversed edges should be
+        // skipped entirely — no exit constraint in either direction.
+        let mut lg = build_sibling_compounds_with_cross_edge();
+        lg.reversed_edges.insert(0); // Mark b->a as reversed
+
+        run(&mut lg);
+
+        let sg_a_idx = lg.node_index[&"sg_a".into()];
+        let sg_b_idx = lg.node_index[&"sg_b".into()];
+        let a_idx = lg.node_index[&"a".into()];
+        let b_idx = lg.node_index[&"b".into()];
+        let bot_a = lg.border_bottom[&sg_a_idx];
+        let bot_b = lg.border_bottom[&sg_b_idx];
+
+        // Should NOT have border_bottom(sg_b) -> a (pre-reversal exit)
+        let has_wrong_exit = lg.edges.iter().enumerate().any(|(i, &(from, to, _))| {
+            from == bot_b && to == a_idx && lg.nesting_edges.contains(&i)
+        });
+        assert!(
+            !has_wrong_exit,
+            "Should NOT have border_bottom(sg_b) -> a for a reversed edge"
+        );
+
+        // Should NOT have border_bottom(sg_a) -> b either (reversed edges skipped)
+        let has_flipped_exit = lg.edges.iter().enumerate().any(|(i, &(from, to, _))| {
+            from == bot_a && to == b_idx && lg.nesting_edges.contains(&i)
+        });
+        assert!(
+            !has_flipped_exit,
+            "Should NOT have any exit constraint for a reversed edge"
+        );
+    }
+
+    #[test]
+    fn test_forward_exit_constraint_preserved() {
+        // Edge b->a (index 0) is NOT reversed (forward).
+        // Exit from sg_b: border_bottom(sg_b) -> a  ✓
+        let mut lg = build_sibling_compounds_with_cross_edge();
+        // No reversed edges — forward direction
+
+        run(&mut lg);
+
+        let sg_b_idx = lg.node_index[&"sg_b".into()];
+        let a_idx = lg.node_index[&"a".into()];
+        let bot_b = lg.border_bottom[&sg_b_idx];
+
+        let has_exit = lg.edges.iter().enumerate().any(|(i, &(from, to, _))| {
+            from == bot_b && to == a_idx && lg.nesting_edges.contains(&i)
+        });
+        assert!(
+            has_exit,
+            "Forward exit constraint border_bottom(sg_b) -> a must be preserved"
+        );
+    }
+
+    #[test]
+    fn test_reversed_edge_no_false_exit_constraint() {
+        // Three sibling compounds: sg_a{a1,a2}, sg_b{b1}, sg_c{c1,c2}
+        // Forward: a1->b1, b1->c1. Back-edge: c2->a2 (reversed).
+        // Must NOT have border_bottom(sg_c) -> a2.
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("a1", (10.0, 10.0));
+        g.add_node("a2", (10.0, 10.0));
+        g.add_node("b1", (10.0, 10.0));
+        g.add_node("c1", (10.0, 10.0));
+        g.add_node("c2", (10.0, 10.0));
+        g.add_node("sg_a", (0.0, 0.0));
+        g.add_node("sg_b", (0.0, 0.0));
+        g.add_node("sg_c", (0.0, 0.0));
+        g.add_edge("a1", "b1"); // 0
+        g.add_edge("b1", "c1"); // 1
+        g.add_edge("c2", "a2"); // 2 — will be reversed
+        g.set_parent("a1", "sg_a");
+        g.set_parent("a2", "sg_a");
+        g.set_parent("b1", "sg_b");
+        g.set_parent("c1", "sg_c");
+        g.set_parent("c2", "sg_c");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        lg.reversed_edges.insert(2); // Mark c2->a2 as reversed
+
+        run(&mut lg);
+
+        let sg_c_idx = lg.node_index[&"sg_c".into()];
+        let a2_idx = lg.node_index[&"a2".into()];
+        let bot_c = lg.border_bottom[&sg_c_idx];
+
+        let has_wrong = lg.edges.iter().enumerate().any(|(i, &(from, to, _))| {
+            from == bot_c && to == a2_idx && lg.nesting_edges.contains(&i)
+        });
+        assert!(
+            !has_wrong,
+            "Must NOT have border_bottom(sg_c) -> a2 for reversed back-edge"
+        );
+    }
+
+    // Note: a full-pipeline feasibility test (acyclic + make_space +
+    // nesting + rank) for three sibling compounds with a backward edge
+    // exposes a pre-existing network simplex bug where nesting minlen
+    // constraints are violated.  This is a separate issue from #152 and
+    // needs its own investigation.
 }

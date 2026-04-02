@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 493.26 1064.26" style="max-width: 493.26px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
+    </marker>
+    <marker id="circlehead" viewBox="0 0 12.00 12.00" refX="11.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <circle cx="6" cy="6" r="5" stroke="#333" stroke-width="1" fill="white" />
+    </marker>
+    <marker id="open-arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,0 10.00,5.00 0,10.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
+    <marker id="diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="#333" />
+    </marker>
+    <marker id="open-diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
+  </defs>
+  <g transform="translate(-20.00,-19.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="28.00" y="27.00" width="410.47" height="100.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="233.24" y="31.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Input Layer</text>
+      <rect class="subgraph" x="137.60" y="799.86" width="151.27" height="275.40" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="213.24" y="803.86" text-anchor="middle" dominant-baseline="hanging" fill="#333">Output Layer</text>
+      <rect class="subgraph" x="53.63" y="280.00" width="451.63" height="366.86" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="279.44" y="284.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Processing</text>
+    </g>
+    <g class="nodes">
+      <rect x="43.00" y="58.00" width="154.25" height="54.00" rx="27.00" ry="27.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="120.13" y="85.00" text-anchor="middle" dominant-baseline="middle" fill="#333">API Gateway</text>
+      <polygon points="247.25,58.00 423.47,58.00 388.23,112.00 282.50,112.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="335.36" y="85.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Load Balancer</text>
+      <polygon points="120.13,311.00 171.63,362.50 120.13,414.00 68.63,362.50" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="120.13" y="362.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Route?</text>
+      <polygon points="191.19,488.00 275.28,488.00 303.31,542.00 163.16,542.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="233.24" y="515.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Transform</text>
+      <path d="M233.02,577.86 A48.04,10.86 0 0,0 329.09,577.86 A48.04,10.86 0 0,0 233.02,577.86 L233.02,621.00 A48.04,10.86 0 0,0 329.09,621.00 L329.09,577.86" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <path d="M233.02,577.86 A48.04,10.86 0 0,1 329.09,577.86" fill="none" stroke="#333" stroke-width="1.00" />
+      <text x="281.06" y="604.86" text-anchor="middle" dominant-baseline="middle" fill="#333">Database</text>
+      <polygon points="380.70,488.00 490.26,488.00 490.26,542.00 380.70,542.00 353.31,515.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="421.79" y="515.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Cache Hit</text>
+      <ellipse cx="202.02" cy="1022.06" rx="38.20" ry="38.20" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="202.02" y="1022.06" text-anchor="middle" dominant-baseline="middle" fill="#333">Status</text>
+      <rect x="152.60" y="830.86" width="121.27" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <line x1="160.60" y1="830.86" x2="160.60" y2="884.86" stroke="#333" stroke-width="1.00" />
+      <line x1="265.87" y1="830.86" x2="265.87" y2="884.86" stroke="#333" stroke-width="1.00" />
+      <text x="213.24" y="857.86" text-anchor="middle" dominant-baseline="middle" fill="#333">Formatter</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M120.13,112.00 L120.13,120.00 L120.13,127.00 C120.13,134.00 120.13,148.00 120.13,171.50 C120.13,195.00 120.13,228.00 120.13,250.83 C120.13,273.67 120.13,286.33 120.13,292.67 L120.13,299.00 L120.13,307.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M335.36,112.00 L335.36,120.00 L335.36,127.00 C335.36,134.00 335.36,148.00 335.36,161.17 C335.36,174.33 335.36,186.67 335.36,203.17 C335.36,219.67 335.36,240.33 307.13,263.98 C278.90,287.63 222.44,314.25 194.21,327.56 L165.98,340.88 L158.74,344.29" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M124.02,410.10 L124.67,418.08 L124.96,421.56 C125.24,425.05 125.81,432.02 126.10,445.68 C126.38,459.33 126.38,479.67 142.46,499.93 C158.54,520.20 190.70,540.41 206.78,550.51 L222.86,560.61 L229.63,564.87" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M150.93,383.19 L157.58,387.65 L173.29,398.21 C189.01,408.77 220.45,429.88 251.20,445.92 C281.94,461.96 311.99,472.92 327.01,478.40 L342.04,483.89 L349.55,486.63" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M149.02,385.11 L155.32,390.04 L168.31,400.20 C181.29,410.36 207.27,430.68 220.25,445.00 C233.24,459.33 233.24,467.67 233.24,471.83 L233.24,476.00 L233.24,484.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+      <path d="M248.53,542.00 L248.53,543.39 C248.53,544.78 248.53,547.55 250.89,550.33 C253.25,553.11 257.97,555.89 260.33,558.00 C262.69,560.11 262.69,561.55 262.69,562.28 L262.69,563.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M233.02,631.86 L225.83,635.37 L214.40,640.95 C202.96,646.54 180.10,657.70 159.73,673.61 C139.37,689.53 121.50,710.20 130.83,728.86 C140.17,747.53 176.70,764.20 194.97,778.86 C213.24,793.53 213.24,806.20 213.24,812.53 L213.24,818.86 L213.24,826.86" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M353.31,542.00 L345.80,544.74 L330.15,550.45 C314.49,556.16 283.19,567.58 267.54,586.27 C251.89,604.95 251.89,630.91 252.80,656.22 C253.70,681.53 255.51,706.20 257.04,726.86 C258.56,747.53 259.81,764.20 256.31,779.16 C252.82,794.13 244.58,807.40 240.46,814.03 L236.34,820.67 L232.11,827.46" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M213.24,884.86 L213.24,892.86 L213.24,897.70 C213.24,902.53 213.24,912.20 212.30,925.38 C211.37,938.55 209.50,955.25 208.57,963.59 L207.63,971.94 L206.74,979.89" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M240.22,1022.06 L248.22,1022.06 L253.83,1022.06 C259.44,1022.06 270.66,1022.06 276.26,912.14 C281.87,802.21 281.87,582.35 265.50,472.43 C249.12,362.50 216.38,362.50 200.00,362.50 L183.63,362.50 L175.63,362.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+      <text x="120.13" y="184.50" text-anchor="middle" dominant-baseline="middle" fill="#333">request</text>
+      <text x="335.36" y="213.50" text-anchor="middle" dominant-baseline="middle" fill="#333">health</text>
+      <text x="139.91" y="508.50" text-anchor="middle" dominant-baseline="middle" fill="#333">read</text>
+      <text x="244.56" y="446.08" text-anchor="middle" dominant-baseline="middle" fill="#333">fast path</text>
+      <text x="204.12" y="428.22" text-anchor="middle" dominant-baseline="middle" fill="#333">write</text>
+      <text x="157.23" y="668.86" text-anchor="middle" dominant-baseline="middle" fill="#333">result</text>
+      <text x="251.89" y="579.00" text-anchor="middle" dominant-baseline="middle" fill="#333">hit</text>
+      <text x="213.24" y="921.86" text-anchor="middle" dominant-baseline="middle" fill="#333">response</text>
+      <text x="281.87" y="657.98" text-anchor="middle" dominant-baseline="middle" fill="#333">retry</text>
+    </g>
+  </g>
+</svg>
