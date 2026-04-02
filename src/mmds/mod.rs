@@ -9,6 +9,7 @@ pub(crate) mod hydrate;
 mod mermaid;
 pub(crate) mod output;
 pub(crate) mod parse;
+pub(crate) mod sequence;
 
 use std::error::Error;
 use std::fmt;

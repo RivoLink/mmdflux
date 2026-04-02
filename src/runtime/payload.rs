@@ -35,6 +35,10 @@ pub(in crate::runtime) fn render_payload(
                 let font_family = "\"trebuchet ms\", verdana, arial, sans-serif";
                 Ok(timeline::render_svg(&model, &metrics, font_family))
             }
+            OutputFormat::Mmds => {
+                let metrics = measure::default_proportional_text_metrics();
+                Ok(super::timeline_family::to_json(&model, &metrics))
+            }
             _ => {
                 let seq_layout = layout::layout(&model);
                 let charset = match format {

@@ -19,7 +19,12 @@ import {
 } from "@tldraw/editor";
 import { generateKeyBetween } from "fractional-indexing";
 
-export const SUPPORTED_DIAGRAM_TYPES = new Set(["flowchart", "class", "state"]);
+export const SUPPORTED_DIAGRAM_TYPES = new Set([
+  "flowchart",
+  "class",
+  "state",
+  "sequence",
+]);
 
 export interface ConvertOptions {
   scale?: number;
@@ -65,14 +70,52 @@ const FRAME_PAD_X = 24;
 const FRAME_PAD_TOP = 28;
 const FRAME_PAD_BOTTOM = 16;
 
-function toShapeId(prefix: string, id: string): string {
+function toShapeId(prefix: string, id: string) {
   const sanitized = id.replace(/[^A-Za-z0-9_-]/g, "_");
   return createShapeId(`${prefix}_${sanitized}`);
 }
 
-function toBindingId(prefix: string, id: string): string {
+function toBindingId(prefix: string, id: string) {
   const sanitized = id.replace(/[^A-Za-z0-9_-]/g, "_");
   return createBindingId(`${prefix}_${sanitized}`);
+}
+
+/**
+ * Build a tldraw line shape record. TLLineShape has stricter branded-type
+ * requirements than other shape types, so we centralize the cast here.
+ */
+function lineShape(opts: {
+  id: ReturnType<typeof createShapeId>;
+  parentId: string;
+  x: number;
+  y: number;
+  opacity?: number;
+  dash: "solid" | "dashed" | "draw" | "dotted";
+  color: string;
+  size: "s" | "m" | "l" | "xl";
+  points: Record<string, { id: string; index: IndexKey; x: number; y: number }>;
+}): TLRecord {
+  return {
+    id: opts.id,
+    typeName: "shape",
+    type: "line",
+    parentId: opts.parentId,
+    index: "" as IndexKey,
+    x: opts.x,
+    y: opts.y,
+    rotation: 0,
+    isLocked: false,
+    opacity: opts.opacity ?? 1,
+    props: {
+      dash: opts.dash,
+      color: opts.color,
+      size: opts.size,
+      spline: "line",
+      scale: 1,
+      points: opts.points,
+    },
+    meta: {},
+  } as TLRecord;
 }
 
 function clamp01(value: number): number {
@@ -917,6 +960,10 @@ export function convertToTldraw(
     );
   }
 
+  if (diagramType === "sequence") {
+    return convertSequenceToTldraw(mmds, scale);
+  }
+
   const adaptiveRatio = computeAdaptiveGrowthRatio(normalized.nodes, scale);
   const nodeSpacing = options.nodeSpacing ?? adaptiveRatio;
   const positionScale = autoPositionScale(
@@ -1321,6 +1368,617 @@ export function convertToTldraw(
     snapshot,
     records,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sequence diagram converter
+// ---------------------------------------------------------------------------
+
+const ACTIVATION_WIDTH = 10;
+const ACTIVATION_DEPTH_OFFSET = 3;
+const SELF_MSG_ARM = 30;
+const SELF_MSG_HEIGHT = 30;
+const BLOCK_TAB_HEIGHT = 22;
+const BLOCK_TAB_PAD_X = 12;
+const BLOCK_TAB_CHAR_W = 8;
+
+function convertSequenceToTldraw(
+  mmds: MmdsDocument,
+  scale: number,
+): TldrawConvertResult {
+  const participants = mmds.participants ?? [];
+  const messages = mmds.messages ?? [];
+  const notes = mmds.notes ?? [];
+  const activations = mmds.activations ?? [];
+  const blocks = mmds.blocks ?? [];
+  const participantBoxes = mmds.participant_boxes ?? [];
+  const bounds = mmds.metadata?.bounds ?? { width: 400, height: 300 };
+
+  // Compute adaptive position scale so tldraw label sizes fit.
+  let maxGrowth = 1;
+  for (const p of participants) {
+    const minW = tldrawEnforcedMinWidth(p.label);
+    const mmdsW = p.size.width * scale;
+    if (mmdsW > 0) maxGrowth = Math.max(maxGrowth, minW / mmdsW);
+  }
+  for (const n of notes) {
+    const minW = tldrawEnforcedMinWidth(n.text);
+    const mmdsW = n.size.width * scale;
+    if (mmdsW > 0) maxGrowth = Math.max(maxGrowth, minW / mmdsW);
+  }
+  const ps = scale * maxGrowth; // position scale
+
+  // Pre-compute scaled participant rects for create-participant detection.
+  const pRects = participants.map((p) => ({
+    x: p.position.x * ps,
+    y: p.position.y * ps,
+    w: Math.max(p.size.width * ps, tldrawEnforcedMinWidth(p.label)),
+    h: Math.max(p.size.height * ps, tldrawEnforcedMinHeight(p.label)),
+    cx: p.lifeline_x * ps,
+  }));
+
+  const store = createTLStore({ defaultName: "sequence" });
+  const pageId = "page:page";
+  const pageIndex = "a1" as IndexKey;
+
+  const pageRecord: TLRecord = {
+    id: pageId,
+    typeName: "page",
+    name: "Page 1",
+    index: pageIndex,
+    meta: {},
+  } as TLRecord;
+
+  const shapeRecords: TLRecord[] = [];
+  const bindingRecords: TLRecord[] = [];
+
+  // Z-order: participant_boxes → blocks → lifelines → activations → participants → notes → messages
+  // We'll add shapes in this order; assignShapeIndices handles final ordering.
+
+  // --- Participant boxes (background grouping) ---
+  for (let i = 0; i < participantBoxes.length; i++) {
+    const box = participantBoxes[i];
+    shapeRecords.push({
+      id: toShapeId("pbox", String(i)),
+      typeName: "shape",
+      type: "geo",
+      parentId: pageId,
+      index: "",
+      x: box.rect.x * ps,
+      y: box.rect.y * ps,
+      rotation: 0,
+      isLocked: false,
+      opacity: 0.15,
+      props: {
+        geo: "rectangle",
+        dash: "solid",
+        url: "",
+        w: box.rect.width * ps,
+        h: box.rect.height * ps,
+        growY: 0,
+        scale: 1,
+        labelColor: "black",
+        color: box.color ? "grey" : "light-blue",
+        fill: "solid",
+        size: "s",
+        font: "draw",
+        align: "start",
+        verticalAlign: "start",
+        richText: box.label ? toRichText(box.label) : toRichText(""),
+      },
+      meta: {},
+    } as TLRecord);
+  }
+
+  // --- Blocks (UML interaction frames: dashed rect + pentagon tab) ---
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const bx = block.rect.x * ps;
+    const by = block.rect.y * ps;
+    const bw = block.rect.width * ps;
+    const bh = block.rect.height * ps;
+
+    // Dashed rectangle for the frame body.
+    shapeRecords.push({
+      id: toShapeId("block", String(i)),
+      typeName: "shape",
+      type: "geo",
+      parentId: pageId,
+      index: "",
+      x: bx,
+      y: by,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: {
+        geo: "rectangle",
+        dash: "dashed",
+        url: "",
+        w: bw,
+        h: bh,
+        growY: 0,
+        scale: 1,
+        labelColor: "black",
+        color: "grey",
+        fill: "none",
+        size: "s",
+        font: "draw",
+        align: "middle",
+        verticalAlign: "middle",
+        richText: toRichText(""),
+      },
+      meta: {},
+    } as TLRecord);
+
+    // UML operator tab: rectangle with bottom-right corner chopped off.
+    // Drawn as a closed line shape (5 points) with a text label inside.
+    const tabText = block.kind;
+    const tabW =
+      Math.max(maxLineLength(tabText) * BLOCK_TAB_CHAR_W, 40) +
+      BLOCK_TAB_PAD_X * 2;
+    const tabH = BLOCK_TAB_HEIGHT;
+    const notch = 8; // size of the bottom-right corner cut
+
+    shapeRecords.push(
+      lineShape({
+        id: toShapeId("blocktab", String(i)),
+        parentId: pageId,
+        x: bx,
+        y: by,
+        dash: "solid",
+        color: "grey",
+        size: "s",
+        points: {
+          a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
+          a2: { id: "a2", index: "a2" as IndexKey, x: tabW, y: 0 },
+          a3: {
+            id: "a3",
+            index: "a3" as IndexKey,
+            x: tabW,
+            y: tabH - notch,
+          },
+          a4: {
+            id: "a4",
+            index: "a4" as IndexKey,
+            x: tabW - notch,
+            y: tabH,
+          },
+          a5: { id: "a5", index: "a5" as IndexKey, x: 0, y: tabH },
+          a6: { id: "a6", index: "a6" as IndexKey, x: 0, y: 0 },
+        },
+      }),
+    );
+
+    // Operator label inside the tab
+    shapeRecords.push({
+      id: toShapeId("blocklbl", String(i)),
+      typeName: "shape",
+      type: "text",
+      parentId: pageId,
+      index: "",
+      x: bx + BLOCK_TAB_PAD_X,
+      y: by + 2,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: {
+        color: "black",
+        size: "s",
+        font: "sans",
+        textAlign: "start",
+        w: tabW,
+        richText: toRichText(tabText),
+        scale: 1,
+        autoSize: true,
+      },
+      meta: {},
+    } as TLRecord);
+
+    // Block title (guard text) centered in the remaining space after the tab
+    if (block.label) {
+      const titleX = bx + tabW;
+      const titleW = bw - tabW;
+      shapeRecords.push({
+        id: toShapeId("blocktitle", String(i)),
+        typeName: "shape",
+        type: "text",
+        parentId: pageId,
+        index: "",
+        x: titleX,
+        y: by + 2,
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        props: {
+          color: "black",
+          size: "s",
+          font: "sans",
+          textAlign: "middle",
+          w: titleW,
+          richText: toRichText(`[${block.label}]`),
+          scale: 1,
+          autoSize: false,
+        },
+        meta: {},
+      } as TLRecord);
+    }
+
+    // Block dividers as dashed lines with label tabs
+    for (let d = 0; d < (block.dividers?.length ?? 0); d++) {
+      const div = block.dividers?.[d];
+      if (!div) continue;
+      const divY = div.y * ps;
+
+      shapeRecords.push(
+        lineShape({
+          id: toShapeId("div", `${i}_${d}`),
+          parentId: pageId,
+          x: bx,
+          y: divY,
+          dash: "dashed",
+          color: "grey",
+          size: "s",
+          points: {
+            a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
+            a2: { id: "a2", index: "a2" as IndexKey, x: bw, y: 0 },
+          },
+        }),
+      );
+
+      if (div.label) {
+        const divLabel = `[${div.label}]`;
+        shapeRecords.push({
+          id: toShapeId("divlbl", `${i}_${d}`),
+          typeName: "shape",
+          type: "text",
+          parentId: pageId,
+          index: "",
+          x: bx,
+          y: divY + 2,
+          rotation: 0,
+          isLocked: false,
+          opacity: 1,
+          props: {
+            color: "black",
+            size: "s",
+            font: "sans",
+            textAlign: "middle",
+            w: bw,
+            richText: toRichText(divLabel),
+            scale: 1,
+            autoSize: false,
+          },
+          meta: {},
+        } as TLRecord);
+      }
+    }
+  }
+
+  // --- Lifelines (dashed vertical lines) ---
+  const diagramBottom = bounds.height * ps;
+  for (let i = 0; i < participants.length; i++) {
+    const pr = pRects[i];
+    const lifelineTop = pr.y + pr.h;
+
+    shapeRecords.push(
+      lineShape({
+        id: toShapeId("lifeline", String(i)),
+        parentId: pageId,
+        x: pr.cx,
+        y: lifelineTop,
+        dash: "dashed",
+        color: "grey",
+        size: "s",
+        points: {
+          a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
+          a2: {
+            id: "a2",
+            index: "a2" as IndexKey,
+            x: 0,
+            y: diagramBottom - lifelineTop,
+          },
+        },
+      }),
+    );
+  }
+
+  // --- Activations (thin filled bars on lifelines) ---
+  for (let i = 0; i < activations.length; i++) {
+    const act = activations[i];
+    const pr = pRects[act.participant];
+    if (!pr) continue;
+
+    const xOffset = act.depth * ACTIVATION_DEPTH_OFFSET * ps;
+    const barX = pr.cx - (ACTIVATION_WIDTH / 2) * ps + xOffset;
+
+    shapeRecords.push({
+      id: toShapeId("act", String(i)),
+      typeName: "shape",
+      type: "geo",
+      parentId: pageId,
+      index: "",
+      x: barX,
+      y: act.y_start * ps,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: {
+        geo: "rectangle",
+        dash: "solid",
+        url: "",
+        w: ACTIVATION_WIDTH * ps,
+        h: (act.y_end - act.y_start) * ps,
+        growY: 0,
+        scale: 1,
+        labelColor: "black",
+        color: "light-blue",
+        fill: "solid",
+        size: "s",
+        font: "draw",
+        align: "middle",
+        verticalAlign: "middle",
+        richText: toRichText(""),
+      },
+      meta: {},
+    } as TLRecord);
+  }
+
+  // --- Participants (header boxes, sized to fit labels) ---
+  for (let i = 0; i < participants.length; i++) {
+    const p = participants[i];
+    const pr = pRects[i];
+    const isActor = p.kind === "actor";
+
+    shapeRecords.push({
+      id: toShapeId("participant", p.id),
+      typeName: "shape",
+      type: "geo",
+      parentId: pageId,
+      index: "",
+      x: pr.cx - pr.w / 2,
+      y: pr.y,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: {
+        geo: isActor ? "ellipse" : "rectangle",
+        dash: "solid",
+        url: "",
+        w: pr.w,
+        h: pr.h,
+        growY: 0,
+        scale: 1,
+        labelColor: "black",
+        color: "black",
+        fill: "none",
+        size: "m",
+        font: "draw",
+        align: "middle",
+        verticalAlign: "middle",
+        richText: toRichText(p.label),
+      },
+      meta: {},
+    } as TLRecord);
+  }
+
+  // --- Notes (yellow-filled rectangles, sized to fit text) ---
+  for (let i = 0; i < notes.length; i++) {
+    const note = notes[i];
+    const nw = Math.max(
+      note.size.width * ps,
+      tldrawEnforcedMinWidth(note.text),
+    );
+    const nh = Math.max(
+      note.size.height * ps,
+      tldrawEnforcedMinHeight(note.text),
+    );
+
+    shapeRecords.push({
+      id: toShapeId("note", String(i)),
+      typeName: "shape",
+      type: "geo",
+      parentId: pageId,
+      index: "",
+      x: note.position.x * ps,
+      y: note.position.y * ps,
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      props: {
+        geo: "rectangle",
+        dash: "solid",
+        url: "",
+        w: nw,
+        h: nh,
+        growY: 0,
+        scale: 1,
+        labelColor: "black",
+        color: "yellow",
+        fill: "solid",
+        size: "s",
+        font: "draw",
+        align: "middle",
+        verticalAlign: "middle",
+        richText: toRichText(note.text),
+      },
+      meta: {},
+    } as TLRecord);
+  }
+
+  // --- Messages (arrows between lifelines or to participant boxes) ---
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (!participants[msg.from] || !participants[msg.to]) continue;
+
+    const fromRect = pRects[msg.from];
+    const toRect = pRects[msg.to];
+    const isSelf = msg.from === msg.to;
+    const y = msg.y * ps;
+
+    // Detect "create participant" — message y is within the target's header box.
+    const isCreateMsg = !isSelf && y >= toRect.y && y <= toRect.y + toRect.h;
+
+    const fromX = fromRect.cx;
+    // For create messages, end at participant box border; otherwise lifeline.
+    const toX = isCreateMsg
+      ? fromX < toRect.cx
+        ? toRect.cx - toRect.w / 2
+        : toRect.cx + toRect.w / 2
+      : toRect.cx;
+
+    const dash = msg.line_style === "dashed" ? "dashed" : "solid";
+    const arrowheadEnd = mapSequenceArrowHead(msg.arrow_head);
+
+    if (isSelf) {
+      // Self-message: line for outgoing path, arrow for return with arrowhead
+      const arm = SELF_MSG_ARM * ps;
+      const height = SELF_MSG_HEIGHT * ps;
+
+      // Outgoing path: right + down
+      shapeRecords.push(
+        lineShape({
+          id: toShapeId("msg", msg.id),
+          parentId: pageId,
+          x: fromX,
+          y: y,
+          dash,
+          color: "black",
+          size: "s",
+          points: {
+            a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
+            a2: { id: "a2", index: "a2" as IndexKey, x: arm, y: 0 },
+            a3: { id: "a3", index: "a3" as IndexKey, x: arm, y: height },
+          },
+        }),
+      );
+
+      // Return arrow with arrowhead
+      shapeRecords.push({
+        id: toShapeId("msgret", msg.id),
+        typeName: "shape",
+        type: "arrow",
+        parentId: pageId,
+        index: "",
+        x: fromX,
+        y: y + height,
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        props: {
+          kind: "arc",
+          labelColor: "black",
+          color: "black",
+          fill: "none",
+          dash,
+          size: "s",
+          arrowheadStart: "none",
+          arrowheadEnd,
+          font: "draw",
+          start: { x: arm, y: 0 },
+          end: { x: 0, y: 0 },
+          bend: 0,
+          richText: toRichText(""),
+          labelPosition: 0.5,
+          scale: 1,
+          elbowMidPoint: 0.5,
+        },
+        meta: {},
+      } as TLRecord);
+
+      // Label for self-message
+      if (msg.text) {
+        shapeRecords.push({
+          id: toShapeId("msglbl", msg.id),
+          typeName: "shape",
+          type: "text",
+          parentId: pageId,
+          index: "",
+          x: fromX + arm + 4 * ps,
+          y: y,
+          rotation: 0,
+          isLocked: false,
+          opacity: 1,
+          props: {
+            color: "black",
+            size: "s",
+            font: "draw",
+            textAlign: "start",
+            w: 200,
+            richText: toRichText(msg.text),
+            scale: 1,
+            autoSize: true,
+          },
+          meta: {},
+        } as TLRecord);
+      }
+    } else {
+      // Normal message: arrow shape
+      const edgeShapeId = toShapeId("msg", msg.id);
+      const startX = Math.min(fromX, toX);
+      const w = Math.abs(toX - fromX);
+      const goesRight = toX > fromX;
+
+      shapeRecords.push({
+        id: edgeShapeId,
+        typeName: "shape",
+        type: "arrow",
+        parentId: pageId,
+        index: "",
+        x: startX,
+        y: y,
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        props: {
+          kind: "arc",
+          labelColor: "black",
+          color: "black",
+          fill: "none",
+          dash,
+          size: "s",
+          arrowheadStart: "none",
+          arrowheadEnd,
+          font: "draw",
+          start: { x: goesRight ? 0 : w, y: 0 },
+          end: { x: goesRight ? w : 0, y: 0 },
+          bend: 0,
+          richText: msg.text ? toRichText(msg.text) : toRichText(""),
+          labelPosition: 0.5,
+          scale: 1,
+          elbowMidPoint: 0.5,
+        },
+        meta: {},
+      } as TLRecord);
+    }
+  }
+
+  assignShapeIndices(shapeRecords);
+
+  const allRecords = [pageRecord, ...shapeRecords, ...bindingRecords];
+  store.put(allRecords);
+
+  const snapshot = store.getStoreSnapshot();
+  const records = sortRecords(Object.values(snapshot.store) as TLRecord[]);
+  store.dispose();
+
+  return { schema: snapshot.schema, snapshot, records };
+}
+
+function mapSequenceArrowHead(
+  arrowHead: string,
+): "arrow" | "triangle" | "bar" | "none" {
+  switch (arrowHead) {
+    case "filled":
+      return "triangle";
+    case "open":
+      return "arrow";
+    case "cross":
+      return "bar";
+    case "async":
+      return "arrow";
+    default:
+      return "arrow";
+  }
 }
 
 export function convertToTldrawStore(

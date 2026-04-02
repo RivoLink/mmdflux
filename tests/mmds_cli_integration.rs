@@ -147,13 +147,13 @@ fn lint_json_combination() {
 // =========================================================================
 
 #[test]
-fn json_unsupported_diagram_type() {
+fn json_sequence_diagram_produces_valid_mmds() {
     mmdflux()
         .args(["-f", "json"])
         .write_stdin("sequenceDiagram\nA->>B: hello\n")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("do not support mmds"));
+        .success()
+        .stdout(predicate::str::contains("\"diagram_type\": \"sequence\""));
 }
 
 // =========================================================================

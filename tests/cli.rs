@@ -787,13 +787,13 @@ fn cli_json_class_diagram_produces_mmds() {
 }
 
 #[test]
-fn cli_json_errors_for_unsupported_type() {
+fn cli_json_outputs_sequence_mmds() {
     mmdflux()
         .args(["--format", "mmds"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("do not support mmds"));
+        .success()
+        .stdout(predicate::str::contains("\"diagram_type\": \"sequence\""));
 }
 
 #[test]

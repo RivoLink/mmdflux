@@ -127,7 +127,7 @@ id = "allow-mmds"
 type = "allow"
 [rules.config]
 source = "mmds"
-allowed = ["errors", "format", "graph", "simplification"]
+allowed = ["errors", "format", "graph", "simplification", "timeline"]
 
 [[rules]]
 id = "allow-frontends"

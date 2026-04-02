@@ -1147,6 +1147,121 @@ fn mmds_routed_output_includes_engine_metadata() {
     assert_eq!(json["metadata"]["engine"], "flux-layered");
 }
 
+// ---------------------------------------------------------------------------
+// Sequence MMDS contract tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sequence_diagram_mmds_output_is_valid_json() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hello";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(json["metadata"]["diagram_type"], "sequence");
+    assert_eq!(json["version"], 1);
+}
+
+#[test]
+fn sequence_mmds_has_participants_with_positions() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hello";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let participants = json["participants"].as_array().unwrap();
+    assert_eq!(participants.len(), 2);
+
+    let alice = &participants[0];
+    assert_eq!(alice["label"], "Alice");
+    assert_eq!(alice["kind"], "participant");
+    assert!(alice["position"]["x"].is_number());
+    assert!(alice["position"]["y"].is_number());
+    assert!(alice["size"]["width"].is_number());
+    assert!(alice["lifeline_x"].is_number());
+}
+
+#[test]
+fn sequence_mmds_has_messages_with_coordinates() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hello\n    Bob-->>Alice: world";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+
+    let msg0 = &messages[0];
+    assert_eq!(msg0["from"], 0);
+    assert_eq!(msg0["to"], 1);
+    assert_eq!(msg0["text"], "hello");
+    assert_eq!(msg0["line_style"], "solid");
+    assert_eq!(msg0["arrow_head"], "filled");
+    assert!(msg0["y"].is_number());
+
+    let msg1 = &messages[1];
+    assert_eq!(msg1["line_style"], "dashed");
+    assert_eq!(msg1["arrow_head"], "filled");
+}
+
+#[test]
+fn sequence_mmds_has_notes() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hi\n    Note right of Bob: thinking";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let notes = json["notes"].as_array().unwrap();
+    assert_eq!(notes.len(), 1);
+
+    let note = &notes[0];
+    assert_eq!(note["placement"], "right_of");
+    assert_eq!(note["text"], "thinking");
+    assert!(note["position"]["x"].is_number());
+    assert!(note["size"]["width"].is_number());
+}
+
+#[test]
+fn sequence_mmds_has_activations() {
+    let input = "sequenceDiagram\n    Alice->>+Bob: hello\n    Bob-->>-Alice: bye";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let activations = json["activations"].as_array().unwrap();
+    assert!(!activations.is_empty());
+
+    let act = &activations[0];
+    assert!(act["participant"].is_number());
+    assert!(act["y_start"].is_number());
+    assert!(act["y_end"].is_number());
+}
+
+#[test]
+fn sequence_mmds_has_blocks() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hi\n    loop Every minute\n        Bob->>Alice: ping\n    end";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let blocks = json["blocks"].as_array().unwrap();
+    assert_eq!(blocks.len(), 1);
+
+    let block = &blocks[0];
+    assert_eq!(block["kind"], "loop");
+    assert_eq!(block["label"], "Every minute");
+    assert!(block["rect"]["x"].is_number());
+    assert!(block["rect"]["width"].is_number());
+}
+
+#[test]
+fn sequence_mmds_envelope_has_empty_nodes_edges() {
+    let input = "sequenceDiagram\n    Alice->>Bob: hi";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(json["nodes"].as_array().unwrap().len(), 0);
+    assert_eq!(json["edges"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn sequence_mmds_self_message() {
+    let input = "sequenceDiagram\n    Alice->>Alice: think";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["from"], messages[0]["to"]);
+    assert_eq!(messages[0]["text"], "think");
+}
+
 #[test]
 fn mmds_layout_output_omits_edge_paths_regardless_of_engine() {
     let input = "graph TD\nA-->B";

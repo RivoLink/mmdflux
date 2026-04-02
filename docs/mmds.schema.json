@@ -74,6 +74,48 @@
       },
       "default": [],
       "description": "Subgraph inventory, sorted by ID."
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Participant"
+      },
+      "description": "Sequence diagram participants (timeline family only)."
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Message"
+      },
+      "description": "Sequence diagram messages (timeline family only)."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Note"
+      },
+      "description": "Sequence diagram notes (timeline family only)."
+    },
+    "activations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Activation"
+      },
+      "description": "Sequence diagram activation bars (timeline family only)."
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Block"
+      },
+      "description": "Sequence diagram interaction frames (timeline family only)."
+    },
+    "participant_boxes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ParticipantBox"
+      },
+      "description": "Sequence diagram participant groupings (timeline family only)."
     }
   },
   "$defs": {
@@ -139,7 +181,7 @@
     },
     "Metadata": {
       "type": "object",
-      "required": ["diagram_type", "direction", "bounds"],
+      "required": ["diagram_type", "bounds"],
       "properties": {
         "diagram_type": {
           "type": "string",
@@ -414,6 +456,91 @@
           "type": "number",
           "description": "Overall height in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Consumers should preserve width/height aspect ratio when scaling."
         }
+      }
+    },
+    "Rect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    },
+    "Participant": {
+      "type": "object",
+      "required": ["id", "label", "kind", "position", "size", "lifeline_x"],
+      "properties": {
+        "id": { "type": "string", "description": "Participant identifier from source." },
+        "label": { "type": "string", "description": "Display label (alias if provided, otherwise id)." },
+        "kind": { "enum": ["participant", "actor"], "description": "Participant visual kind." },
+        "position": { "$ref": "#/$defs/Position", "description": "Top-left of header box." },
+        "size": { "$ref": "#/$defs/Size", "description": "Header box dimensions." },
+        "lifeline_x": { "type": "number", "description": "Center x of the vertical lifeline." }
+      }
+    },
+    "Message": {
+      "type": "object",
+      "required": ["id", "from", "to", "line_style", "arrow_head", "text", "y"],
+      "properties": {
+        "id": { "type": "string", "description": "Deterministic message ID (m0, m1, ...)." },
+        "from": { "type": "integer", "minimum": 0, "description": "Source participant index." },
+        "to": { "type": "integer", "minimum": 0, "description": "Target participant index." },
+        "line_style": { "enum": ["solid", "dashed"], "description": "Line style." },
+        "arrow_head": { "enum": ["filled", "open", "cross", "async"], "description": "Arrowhead shape." },
+        "text": { "type": "string", "description": "Message label text." },
+        "y": { "type": "number", "description": "Vertical position of the arrow." }
+      }
+    },
+    "Note": {
+      "type": "object",
+      "required": ["placement", "participants", "text", "position", "size"],
+      "properties": {
+        "placement": { "enum": ["left_of", "right_of", "over"], "description": "Note placement relative to participants." },
+        "participants": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Participant indices the note relates to." },
+        "text": { "type": "string", "description": "Note text." },
+        "position": { "$ref": "#/$defs/Position", "description": "Top-left of note box." },
+        "size": { "$ref": "#/$defs/Size", "description": "Note box dimensions." }
+      }
+    },
+    "Activation": {
+      "type": "object",
+      "required": ["participant", "y_start", "y_end", "depth"],
+      "properties": {
+        "participant": { "type": "integer", "minimum": 0, "description": "Participant index." },
+        "y_start": { "type": "number", "description": "Top of the activation bar." },
+        "y_end": { "type": "number", "description": "Bottom of the activation bar." },
+        "depth": { "type": "integer", "minimum": 0, "description": "Nesting depth (0 = outermost)." }
+      }
+    },
+    "BlockDivider": {
+      "type": "object",
+      "required": ["y", "kind", "label"],
+      "properties": {
+        "y": { "type": "number", "description": "Vertical position of the divider." },
+        "kind": { "enum": ["else", "and", "option"], "description": "Divider kind." },
+        "label": { "type": "string", "description": "Divider label." }
+      }
+    },
+    "Block": {
+      "type": "object",
+      "required": ["kind", "label", "rect"],
+      "properties": {
+        "kind": { "enum": ["loop", "alt", "opt", "par", "critical", "break", "rect"], "description": "Interaction operator." },
+        "label": { "type": "string", "description": "Block header label." },
+        "rect": { "$ref": "#/$defs/Rect", "description": "Bounding rectangle." },
+        "dividers": { "type": "array", "items": { "$ref": "#/$defs/BlockDivider" }, "default": [], "description": "Interior dividers (else, and, option)." }
+      }
+    },
+    "ParticipantBox": {
+      "type": "object",
+      "required": ["participants", "rect"],
+      "properties": {
+        "label": { "type": "string", "description": "Optional grouping label." },
+        "color": { "type": "string", "description": "Optional fill color." },
+        "participants": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Participant indices in this grouping." },
+        "rect": { "$ref": "#/$defs/Rect", "description": "Bounding rectangle." }
       }
     }
   }

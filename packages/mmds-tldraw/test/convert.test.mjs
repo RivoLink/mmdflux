@@ -1278,14 +1278,11 @@ test("deterministic ordering: same MMDS produces identical tldraw output", () =>
 test("rejects unsupported diagram types with clear error", () => {
   const mmds = {
     version: 2,
-    metadata: { diagram_type: "sequence" },
+    metadata: { diagram_type: "pie" },
     nodes: [],
     edges: [],
   };
-  assert.throws(
-    () => convertToTldraw(mmds),
-    /unsupported diagram type.*sequence/i,
-  );
+  assert.throws(() => convertToTldraw(mmds), /unsupported diagram type.*pie/i);
 });
 
 test("accepts flowchart diagram type", () => {
@@ -1342,7 +1339,8 @@ test("SUPPORTED_DIAGRAM_TYPES is exported and contains expected types", () => {
   assert.ok(SUPPORTED_DIAGRAM_TYPES instanceof Set);
   assert.ok(SUPPORTED_DIAGRAM_TYPES.has("flowchart"));
   assert.ok(SUPPORTED_DIAGRAM_TYPES.has("class"));
-  assert.ok(!SUPPORTED_DIAGRAM_TYPES.has("sequence"));
+  assert.ok(SUPPORTED_DIAGRAM_TYPES.has("sequence"));
+  assert.ok(!SUPPORTED_DIAGRAM_TYPES.has("pie"));
 });
 
 // ── Phase 3: Backward edge arrowhead swap ───────────────────────────
@@ -2022,4 +2020,141 @@ test("state diagram fixture produces parseable .tldr", () => {
       r.typeName === "shape" && r.type === "geo" && r.props.fill === "solid",
   );
   assert.ok(filledGeos.length >= 1, "should have filled start/end markers");
+});
+
+// ── Sequence diagram tldraw conversion ──────────────────────────────
+
+test("sequence diagram produces valid tldraw file", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+  assertParses(file);
+});
+
+test("sequence diagram has participant shapes", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+
+  const geoShapes = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "geo",
+  );
+
+  // Should have participant header boxes
+  const participantShapes = geoShapes.filter((r) =>
+    r.id.includes("participant"),
+  );
+  assert.ok(
+    participantShapes.length >= 2,
+    `expected at least 2 participant shapes, got ${participantShapes.length}`,
+  );
+});
+
+test("sequence diagram has lifeline shapes", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+
+  const lineShapes = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "line",
+  );
+
+  const lifelines = lineShapes.filter((r) => r.id.includes("lifeline"));
+  assert.ok(
+    lifelines.length >= 2,
+    `expected at least 2 lifelines, got ${lifelines.length}`,
+  );
+});
+
+test("sequence diagram has message arrows", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+
+  const arrows = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "arrow",
+  );
+  assert.ok(
+    arrows.length >= 2,
+    `expected at least 2 message arrows, got ${arrows.length}`,
+  );
+});
+
+test("sequence diagram has note shape", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+
+  const noteShapes = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "geo" && r.id.includes("note"),
+  );
+  assert.ok(
+    noteShapes.length >= 1,
+    `expected at least 1 note shape, got ${noteShapes.length}`,
+  );
+});
+
+test("sequence diagram has activation bars", () => {
+  const mmds = fixture(
+    "tests",
+    "fixtures",
+    "mmds",
+    "contracts",
+    "sequence-simple.json",
+  );
+  const file = toTldrawFile(mmds);
+
+  const actShapes = file.records.filter(
+    (r) => r.typeName === "shape" && r.type === "geo" && r.id.includes("act"),
+  );
+  assert.ok(
+    actShapes.length >= 1,
+    `expected at least 1 activation bar, got ${actShapes.length}`,
+  );
+});
+
+test("accepts sequence diagram type", () => {
+  const mmds = {
+    version: 1,
+    metadata: { diagram_type: "sequence", bounds: { width: 200, height: 200 } },
+    nodes: [],
+    edges: [],
+    participants: [
+      {
+        id: "A",
+        label: "A",
+        kind: "participant",
+        position: { x: 10, y: 10 },
+        size: { width: 50, height: 30 },
+        lifeline_x: 35,
+      },
+    ],
+    messages: [],
+  };
+  assert.doesNotThrow(() => convertToTldraw(mmds));
 });

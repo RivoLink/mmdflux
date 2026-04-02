@@ -207,7 +207,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `extensions`            | object                   | Optional namespaced extension payloads keyed by versioned namespace ID (`*.v{number}`).                                              |
 | `defaults`              | object                   | Document-level defaults for omitted node/edge fields                                                                                 |
 | `geometry_level`        | `"layout"` or `"routed"` | Geometry detail level                                                                                                                |
-| `metadata.diagram_type` | string                   | `"flowchart"` or `"class"`                                                                                                           |
+| `metadata.diagram_type` | string                   | `"flowchart"`, `"class"`, `"state"`, or `"sequence"`                                                                                 |
 | `metadata.direction`    | string                   | `"TD"`, `"BT"`, `"LR"`, or `"RL"`                                                                                                    |
 | `metadata.bounds`       | object                   | Overall diagram canvas extents (`width`, `height`) in unitless MMDS coordinate space (currently SVG-pixel-aligned in mmdflux output) |
 | `metadata.engine`       | string?                  | Engine+algorithm that produced this output (e.g., `"flux-layered"`). Omitted when not produced via the solve pipeline.               |
@@ -410,8 +410,119 @@ just conformance
 
 ## Supported Diagram Types
 
-| Type      | `diagram_type` | Status                          |
-| --------- | -------------- | ------------------------------- |
-| Flowchart | `"flowchart"`  | Supported                       |
-| Class     | `"class"`      | Supported                       |
-| Sequence  | —              | Not supported (timeline family) |
+| Type      | `diagram_type` | Family   | Status    |
+| --------- | -------------- | -------- | --------- |
+| Flowchart | `"flowchart"`  | Graph    | Supported |
+| Class     | `"class"`      | Graph    | Supported |
+| State     | `"state"`      | Graph    | Supported |
+| Sequence  | `"sequence"`   | Timeline | Supported |
+
+### Graph-Family vs Timeline-Family Output
+
+Graph-family diagrams (flowchart, class, state) use the standard MMDS envelope with `nodes`, `edges`, `subgraphs`, and `defaults`.
+
+Timeline-family diagrams (sequence) use the same envelope structure (`version`, `geometry_level`, `metadata`, `nodes`, `edges`) for compatibility, but `nodes` and `edges` are always empty arrays. The diagram content is in sequence-specific body fields described below.
+
+## Sequence MMDS Profile
+
+Sequence diagrams produce MMDS JSON with timeline-native fields. The envelope fields (`version`, `geometry_level`, `metadata`) follow the same contract as graph-family output. `metadata.diagram_type` is `"sequence"`. `metadata.direction` is omitted. `nodes` and `edges` are empty arrays.
+
+Positions come from the proportional SVG layout engine and are in the same unitless MMDS coordinate space as graph-family output.
+
+### Sequence-Specific Fields
+
+#### `participants`
+
+| Field        | Type              | Description                                    |
+| ------------ | ----------------- | ---------------------------------------------- |
+| `id`         | string            | Participant identifier from source              |
+| `label`      | string            | Display label (alias if provided, otherwise id) |
+| `kind`       | string            | `"participant"` or `"actor"`                    |
+| `position`   | `{x, y}`          | Top-left of header box                          |
+| `size`       | `{width, height}` | Header box dimensions                           |
+| `lifeline_x` | number           | Center x of the vertical lifeline               |
+
+#### `messages`
+
+| Field        | Type   | Description                                       |
+| ------------ | ------ | ------------------------------------------------- |
+| `id`         | string | Deterministic message ID (`m0`, `m1`, ...)         |
+| `from`       | number | Source participant index                           |
+| `to`         | number | Target participant index (same as `from` for self) |
+| `line_style` | string | `"solid"` or `"dashed"`                            |
+| `arrow_head` | string | `"filled"`, `"open"`, `"cross"`, or `"async"`      |
+| `text`       | string | Message label text                                 |
+| `y`          | number | Vertical position of the arrow                     |
+
+#### `notes`
+
+| Field          | Type              | Description                                          |
+| -------------- | ----------------- | ---------------------------------------------------- |
+| `placement`    | string            | `"left_of"`, `"right_of"`, or `"over"`               |
+| `participants` | number[]          | Participant indices the note relates to               |
+| `text`         | string            | Note text                                            |
+| `position`     | `{x, y}`          | Top-left of note box                                 |
+| `size`         | `{width, height}` | Note box dimensions                                  |
+
+#### `activations`
+
+| Field         | Type   | Description                        |
+| ------------- | ------ | ---------------------------------- |
+| `participant` | number | Participant index                  |
+| `y_start`     | number | Top of the activation bar          |
+| `y_end`       | number | Bottom of the activation bar       |
+| `depth`       | number | Nesting depth (0 = outermost)      |
+
+#### `blocks`
+
+| Field      | Type     | Description                                                |
+| ---------- | -------- | ---------------------------------------------------------- |
+| `kind`     | string   | `"loop"`, `"alt"`, `"opt"`, `"par"`, `"critical"`, `"break"`, `"rect"` |
+| `label`    | string   | Block header label                                          |
+| `rect`     | `{x, y, width, height}` | Bounding rectangle                        |
+| `dividers` | array    | `[{y, kind, label}]` — `kind` is `"else"`, `"and"`, or `"option"` |
+
+#### `participant_boxes`
+
+| Field          | Type              | Description                          |
+| -------------- | ----------------- | ------------------------------------ |
+| `label`        | string?           | Optional grouping label              |
+| `color`        | string?           | Optional fill color                  |
+| `participants` | number[]          | Participant indices in this grouping |
+| `rect`         | `{x, y, width, height}` | Bounding rectangle          |
+
+### Sequence Example
+
+```json
+{
+  "version": 1,
+  "geometry_level": "layout",
+  "metadata": {
+    "diagram_type": "sequence",
+    "bounds": { "width": 370.0, "height": 220.0 }
+  },
+  "nodes": [],
+  "edges": [],
+  "participants": [
+    {
+      "id": "Alice", "label": "Alice", "kind": "participant",
+      "position": { "x": 60.0, "y": 20.0 },
+      "size": { "width": 90.0, "height": 40.0 },
+      "lifeline_x": 105.0
+    },
+    {
+      "id": "Bob", "label": "Bob", "kind": "participant",
+      "position": { "x": 210.0, "y": 20.0 },
+      "size": { "width": 80.0, "height": 40.0 },
+      "lifeline_x": 250.0
+    }
+  ],
+  "messages": [
+    {
+      "id": "m0", "from": 0, "to": 1,
+      "line_style": "solid", "arrow_head": "filled",
+      "text": "hello", "y": 100.0
+    }
+  ]
+}
+```
