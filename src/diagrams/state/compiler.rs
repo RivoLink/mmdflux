@@ -7,7 +7,7 @@
 use std::collections::HashSet;
 
 use crate::graph::{
-    Arrow, Direction, Edge, Graph, GraphNote, Node, NotePosition, Shape, Stroke, Subgraph,
+    Arrow, Direction, Edge, Graph, Node, NotePosition, Shape, Stroke, Subgraph,
 };
 use crate::mermaid::state::{
     StateDecl, StateModel, StateStatement, StateStereotype, StateTransition,
@@ -21,70 +21,62 @@ use crate::mermaid::state::{
 pub fn compile(model: &StateModel) -> Graph {
     let mut graph = Graph::new(direction_from_str(model.direction.as_deref()));
     let mut seen_nodes: HashSet<String> = HashSet::new();
+    let mut note_counter: usize = 0;
 
     process_statements(
         &mut graph,
         &mut seen_nodes,
+        &mut note_counter,
         &model.statements,
         None,
         "__root",
     );
 
-    create_note_nodes(&mut graph);
     resolve_subgraph_edges(&mut graph);
 
     graph
 }
 
-/// Convert note annotations into standalone graph nodes with constraint edges.
+/// Create a standalone note node with a constraint edge to its target state.
 ///
-/// For each note in `graph.notes`, creates a `NoteRect` node at the same
-/// hierarchy level as the target state, plus a dotted constraint edge.
-/// Edge direction encodes position: "right of" = state→note (downstream),
-/// "left of" = note→state (upstream). In TD mode this produces below/above
-/// placement; in LR mode it produces right/left — matching Mermaid.
-///
-/// No invisible subgraph or compound group is needed. The layout engine
-/// positions the note via the constraint edge alone.
-fn create_note_nodes(graph: &mut Graph) {
-    let notes: Vec<GraphNote> = std::mem::take(&mut graph.notes);
+/// Called inline during statement processing so the edge appears at the same
+/// position in the edge list as in the source, preserving the layout engine's
+/// edge-order-based ranking.
+fn add_note_node(
+    graph: &mut Graph,
+    state_id: &str,
+    text: &str,
+    position: NotePosition,
+    index: usize,
+) {
+    let note_node_id = format!("{state_id}____note_{index}");
 
-    for (i, note) in notes.iter().enumerate() {
-        let state_id = &note.target;
+    // Place note at the same hierarchy level as the target state.
+    let state_parent = graph.nodes.get(state_id).and_then(|n| n.parent.clone());
+    let mut note_node = Node::new(&note_node_id)
+        .with_label(text)
+        .with_shape(Shape::NoteRect);
+    note_node.parent = state_parent.clone();
+    graph.add_node(note_node);
 
-        if !graph.nodes.contains_key(state_id) {
-            continue;
-        }
-
-        let note_node_id = format!("{state_id}____note_{i}");
-
-        // Place note at the same hierarchy level as the target state.
-        let state_parent = graph.nodes.get(state_id).and_then(|n| n.parent.clone());
-        let mut note_node = Node::new(&note_node_id)
-            .with_label(&note.text)
-            .with_shape(Shape::NoteRect);
-        note_node.parent = state_parent.clone();
-        graph.add_node(note_node);
-
-        // Add note to the same parent subgraph's children list.
-        if let Some(ref parent_id) = state_parent
-            && let Some(parent_sg) = graph.subgraphs.get_mut(parent_id)
-        {
-            parent_sg.nodes.push(note_node_id.clone());
-        }
-
-        // Constraint edge: "right of" = downstream, "left of" = upstream.
-        let (from, to) = match note.position {
-            NotePosition::Right => (state_id.to_string(), note_node_id.clone()),
-            NotePosition::Left => (note_node_id.clone(), state_id.to_string()),
-        };
-
-        graph.add_edge(
-            Edge::new(&from, &to)
-                .with_stroke(Stroke::Dotted)
-                .with_arrows(Arrow::None, Arrow::None),
-        );
+    // Add note to the same parent subgraph's children list.
+    if let Some(ref parent_id) = state_parent
+        && let Some(parent_sg) = graph.subgraphs.get_mut(parent_id)
+    {
+        parent_sg.nodes.push(note_node_id.clone());
     }
+
+    // Constraint edge: "right of" = downstream, "left of" = upstream.
+    let (from, to) = match position {
+        NotePosition::Right => (state_id.to_string(), note_node_id.clone()),
+        NotePosition::Left => (note_node_id.clone(), state_id.to_string()),
+    };
+
+    graph.add_edge(
+        Edge::new(&from, &to)
+            .with_stroke(Stroke::Dotted)
+            .with_arrows(Arrow::None, Arrow::None),
+    );
 }
 
 fn direction_from_str(dir: Option<&str>) -> Direction {
@@ -104,6 +96,7 @@ fn direction_from_str(dir: Option<&str>) -> Direction {
 fn process_statements(
     graph: &mut Graph,
     seen_nodes: &mut HashSet<String>,
+    note_counter: &mut usize,
     statements: &[StateStatement],
     parent_subgraph: Option<&str>,
     scope: &str,
@@ -114,22 +107,22 @@ fn process_statements(
                 add_transition(graph, seen_nodes, t, parent_subgraph, scope);
             }
             StateStatement::State(decl) => {
-                process_state_decl(graph, seen_nodes, decl, parent_subgraph, scope);
+                process_state_decl(graph, seen_nodes, note_counter, decl, parent_subgraph, scope);
             }
             StateStatement::Direction(_) => {
                 // Handled at the composite level during subgraph creation.
             }
             StateStatement::Note(note) => {
-                // Ensure target state exists, then store as annotation.
+                // Create note node and constraint edge inline so the edge
+                // appears at the same position as in the source, preserving
+                // the layout engine's edge-order-based ranking.
                 ensure_implicit_node(graph, seen_nodes, &note.state_id, parent_subgraph);
-                graph.notes.push(GraphNote {
-                    target: note.state_id.clone(),
-                    position: match note.position {
-                        crate::mermaid::state::NotePosition::Right => NotePosition::Right,
-                        crate::mermaid::state::NotePosition::Left => NotePosition::Left,
-                    },
-                    text: note.text.clone(),
-                });
+                let position = match note.position {
+                    crate::mermaid::state::NotePosition::Right => NotePosition::Right,
+                    crate::mermaid::state::NotePosition::Left => NotePosition::Left,
+                };
+                add_note_node(graph, &note.state_id, &note.text, position, *note_counter);
+                *note_counter += 1;
             }
         }
     }
@@ -140,6 +133,7 @@ fn process_statements(
 fn process_state_decl(
     graph: &mut Graph,
     seen_nodes: &mut HashSet<String>,
+    note_counter: &mut usize,
     decl: &StateDecl,
     parent_subgraph: Option<&str>,
     _scope: &str,
@@ -159,6 +153,7 @@ fn process_state_decl(
         process_statements(
             graph,
             seen_nodes,
+            note_counter,
             &decl.children,
             Some(&decl.id),
             &decl.id, // new scope for [*] coalescing
