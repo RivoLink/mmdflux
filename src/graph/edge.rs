@@ -11,6 +11,8 @@ pub enum Stroke {
     Solid,
     /// Dotted line: -.
     Dotted,
+    /// Dashed line (longer dashes than dotted, e.g. note constraint edges).
+    Dashed,
     /// Thick/bold line: ==
     Thick,
     /// Invisible edge (layout-only, not rendered): ~~~

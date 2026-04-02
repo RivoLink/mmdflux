@@ -577,6 +577,7 @@ fn stroke_str(stroke: Stroke) -> &'static str {
     match stroke {
         Stroke::Solid => "solid",
         Stroke::Dotted => "dotted",
+        Stroke::Dashed => "dashed",
         Stroke::Thick => "thick",
         Stroke::Invisible => "invisible",
     }

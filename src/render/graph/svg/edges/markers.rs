@@ -16,10 +16,17 @@ pub(super) fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
         stroke = STROKE_COLOR,
         width = fmt_f64(stroke_width)
     );
-    if edge.stroke == Stroke::Dotted {
-        let dash = fmt_f64(2.0 * scale);
-        let gap = fmt_f64(4.0 * scale);
-        let _ = write!(attrs, " stroke-dasharray=\"{dash},{gap}\"");
+    match edge.stroke {
+        Stroke::Dotted => {
+            let dash = fmt_f64(2.0 * scale);
+            let gap = fmt_f64(4.0 * scale);
+            let _ = write!(attrs, " stroke-dasharray=\"{dash},{gap}\"");
+        }
+        Stroke::Dashed => {
+            let dash = fmt_f64(5.0 * scale);
+            let _ = write!(attrs, " stroke-dasharray=\"{dash}\"");
+        }
+        _ => {}
     }
     attrs
 }

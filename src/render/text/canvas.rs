@@ -217,7 +217,9 @@ impl Canvas {
             let vertical_only = (merged.up || merged.down) && !merged.left && !merged.right;
             cell.ch = if heavy {
                 charset.junction_heavy(merged)
-            } else if stroke == Stroke::Dotted && (horizontal_only || vertical_only) {
+            } else if matches!(stroke, Stroke::Dotted | Stroke::Dashed)
+                && (horizontal_only || vertical_only)
+            {
                 if horizontal_only {
                     charset.dotted_horizontal
                 } else {

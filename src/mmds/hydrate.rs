@@ -760,6 +760,7 @@ fn parse_stroke(value: &str) -> Option<Stroke> {
     match value {
         "solid" => Some(Stroke::Solid),
         "dotted" => Some(Stroke::Dotted),
+        "dashed" => Some(Stroke::Dashed),
         "thick" => Some(Stroke::Thick),
         "invisible" => Some(Stroke::Invisible),
         _ => None,

@@ -6,9 +6,7 @@
 
 use std::collections::HashSet;
 
-use crate::graph::{
-    Arrow, Direction, Edge, Graph, Node, NotePosition, Shape, Stroke, Subgraph,
-};
+use crate::graph::{Arrow, Direction, Edge, Graph, Node, NotePosition, Shape, Stroke, Subgraph};
 use crate::mermaid::state::{
     StateDecl, StateModel, StateStatement, StateStereotype, StateTransition,
 };
@@ -74,7 +72,7 @@ fn add_note_node(
 
     graph.add_edge(
         Edge::new(&from, &to)
-            .with_stroke(Stroke::Dotted)
+            .with_stroke(Stroke::Dashed)
             .with_arrows(Arrow::None, Arrow::None),
     );
 }
@@ -107,7 +105,14 @@ fn process_statements(
                 add_transition(graph, seen_nodes, t, parent_subgraph, scope);
             }
             StateStatement::State(decl) => {
-                process_state_decl(graph, seen_nodes, note_counter, decl, parent_subgraph, scope);
+                process_state_decl(
+                    graph,
+                    seen_nodes,
+                    note_counter,
+                    decl,
+                    parent_subgraph,
+                    scope,
+                );
             }
             StateStatement::Direction(_) => {
                 // Handled at the composite level during subgraph creation.
@@ -743,7 +748,7 @@ stateDiagram-v2
         let dotted_edge = graph
             .edges
             .iter()
-            .find(|e| e.stroke == Stroke::Dotted)
+            .find(|e| e.stroke == Stroke::Dashed)
             .expect("dotted edge should exist");
         assert_eq!(dotted_edge.arrow_start, Arrow::None);
         assert_eq!(dotted_edge.arrow_end, Arrow::None);
