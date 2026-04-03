@@ -1262,6 +1262,60 @@ fn sequence_mmds_self_message() {
     assert_eq!(messages[0]["text"], "think");
 }
 
+// ---------------------------------------------------------------------------
+// Contract fixture validation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn state_mmds_contract_fixture_is_valid() {
+    let fixture = mmds_fixture("contracts/state-simple.json");
+    assert_eq!(fixture["metadata"]["diagram_type"], "state");
+    assert!(fixture["nodes"].as_array().unwrap().len() >= 2);
+    assert!(fixture["edges"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
+fn sequence_mmds_contract_fixture_is_valid() {
+    let fixture = mmds_fixture("contracts/sequence-simple.json");
+    assert_eq!(fixture["metadata"]["diagram_type"], "sequence");
+    assert!(fixture["participants"].as_array().unwrap().len() >= 2);
+    assert!(fixture["messages"].as_array().unwrap().len() >= 2);
+}
+
+// ---------------------------------------------------------------------------
+// State MMDS contract tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn state_diagram_mmds_output_is_valid_json() {
+    let input = "stateDiagram-v2\n    [*] --> Active\n    Active --> [*]";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(json["metadata"]["diagram_type"], "state");
+    assert_eq!(json["version"], 1);
+}
+
+#[test]
+fn state_mmds_has_nodes_and_edges() {
+    let input = "stateDiagram-v2\n    [*] --> Active\n    Active --> Idle\n    Idle --> [*]";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+
+    let nodes = json["nodes"].as_array().unwrap();
+    assert!(
+        nodes.len() >= 3,
+        "expected at least 3 nodes, got {}",
+        nodes.len()
+    );
+
+    let edges = json["edges"].as_array().unwrap();
+    assert!(
+        edges.len() >= 3,
+        "expected at least 3 edges, got {}",
+        edges.len()
+    );
+}
+
 #[test]
 fn mmds_layout_output_omits_edge_paths_regardless_of_engine() {
     let input = "graph TD\nA-->B";

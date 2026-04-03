@@ -156,6 +156,16 @@ fn json_sequence_diagram_produces_valid_mmds() {
         .stdout(predicate::str::contains("\"diagram_type\": \"sequence\""));
 }
 
+#[test]
+fn json_state_diagram_produces_valid_mmds() {
+    mmdflux()
+        .args(["-f", "json"])
+        .write_stdin("stateDiagram-v2\n    [*] --> Active\n    Active --> [*]\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"diagram_type\": \"state\""));
+}
+
 // =========================================================================
 // Fixture Smoke Tests
 // =========================================================================
