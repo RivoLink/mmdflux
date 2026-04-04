@@ -17,7 +17,11 @@ use crate::builtins::default_registry;
 use crate::errors::{ParseDiagnostic, RenderError};
 use crate::format::OutputFormat;
 use crate::frontends::{InputFrontend, detect_input_frontend};
-use crate::mermaid::ParseError;
+use crate::mermaid::{ParseError, extract_theme_hint};
+use crate::render::svg::theme::{
+    ResolvedSvgTheme, SvgThemeRenderMode, SvgThemeSpec, resolve_svg_theme,
+};
+use crate::runtime::config::SvgThemeConfig;
 
 /// Detect the diagram type from input text.
 ///
@@ -41,14 +45,22 @@ pub fn render_diagram(
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
     if matches!(detect_input_frontend(input), Some(InputFrontend::Mmds)) {
+        let svg_theme = if matches!(format, OutputFormat::Svg) {
+            resolve_configured_svg_theme(config)?
+        } else {
+            None
+        };
         return mmds::render_input(
             input,
             format,
             config.geometry_level,
             &config.text_render_options(format),
             &config.svg_render_options(),
+            svg_theme.as_ref(),
         );
     }
+
+    let effective_config = effective_render_config(input, format, config);
 
     let registry = default_registry();
 
@@ -72,7 +84,7 @@ pub fn render_diagram(
     })?;
 
     let payload = parsed.into_payload()?;
-    payload::render_payload(payload, format, config)
+    payload::render_payload(payload, format, &effective_config)
 }
 
 /// Validate Mermaid input and return structured diagnostics as JSON.
@@ -153,5 +165,132 @@ fn parse_failure_diagnostic(error: &(dyn std::error::Error + 'static)) -> ParseD
             end_column: None,
             message: error.to_string(),
         },
+    }
+}
+
+fn effective_render_config(
+    input: &str,
+    format: OutputFormat,
+    config: &RenderConfig,
+) -> RenderConfig {
+    let mut effective = config.clone();
+
+    if !matches!(format, OutputFormat::Svg) || effective.svg_theme.is_some() {
+        return effective;
+    }
+
+    if !matches!(detect_input_frontend(input), Some(InputFrontend::Mermaid)) {
+        return effective;
+    }
+
+    if let Some(theme_name) = extract_theme_hint(input) {
+        effective.svg_theme = Some(SvgThemeConfig {
+            name: Some(theme_name),
+            ..SvgThemeConfig::default()
+        });
+    }
+
+    effective
+}
+
+pub(in crate::runtime) fn resolve_configured_svg_theme(
+    config: &RenderConfig,
+) -> Result<Option<ResolvedSvgTheme>, RenderError> {
+    config
+        .svg_theme
+        .as_ref()
+        .map(|theme| resolve_svg_theme(&svg_theme_spec_from_config(theme)))
+        .transpose()
+        .map_err(|error| RenderError {
+            message: error.message,
+        })
+}
+
+pub(in crate::runtime) fn svg_theme_spec_from_config(config: &SvgThemeConfig) -> SvgThemeSpec {
+    SvgThemeSpec {
+        name: config.name.clone(),
+        mode: match config.mode {
+            crate::runtime::config::SvgThemeMode::Static => SvgThemeRenderMode::Static,
+            crate::runtime::config::SvgThemeMode::Dynamic => SvgThemeRenderMode::Dynamic,
+        },
+        bg: config.bg.clone(),
+        fg: config.fg.clone(),
+        line: config.line.clone(),
+        accent: config.accent.clone(),
+        muted: config.muted.clone(),
+        surface: config.surface.clone(),
+        border: config.border.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RenderConfig, effective_render_config, validate_diagram};
+    use crate::format::OutputFormat;
+    use crate::runtime::config::SvgThemeConfig;
+
+    #[test]
+    fn validate_diagram_skips_warning_for_frontmatter_theme_hint() {
+        let input = "---\nconfig:\n  theme: dark\n---\ngraph TD\nA-->B\n";
+        let value: serde_json::Value = serde_json::from_str(&validate_diagram(input)).unwrap();
+        assert_eq!(value["valid"], true);
+        assert!(value.get("diagnostics").is_none());
+    }
+
+    #[test]
+    fn validate_diagram_skips_warning_for_init_theme_hint() {
+        let input = "%%{init: {\"theme\": \"dark\"}}%%\ngraph TD\nA-->B\n";
+        let value: serde_json::Value = serde_json::from_str(&validate_diagram(input)).unwrap();
+        assert_eq!(value["valid"], true);
+        assert!(value.get("diagnostics").is_none());
+    }
+
+    #[test]
+    fn validate_diagram_keeps_warning_for_non_theme_init_keys() {
+        let input = "%%{init: {\"theme\": \"dark\", \"flowchart\": {\"curve\": \"basis\"}}}%%\ngraph TD\nA-->B\n";
+        let value: serde_json::Value = serde_json::from_str(&validate_diagram(input)).unwrap();
+        assert_eq!(value["valid"], true);
+        let diagnostics = value["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be present");
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("Strict parsing would reject"))
+        }));
+    }
+
+    #[test]
+    fn runtime_uses_source_theme_hint_when_svg_theme_is_unset() {
+        let input = "%%{init: {\"theme\": \"forest\"}}%%\nstateDiagram-v2\n[*] --> Idle\n";
+        let effective = effective_render_config(input, OutputFormat::Svg, &RenderConfig::default());
+        assert_eq!(
+            effective
+                .svg_theme
+                .as_ref()
+                .and_then(|theme| theme.name.as_deref()),
+            Some("forest")
+        );
+    }
+
+    #[test]
+    fn explicit_svg_theme_overrides_source_hint() {
+        let input = "%%{init: {\"theme\": \"forest\"}}%%\ngraph TD\nA-->B\n";
+        let config = RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".to_string()),
+                ..SvgThemeConfig::default()
+            }),
+            ..RenderConfig::default()
+        };
+
+        let effective = effective_render_config(input, OutputFormat::Svg, &config);
+        assert_eq!(
+            effective
+                .svg_theme
+                .as_ref()
+                .and_then(|theme| theme.name.as_deref()),
+            Some("dark")
+        );
     }
 }

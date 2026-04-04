@@ -4,8 +4,8 @@ use std::fmt::Write;
 
 use super::bounds::scale_rect;
 use super::edges::{document_svg_path, polygon_points};
-use super::text::render_text_centered;
-use super::{NODE_FILL, Point, Rect, STROKE_COLOR, SUBGRAPH_STROKE, TEXT_COLOR};
+use super::text::{TextRenderStyle, render_text_centered};
+use super::{GraphSvgPalette, Point, Rect, dynamic_css_attrs};
 use crate::graph::geometry::{FRect, GraphGeometry};
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::graph::routing::hexagon_vertices;
@@ -39,6 +39,27 @@ impl<'a> ResolvedSvgNodeStyle<'a> {
     fn text_or(self, default: &'a str) -> &'a str {
         self.text.unwrap_or(default)
     }
+
+    fn fill_is_overridden(self) -> bool {
+        self.fill.is_some()
+    }
+
+    fn stroke_is_overridden(self) -> bool {
+        self.stroke.is_some()
+    }
+
+    fn text_is_overridden(self) -> bool {
+        self.text.is_some()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NodeLabelRenderContext<'a> {
+    rect: &'a Rect,
+    style: ResolvedSvgNodeStyle<'a>,
+    metrics: &'a ProportionalTextMetrics,
+    scale: f64,
+    palette: &'a GraphSvgPalette,
 }
 
 pub(super) fn render_subgraphs(
@@ -47,6 +68,7 @@ pub(super) fn render_subgraphs(
     geom: &GraphGeometry,
     metrics: &ProportionalTextMetrics,
     scale: f64,
+    palette: &GraphSvgPalette,
 ) {
     if geom.subgraphs.is_empty() {
         return;
@@ -70,25 +92,37 @@ pub(super) fn render_subgraphs(
     for (_id, sg_geom) in subgraphs {
         let rect = scale_rect(&sg_geom.rect, scale);
         let stroke_width = fmt_f64(1.0 * scale);
+        let dynamic_attrs = dynamic_css_attrs(
+            palette.dynamic_css,
+            "graph-subgraph-stroke",
+            &["stroke:var(--_inner-stroke);"],
+        );
         let rect_line = format!(
-            "<rect class=\"subgraph\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
+            "<rect class=\"subgraph\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\"{dynamic_attrs} />",
             x = fmt_f64(rect.x),
             y = fmt_f64(rect.y),
             w = fmt_f64(rect.width),
             h = fmt_f64(rect.height),
-            stroke = SUBGRAPH_STROKE,
-            stroke_width = stroke_width
+            stroke = palette.subgraph_stroke,
+            stroke_width = stroke_width,
+            dynamic_attrs = dynamic_attrs
         );
         writer.push_line(&rect_line);
 
         if !sg_geom.title.trim().is_empty() {
             let title_x = rect.x + rect.width / 2.0;
             let title_y = rect.y + metrics.font_size * 0.25;
+            let dynamic_attrs = dynamic_css_attrs(
+                palette.dynamic_css,
+                "graph-subgraph-text",
+                &["fill:var(--_group-hdr);"],
+            );
             let text = format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" fill=\"{color}\">{label}</text>",
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" fill=\"{color}\"{dynamic_attrs}>{label}</text>",
                 x = fmt_f64(title_x),
                 y = fmt_f64(title_y),
-                color = TEXT_COLOR,
+                color = palette.subgraph_title_text,
+                dynamic_attrs = dynamic_attrs,
                 label = escape_text(&sg_geom.title)
             );
             writer.push_line(&text);
@@ -103,6 +137,7 @@ pub(super) fn render_nodes(
     geom: &GraphGeometry,
     metrics: &ProportionalTextMetrics,
     scale: f64,
+    palette: &GraphSvgPalette,
 ) {
     writer.start_group("nodes");
 
@@ -116,7 +151,15 @@ pub(super) fn render_nodes(
         };
         let rect: Rect = pos_node.rect;
         let style = ResolvedSvgNodeStyle::from_node(node);
-        render_node_shape(writer, node, &rect, scale, diagram.direction, style);
+        render_node_shape(
+            writer,
+            node,
+            &rect,
+            scale,
+            diagram.direction,
+            style,
+            palette,
+        );
 
         let center = rect.center();
         let mut text_x = center.x;
@@ -150,10 +193,13 @@ pub(super) fn render_nodes(
                 y: text_y * scale,
             },
             &node.label,
-            &rect,
-            style,
-            metrics,
-            scale,
+            NodeLabelRenderContext {
+                rect: &rect,
+                style,
+                metrics,
+                scale,
+                palette,
+            },
         );
     }
 
@@ -165,28 +211,44 @@ fn render_node_label(
     writer: &mut SvgWriter,
     center: Point,
     text: &str,
-    rect: &Rect,
-    style: ResolvedSvgNodeStyle<'_>,
-    metrics: &ProportionalTextMetrics,
-    scale: f64,
+    context: NodeLabelRenderContext<'_>,
 ) {
     let lines: Vec<&str> = text.split('\n').collect();
     let has_separator = lines.contains(&Node::SEPARATOR);
-    let stroke = style.stroke_or(STROKE_COLOR);
-    let text_color = style.text_or(TEXT_COLOR);
+    let stroke = context.style.stroke_or(&context.palette.node_stroke);
+    let text_color = context.style.text_or(&context.palette.node_text);
+    let text_dynamic_attrs = if context.style.text_is_overridden() {
+        String::new()
+    } else {
+        dynamic_css_attrs(
+            context.palette.dynamic_css,
+            "graph-node-text",
+            &["fill:var(--_text);"],
+        )
+    };
 
     if !has_separator {
-        render_text_centered(writer, center.x, center.y, text, text_color, metrics, scale);
+        render_text_centered(
+            writer,
+            center,
+            text,
+            context.metrics,
+            context.scale,
+            TextRenderStyle {
+                color: text_color,
+                extra_attrs: text_dynamic_attrs.as_str(),
+            },
+        );
         return;
     }
 
-    let line_height = metrics.line_height * scale;
+    let line_height = context.metrics.line_height * context.scale;
     let total_height = line_height * (lines.len().saturating_sub(1) as f64);
     let start_y = center.y - total_height / 2.0;
-    let x1 = rect.x * scale;
-    let x2 = (rect.x + rect.width) * scale;
+    let x1 = context.rect.x * context.scale;
+    let x2 = (context.rect.x + context.rect.width) * context.scale;
     // Left-align x: node left edge + padding (matches text renderer's x+2 convention)
-    let left_x = x1 + metrics.node_padding_x * scale;
+    let left_x = x1 + context.metrics.node_padding_x * context.scale;
     let mut past_separator = false;
 
     for (idx, line_text) in lines.iter().enumerate() {
@@ -194,31 +256,42 @@ fn render_node_label(
         if *line_text == Node::SEPARATOR {
             past_separator = true;
             let line = format!(
-                "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"{sw}\" />",
+                "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"{sw}\"{dynamic_attrs} />",
                 x1 = fmt_f64(x1),
                 y = fmt_f64(line_y),
                 x2 = fmt_f64(x2),
                 stroke = stroke,
-                sw = fmt_f64(1.0 * scale),
+                sw = fmt_f64(context.scale),
+                dynamic_attrs = if context.style.stroke_is_overridden() {
+                    String::new()
+                } else {
+                    dynamic_css_attrs(
+                        context.palette.dynamic_css,
+                        "graph-node-stroke",
+                        &["stroke:var(--_node-stroke);"],
+                    )
+                },
             );
             writer.push_line(&line);
         } else if past_separator {
             // Members: left-aligned
             let line = format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"middle\" fill=\"{color}\">{text}</text>",
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"middle\" fill=\"{color}\"{dynamic_attrs}>{text}</text>",
                 x = fmt_f64(left_x),
                 y = fmt_f64(line_y),
                 color = text_color,
+                dynamic_attrs = text_dynamic_attrs.as_str(),
                 text = escape_text(line_text)
             );
             writer.push_line(&line);
         } else {
             // Class name: centered
             let line = format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{color}\">{text}</text>",
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{color}\"{dynamic_attrs}>{text}</text>",
                 x = fmt_f64(center.x),
                 y = fmt_f64(line_y),
                 color = text_color,
+                dynamic_attrs = text_dynamic_attrs.as_str(),
                 text = escape_text(line_text)
             );
             writer.push_line(&line);
@@ -233,16 +306,30 @@ fn render_node_shape(
     scale: f64,
     direction: Direction,
     node_style: ResolvedSvgNodeStyle<'_>,
+    palette: &GraphSvgPalette,
 ) {
     let rect = scale_rect(rect, scale);
     let stroke_width = fmt_f64(1.0 * scale);
-    let fill = node_style.fill_or(NODE_FILL);
-    let stroke = node_style.stroke_or(STROKE_COLOR);
+    let fill = node_style.fill_or(&palette.node_fill);
+    let stroke = node_style.stroke_or(&palette.node_stroke);
+    let mut dynamic_declarations = Vec::new();
+    if !node_style.fill_is_overridden() {
+        dynamic_declarations.push("fill:var(--_node-fill);");
+    }
+    if !node_style.stroke_is_overridden() {
+        dynamic_declarations.push("stroke:var(--_node-stroke);");
+    }
+    let dynamic_attrs = dynamic_css_attrs(
+        palette.dynamic_css,
+        "graph-node-shape",
+        &dynamic_declarations,
+    );
     let style = format!(
-        " fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linejoin=\"round\"",
+        " fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linejoin=\"round\"{dynamic_attrs}",
         fill = fill,
         stroke = stroke,
-        stroke_width = stroke_width
+        stroke_width = stroke_width,
+        dynamic_attrs = dynamic_attrs
     );
 
     match node.shape {

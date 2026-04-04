@@ -10,8 +10,9 @@ use mmdflux::format::{Curve, EdgePreset, RoutingStyle};
 use mmdflux::graph::GeometryLevel;
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
-    ColorWhen, EngineAlgorithmId, LayoutConfig, OutputFormat, Ranker, RenderConfig, TextColorMode,
-    apply_svg_surface_defaults, detect_diagram, render_diagram, validate_diagram,
+    ColorWhen, EngineAlgorithmId, LayoutConfig, OutputFormat, Ranker, RenderConfig, SvgThemeConfig,
+    SvgThemeMode, TextColorMode, apply_svg_surface_defaults, detect_diagram, render_diagram,
+    validate_diagram,
 };
 use serde::{Deserialize, Serialize};
 
@@ -186,6 +187,42 @@ struct Cli {
     #[arg(long)]
     svg_scale: Option<f64>,
 
+    /// Named SVG theme to resolve before slot overrides.
+    #[arg(long)]
+    svg_theme: Option<String>,
+
+    /// SVG theme output mode (static or dynamic).
+    #[arg(long, value_enum)]
+    svg_theme_mode: Option<SvgThemeModeArg>,
+
+    /// SVG theme background color override.
+    #[arg(long)]
+    svg_theme_bg: Option<String>,
+
+    /// SVG theme foreground color override.
+    #[arg(long)]
+    svg_theme_fg: Option<String>,
+
+    /// SVG theme line color override.
+    #[arg(long)]
+    svg_theme_line: Option<String>,
+
+    /// SVG theme accent color override.
+    #[arg(long)]
+    svg_theme_accent: Option<String>,
+
+    /// SVG theme muted color override.
+    #[arg(long)]
+    svg_theme_muted: Option<String>,
+
+    /// SVG theme surface color override.
+    #[arg(long)]
+    svg_theme_surface: Option<String>,
+
+    /// SVG theme border color override.
+    #[arg(long)]
+    svg_theme_border: Option<String>,
+
     /// SVG node padding on x-axis (px)
     #[arg(long)]
     svg_node_padding_x: Option<f64>,
@@ -316,6 +353,21 @@ impl From<PathSimplificationArg> for PathSimplification {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum SvgThemeModeArg {
+    Static,
+    Dynamic,
+}
+
+impl From<SvgThemeModeArg> for SvgThemeMode {
+    fn from(arg: SvgThemeModeArg) -> Self {
+        match arg {
+            SvgThemeModeArg::Static => SvgThemeMode::Static,
+            SvgThemeModeArg::Dynamic => SvgThemeMode::Dynamic,
+        }
+    }
+}
+
 fn resolve_curve_from_cli(raw: Option<&str>) -> Result<Option<Curve>, String> {
     raw.map(Curve::parse).transpose().map_err(|err| {
         if err.message.contains("expected one of") {
@@ -340,6 +392,34 @@ fn resolve_text_color_mode(
     }
 
     ColorWhen::Auto.resolve(stdout_is_terminal)
+}
+
+fn svg_theme_from_cli(cli: &Cli) -> Option<SvgThemeConfig> {
+    let has_theme_input = cli.svg_theme.is_some()
+        || cli.svg_theme_mode.is_some()
+        || cli.svg_theme_bg.is_some()
+        || cli.svg_theme_fg.is_some()
+        || cli.svg_theme_line.is_some()
+        || cli.svg_theme_accent.is_some()
+        || cli.svg_theme_muted.is_some()
+        || cli.svg_theme_surface.is_some()
+        || cli.svg_theme_border.is_some();
+
+    if !has_theme_input {
+        return None;
+    }
+
+    Some(SvgThemeConfig {
+        name: cli.svg_theme.clone(),
+        mode: cli.svg_theme_mode.map(Into::into).unwrap_or_default(),
+        bg: cli.svg_theme_bg.clone(),
+        fg: cli.svg_theme_fg.clone(),
+        line: cli.svg_theme_line.clone(),
+        accent: cli.svg_theme_accent.clone(),
+        muted: cli.svg_theme_muted.clone(),
+        surface: cli.svg_theme_surface.clone(),
+        border: cli.svg_theme_border.clone(),
+    })
 }
 
 fn main() -> io::Result<()> {
@@ -464,6 +544,7 @@ fn main() -> io::Result<()> {
         curve,
         edge_radius: cli.edge_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
+        svg_theme: svg_theme_from_cli(&cli),
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_simplification: cli.path_simplification.map(Into::into).unwrap_or_default(),

@@ -10,7 +10,7 @@ use mmdflux::registry::{DiagramFamily, DiagramInstance, ParsedDiagram};
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
     ColorWhen, EngineAlgorithmId, EngineId, OutputFormat, RenderConfig, RenderError,
-    RuntimeConfigInput, TextColorMode,
+    RuntimeConfigInput, SvgThemeConfig, SvgThemeMode, TextColorMode,
 };
 
 fn lib_rs_source() -> String {
@@ -140,6 +140,8 @@ fn crate_root_reexports_curated_runtime_and_value_types() {
             "ColorWhen",
             "TextColorMode",
             "RuntimeConfigInput",
+            "SvgThemeConfig",
+            "SvgThemeMode",
             "apply_svg_surface_defaults",
             // Runtime facade functions.
             "detect_diagram",
@@ -214,6 +216,8 @@ fn supported_root_exports_compile() {
     let _ = PathSimplification::default();
     let _ = ColorWhen::Auto;
     let _ = TextColorMode::Plain;
+    let _ = SvgThemeMode::default();
+    let _ = SvgThemeConfig::default();
     let _ = ColorToken::parse("#fff").unwrap();
     let _ = NodeStyle::default();
     let _ = RuntimeConfigInput::default();

@@ -5,6 +5,8 @@ _Generated from commit `e35d5c67` — 112 fixtures_
 - [Flowchart](#flowchart) (95)
 - [Class](#class) (17)
 
+SVG snapshots in this gallery use the static SVG renderer path. Mermaid compatibility fixtures that carry a `theme` hint render with that theme intentionally, and each snapshot's `<defs>` block includes only the marker definitions actually referenced by the diagram.
+
 # Flowchart
 
 ## ampersand
@@ -6394,4 +6396,3 @@ foo ()-- Class01
 ```
 
 </details>
-

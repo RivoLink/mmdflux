@@ -1,5 +1,9 @@
 //! Shared SVG writing utilities used by both graph and sequence renderers.
 
+pub(crate) mod theme;
+
+use self::theme::SvgRootStyle;
+
 pub(crate) fn fmt_f64(value: f64) -> String {
     let mut v = value;
     if v.abs() < 0.005 {
@@ -36,11 +40,34 @@ impl SvgWriter {
         }
     }
 
-    pub(crate) fn start_svg(&mut self, width: f64, height: f64, font_family: &str, font_size: f64) {
+    pub(crate) fn start_svg_with_root_style(
+        &mut self,
+        width: f64,
+        height: f64,
+        font_family: &str,
+        font_size: f64,
+        root_style: &SvgRootStyle,
+    ) {
         let view_width = fmt_f64(width);
         let view_height = fmt_f64(height);
         let view_box = format!("0 0 {view_width} {view_height}");
-        let style = format!("max-width: {view_width}px; background-color: transparent;");
+        let mut style_parts = vec![
+            format!("max-width: {view_width}px"),
+            format!(
+                "background-color: {}",
+                root_style
+                    .background_color
+                    .as_deref()
+                    .unwrap_or("transparent")
+            ),
+        ];
+        style_parts.extend(
+            root_style
+                .css_variables
+                .iter()
+                .map(|(name, value)| format!("{name}:{value}")),
+        );
+        let style = format!("{};", style_parts.join("; "));
         let line = format!(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" viewBox=\"{view_box}\" style=\"{style}\" font-family=\"{font}\" font-size=\"{font_size}\">",
             view_box = view_box,
@@ -50,6 +77,14 @@ impl SvgWriter {
         );
         self.push_line(&line);
         self.indent += 1;
+
+        if let Some(style_block) = &root_style.style_block {
+            self.start_tag("<style>");
+            for css_line in style_block.lines() {
+                self.push_line(css_line);
+            }
+            self.end_tag("</style>");
+        }
     }
 
     pub(crate) fn end_svg(&mut self) {
@@ -100,7 +135,8 @@ impl SvgWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_text, fmt_f64};
+    use super::theme::SvgRootStyle;
+    use super::{SvgWriter, escape_text, fmt_f64};
 
     #[test]
     fn fmt_f64_snaps_tiny_values_to_zero() {
@@ -115,5 +151,35 @@ mod tests {
             escape_text("<tag attr=\"a&b\">it's</tag>"),
             "&lt;tag attr=&quot;a&amp;b&quot;&gt;it&apos;s&lt;/tag&gt;"
         );
+    }
+
+    #[test]
+    fn start_svg_with_root_style_emits_background_variables_and_style_block() {
+        let mut writer = SvgWriter::new();
+        writer.start_svg_with_root_style(
+            120.0,
+            60.0,
+            "Inter",
+            16.0,
+            &SvgRootStyle {
+                background_color: Some("#ffffff".into()),
+                css_variables: vec![
+                    ("--bg".into(), "#ffffff".into()),
+                    ("--fg".into(), "#27272a".into()),
+                    ("--line".into(), "#939395".into()),
+                ],
+                style_block: Some("svg { --_text: var(--fg); }".into()),
+            },
+        );
+        writer.end_svg();
+
+        let output = writer.finish();
+
+        assert!(output.contains("background-color: #ffffff;"));
+        assert!(output.contains("--bg:#ffffff"));
+        assert!(output.contains("--fg:#27272a"));
+        assert!(output.contains("--line:#939395"));
+        assert!(output.contains("<style>"));
+        assert!(output.contains("svg { --_text: var(--fg); }"));
     }
 }

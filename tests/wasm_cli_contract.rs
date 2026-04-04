@@ -136,21 +136,65 @@ fn facade_detect_matches_registry() {
 #[test]
 fn cli_and_wasm_use_the_same_render_config_contract() {
     use mmdflux::format::EdgePreset;
-    use mmdflux::{RenderConfig, RuntimeConfigInput};
+    use mmdflux::{RenderConfig, RuntimeConfigInput, SvgThemeConfig, SvgThemeMode};
 
     // JSON config as WASM receives it.
-    let json = r#"{"edgePreset":"smooth-step"}"#;
+    let json = r##"{
+        "edgePreset":"smooth-step",
+        "svgTheme": {
+            "name": "dark",
+            "mode": "dynamic",
+            "bg": "#101418",
+            "accent": "#7dd3fc"
+        }
+    }"##;
     let input: RuntimeConfigInput = serde_json::from_str(json).unwrap();
     let wasm_config = input.into_render_config().unwrap();
 
     // Equivalent config built manually as the CLI would.
     let cli_config = RenderConfig {
         edge_preset: Some(EdgePreset::SmoothStep),
+        svg_theme: Some(SvgThemeConfig {
+            name: Some("dark".to_string()),
+            mode: SvgThemeMode::Dynamic,
+            bg: Some("#101418".to_string()),
+            fg: None,
+            line: None,
+            accent: Some("#7dd3fc".to_string()),
+            muted: None,
+            surface: None,
+            border: None,
+        }),
         ..RenderConfig::default()
     };
 
     assert_eq!(wasm_config.edge_preset, cli_config.edge_preset);
+    assert_eq!(wasm_config.svg_theme, cli_config.svg_theme);
     assert_eq!(wasm_config.layout.node_sep, cli_config.layout.node_sep);
+}
+
+#[test]
+fn runtime_config_input_parses_nested_svg_theme() {
+    use mmdflux::{RuntimeConfigInput, SvgThemeMode};
+
+    let input: RuntimeConfigInput = serde_json::from_str(
+        r##"{
+            "svgTheme": {
+                "name": "dark",
+                "mode": "dynamic",
+                "bg": "#101418",
+                "accent": "#7dd3fc"
+            }
+        }"##,
+    )
+    .unwrap();
+
+    let config = input.into_render_config().unwrap();
+    let theme = config.svg_theme.expect("svg theme should be present");
+    assert_eq!(theme.name.as_deref(), Some("dark"));
+    assert_eq!(theme.mode, SvgThemeMode::Dynamic);
+    assert_eq!(theme.bg.as_deref(), Some("#101418"));
+    assert_eq!(theme.accent.as_deref(), Some("#7dd3fc"));
 }
 
 #[test]

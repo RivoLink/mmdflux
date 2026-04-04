@@ -3,7 +3,9 @@ use std::path::Path;
 
 use mmdflux::format::{CornerStyle, Curve, RoutingStyle};
 use mmdflux::simplification::PathSimplification;
-use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig, render_diagram};
+use mmdflux::{
+    EngineAlgorithmId, OutputFormat, RenderConfig, SvgThemeConfig, SvgThemeMode, render_diagram,
+};
 
 fn load_flowchart_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -15,6 +17,16 @@ fn load_flowchart_fixture(name: &str) -> String {
         .unwrap_or_else(|e| panic!("failed to read flowchart fixture {}: {e}", path.display()))
 }
 
+fn load_class_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("class")
+        .join(name);
+    fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read class fixture {}: {e}", path.display()))
+}
+
 fn load_mmds_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -23,6 +35,26 @@ fn load_mmds_fixture(name: &str) -> String {
         .join(name);
     fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read MMDS fixture {}: {e}", path.display()))
+}
+
+fn load_sequence_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("sequence")
+        .join(name);
+    fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read sequence fixture {}: {e}", path.display()))
+}
+
+fn load_state_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("state")
+        .join(name);
+    fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read state fixture {}: {e}", path.display()))
 }
 
 fn render_svg(input: &str, config: &RenderConfig) -> String {
@@ -39,6 +71,217 @@ fn basic_flowchart_svg_has_root_text_and_arrow_marker() {
     assert!(svg.contains("End"));
     assert!(svg.contains("marker-end="));
     assert!(svg.contains("<path d=\""));
+}
+
+#[test]
+fn simple_arrow_flowchart_only_emits_arrowhead_def() {
+    let svg = render_svg("graph TD\nA-->B\n", &RenderConfig::default());
+
+    assert!(svg.contains("id=\"arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"crosshead\""), "{svg}");
+    assert!(!svg.contains("id=\"circlehead\""), "{svg}");
+    assert!(!svg.contains("id=\"diamondhead\""), "{svg}");
+    assert!(!svg.contains("id=\"open-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"open-diamondhead\""), "{svg}");
+}
+
+#[test]
+fn mixed_arrow_flowchart_only_emits_referenced_marker_defs_once() {
+    let input = load_flowchart_fixture("cross_circle_arrows.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert_eq!(svg.matches("id=\"crosshead\"").count(), 1, "{svg}");
+    assert_eq!(svg.matches("id=\"circlehead\"").count(), 1, "{svg}");
+    assert!(!svg.contains("id=\"arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"diamondhead\""), "{svg}");
+    assert!(!svg.contains("id=\"open-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"open-diamondhead\""), "{svg}");
+}
+
+#[test]
+fn graph_circle_markers_use_default_canvas_fill() {
+    let input = load_flowchart_fixture("cross_circle_arrows.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("id=\"circlehead\""), "{svg}");
+    assert!(
+        svg.contains(
+            "<circle cx=\"6\" cy=\"6\" r=\"5\" stroke=\"#333\" stroke-width=\"1\" fill=\"white\""
+        ),
+        "{svg}"
+    );
+}
+
+#[test]
+fn themed_graph_circle_markers_use_theme_background_fill() {
+    let input = load_class_fixture("lollipop_interfaces.mmd");
+    let svg = render_svg(
+        &input,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("id=\"circlehead\""), "{svg}");
+    assert!(
+        svg.contains(
+            "<circle cx=\"6\" cy=\"6\" r=\"5\" stroke=\"#d3d3d3\" stroke-width=\"1\" fill=\"#333333\""
+        ),
+        "{svg}"
+    );
+}
+
+#[test]
+fn graph_circle_marker_paths_stop_at_circle_border() {
+    let input = load_class_fixture("lollipop_interfaces.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("d=\"M64.82,166.00 L64.82,206.00\""), "{svg}");
+    assert!(svg.contains("d=\"M210.80,62.00 L210.80,102.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M64.82,166.00 L64.82,216.00\""), "{svg}");
+}
+
+#[test]
+fn class_open_arrow_markers_are_unfilled() {
+    let input = load_class_fixture("interface_realization.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("id=\"open-arrowhead\""), "{svg}");
+    assert!(
+        svg.contains("<polygon points=\"0,0 10.00,5.00 0,10.00\" fill=\"none\" stroke=\"#333\""),
+        "{svg}"
+    );
+}
+
+#[test]
+fn class_open_arrow_paths_stop_at_triangle_border() {
+    let input = load_class_fixture("simple.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("d=\"M62.13,67.00 L62.13,112.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M62.13,66.00 L62.13,112.00\""), "{svg}");
+}
+
+#[test]
+fn class_open_diamond_markers_are_unfilled() {
+    let input = load_class_fixture("two_way_relations.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("id=\"open-diamondhead\""), "{svg}");
+    assert!(
+        svg.contains(
+            "<polygon points=\"0,6.00 6.00,0 12.00,6.00 6.00,12.00\" fill=\"none\" stroke=\"#333\""
+        ),
+        "{svg}"
+    );
+}
+
+#[test]
+fn class_open_diamond_paths_stop_at_diamond_border() {
+    let input = load_class_fixture("two_way_relations.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("d=\"M42.45,172.00 L42.45,210.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M42.45,166.00 L42.45,216.00\""), "{svg}");
+}
+
+#[test]
+fn svg_theme_changes_graph_root_and_node_colors() {
+    let svg = render_svg(
+        "graph TD\nA-->B\n",
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#1f2020\""), "{svg}");
+    assert!(svg.contains("stroke=\"#d3d3d3\""), "{svg}");
+    assert!(svg.contains("fill=\"#cccccc\">A</text>"), "{svg}");
+}
+
+#[test]
+fn svg_theme_dynamic_mode_emits_root_variables_and_hex_fallbacks_for_graphs() {
+    let svg = render_svg(
+        "graph TD\nA-->B\n",
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                mode: SvgThemeMode::Dynamic,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("--bg:#333333"), "{svg}");
+    assert!(svg.contains("--fg:#cccccc"), "{svg}");
+    assert!(svg.contains("<style>"), "{svg}");
+    assert!(svg.contains("--_node-fill: var(--surface);"), "{svg}");
+    assert!(svg.contains("fill=\"#1f2020\""), "{svg}");
+    assert!(svg.contains("stroke=\"#d3d3d3\""), "{svg}");
+}
+
+#[test]
+fn svg_theme_applies_to_state_diagrams_via_graph_family_runtime() {
+    let input = load_state_fixture("simple.mmd");
+    let svg = render_svg(
+        &input,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#1f2020\""), "{svg}");
+    assert!(svg.contains("fill=\"#cccccc\">Idle</text>"), "{svg}");
+}
+
+#[test]
+fn svg_theme_preserves_node_style_precedence_through_runtime() {
+    let input = load_flowchart_fixture("style-basic.mmd");
+    let svg = render_svg(
+        &input,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#ffeeaa\""), "{svg}");
+    assert!(svg.contains("stroke=\"#333\""), "{svg}");
+    assert!(svg.contains("fill=\"#111\">Alpha</text>"), "{svg}");
+}
+
+#[test]
+fn mermaid_theme_hints_render_themed_svg_for_compatibility_fixtures() {
+    for fixture in ["compat_frontmatter.mmd", "compat_directive.mmd"] {
+        let input = load_flowchart_fixture(fixture);
+        let svg = render_svg(&input, &RenderConfig::default());
+
+        assert!(
+            svg.contains("background-color: #333333;"),
+            "{fixture}\n{svg}"
+        );
+        assert!(svg.contains("fill=\"#1f2020\""), "{fixture}\n{svg}");
+        assert!(svg.contains("fill=\"#cccccc\""), "{fixture}\n{svg}");
+    }
 }
 
 #[test]
@@ -79,6 +322,86 @@ fn basic_sequence_svg_has_participants_and_arrows() {
 }
 
 #[test]
+fn simple_sequence_only_emits_filled_arrowhead_def() {
+    let svg = render_svg(
+        "sequenceDiagram\n    Alice->>Bob: Hello\n",
+        &RenderConfig::default(),
+    );
+
+    assert!(svg.contains("id=\"seq-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-open-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-crosshead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-async-arrowhead\""), "{svg}");
+}
+
+#[test]
+fn mixed_sequence_only_emits_referenced_marker_defs_once() {
+    let input = load_sequence_fixture("all_arrows.mmd")
+        .replace("    A-xB: Solid cross\n", "")
+        .replace("    A--xB: Dashed cross\n", "");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert_eq!(svg.matches("id=\"seq-arrowhead\"").count(), 1, "{svg}");
+    assert_eq!(svg.matches("id=\"seq-open-arrowhead\"").count(), 1, "{svg}");
+    assert_eq!(
+        svg.matches("id=\"seq-async-arrowhead\"").count(),
+        1,
+        "{svg}"
+    );
+    assert!(!svg.contains("id=\"seq-crosshead\""), "{svg}");
+}
+
+#[test]
+fn sequence_open_arrow_markers_are_unfilled() {
+    let input = load_sequence_fixture("open_arrow.mmd");
+    let svg = render_svg(&input, &RenderConfig::default());
+
+    assert!(svg.contains("id=\"seq-open-arrowhead\""), "{svg}");
+    assert!(
+        svg.contains(
+            "<marker id=\"seq-open-arrowhead\" viewBox=\"0 0 10 10\" refX=\"0\" refY=\"5\""
+        ),
+        "{svg}"
+    );
+    assert!(
+        svg.contains("<polygon points=\"0,0 10,5 0,10\" fill=\"none\" stroke=\"#333\""),
+        "{svg}"
+    );
+}
+
+#[test]
+fn sequence_open_and_async_paths_stop_at_marker_back_edge() {
+    let input = load_sequence_fixture("all_arrows.mmd");
+    let svg = render_svg(
+        &input,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(
+        svg.contains("<line x1=\"30.45\" y1=\"174.00\" x2=\"170.45\" y2=\"174.00\""),
+        "{svg}"
+    );
+    assert!(
+        svg.contains("<line x1=\"30.45\" y1=\"224.00\" x2=\"170.45\" y2=\"224.00\""),
+        "{svg}"
+    );
+    assert!(
+        svg.contains("<line x1=\"30.45\" y1=\"374.00\" x2=\"170.45\" y2=\"374.00\""),
+        "{svg}"
+    );
+    assert!(
+        svg.contains("<line x1=\"30.45\" y1=\"424.00\" x2=\"170.45\" y2=\"424.00\""),
+        "{svg}"
+    );
+}
+
+#[test]
 fn sequence_svg_self_message_renders_path() {
     let input = "sequenceDiagram\n    Alice->>Alice: Think\n";
     let svg = render_svg(input, &RenderConfig::default());
@@ -109,6 +432,28 @@ fn sequence_svg_activation_renders_rect() {
 }
 
 #[test]
+fn sequence_svg_theme_changes_note_and_activation_colors() {
+    let input = "sequenceDiagram\n    Alice->>Bob: Hello\n    Note right of Bob: Important\n    activate Bob\n    Bob-->>Alice: Hi\n    deactivate Bob\n";
+    let svg = render_svg(
+        input,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#1f2020\""), "{svg}");
+    assert!(svg.contains("fill=\"#424242\""), "{svg}");
+    assert!(svg.contains("fill=\"#454545\""), "{svg}");
+    assert!(!svg.contains("#ffffcc"), "{svg}");
+    assert!(!svg.contains("#ddd"), "{svg}");
+}
+
+#[test]
 fn positioned_mmds_payload_renders_svg_through_runtime() {
     let payload = load_mmds_fixture("positioned/routed-fan-in-ports.json");
     let svg = render_svg(
@@ -122,4 +467,24 @@ fn positioned_mmds_payload_renders_svg_through_runtime() {
     assert!(svg.starts_with("<svg"));
     assert!(svg.contains("marker-end="));
     assert!(svg.contains("<path d=\""));
+}
+
+#[test]
+fn positioned_mmds_payload_honors_explicit_svg_theme() {
+    let payload = load_mmds_fixture("positioned/routed-fan-in-ports.json");
+    let svg = render_svg(
+        &payload,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".into()),
+                ..Default::default()
+            }),
+            path_simplification: PathSimplification::None,
+            ..RenderConfig::default()
+        },
+    );
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#1f2020\""), "{svg}");
+    assert!(svg.contains("stroke=\"#cccccc\""), "{svg}");
 }

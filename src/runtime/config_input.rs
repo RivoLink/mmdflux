@@ -12,7 +12,7 @@ use crate::format::{
     ColorWhen, Curve, EdgePreset, OutputFormat, RoutingStyle, normalize_enum_token,
 };
 use crate::graph::GeometryLevel;
-use crate::runtime::config::RenderConfig;
+use crate::runtime::config::{RenderConfig, SvgThemeConfig, SvgThemeMode};
 use crate::simplification::PathSimplification;
 
 /// Serde-friendly render config accepted from JSON callers.
@@ -27,6 +27,7 @@ pub struct RuntimeConfigInput {
     pub cluster_ranksep: Option<f64>,
     pub padding: Option<usize>,
     pub svg_scale: Option<f64>,
+    pub svg_theme: Option<SvgThemeConfigInput>,
     pub edge_preset: Option<String>,
     pub routing_style: Option<String>,
     pub curve: Option<String>,
@@ -52,6 +53,21 @@ pub struct LayoutConfigInput {
     pub ranker: Option<String>,
 }
 
+/// Serde-friendly SVG theme config nested inside [`RuntimeConfigInput`].
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct SvgThemeConfigInput {
+    pub name: Option<String>,
+    pub mode: Option<String>,
+    pub bg: Option<String>,
+    pub fg: Option<String>,
+    pub line: Option<String>,
+    pub accent: Option<String>,
+    pub muted: Option<String>,
+    pub surface: Option<String>,
+    pub border: Option<String>,
+}
+
 impl RuntimeConfigInput {
     /// Validate and convert into a typed [`RenderConfig`].
     pub fn into_render_config(self) -> Result<RenderConfig, RenderError> {
@@ -66,6 +82,9 @@ impl RuntimeConfigInput {
             ..RenderConfig::default()
         };
 
+        if let Some(svg_theme) = self.svg_theme {
+            config.svg_theme = Some(svg_theme.into_svg_theme_config()?);
+        }
         if let Some(layout_engine) = self.layout_engine {
             config.layout_engine = Some(EngineAlgorithmId::parse(&layout_engine)?);
         }
@@ -112,12 +131,43 @@ impl RuntimeConfigInput {
     }
 }
 
+impl SvgThemeConfigInput {
+    fn into_svg_theme_config(self) -> Result<SvgThemeConfig, RenderError> {
+        let mode = match self.mode {
+            Some(mode) => parse_svg_theme_mode(&mode)?,
+            None => SvgThemeMode::default(),
+        };
+
+        Ok(SvgThemeConfig {
+            name: self.name,
+            mode,
+            bg: self.bg,
+            fg: self.fg,
+            line: self.line,
+            accent: self.accent,
+            muted: self.muted,
+            surface: self.surface,
+            border: self.border,
+        })
+    }
+}
+
 fn parse_ranker(value: &str) -> Result<Ranker, RenderError> {
     match normalize_enum_token(value).as_str() {
         "network-simplex" | "networksimplex" => Ok(Ranker::NetworkSimplex),
         "longest-path" | "longestpath" => Ok(Ranker::LongestPath),
         _ => Err(RenderError {
             message: format!("unknown ranker: {value}"),
+        }),
+    }
+}
+
+fn parse_svg_theme_mode(value: &str) -> Result<SvgThemeMode, RenderError> {
+    match normalize_enum_token(value).as_str() {
+        "static" => Ok(SvgThemeMode::Static),
+        "dynamic" => Ok(SvgThemeMode::Dynamic),
+        _ => Err(RenderError {
+            message: format!("unknown svg theme mode: {value} (expected static or dynamic)"),
         }),
     }
 }

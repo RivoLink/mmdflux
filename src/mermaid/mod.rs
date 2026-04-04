@@ -9,12 +9,14 @@ pub mod error;
 pub mod flowchart;
 pub mod sequence;
 pub mod state;
+pub(crate) mod theme_hint;
 
 pub use ast::*;
 pub use error::*;
 pub use flowchart::{
     Flowchart, ParseOptions, parse_flowchart, parse_flowchart_with_options, strip_frontmatter,
 };
+pub(crate) use theme_hint::{extract_theme_hint, strip_theme_only_compat_syntax};
 
 /// The type of Mermaid diagram detected from input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -60,6 +60,66 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
+fn cli_accepts_svg_theme_flags_for_svg_output() {
+    mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--svg-theme",
+            "dark",
+            "--svg-theme-mode",
+            "dynamic",
+            "--svg-theme-bg",
+            "#101418",
+            "--svg-theme-accent",
+            "#7dd3fc",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("<svg"));
+}
+
+#[test]
+fn cli_rejects_invalid_svg_theme_mode() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-theme-mode", "animated"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid value 'animated'"))
+        .stderr(predicate::str::contains("static"))
+        .stderr(predicate::str::contains("dynamic"));
+}
+
+#[test]
+fn cli_svg_output_is_unchanged_when_no_theme_flags_are_supplied() {
+    let baseline = mmdflux()
+        .args(["--format", "svg"])
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("baseline svg render should execute");
+    assert!(
+        baseline.status.success(),
+        "baseline svg render failed: stderr={}",
+        String::from_utf8_lossy(&baseline.stderr)
+    );
+
+    let repeated = mmdflux()
+        .args(["--format", "svg"])
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("repeated svg render should execute");
+    assert!(
+        repeated.status.success(),
+        "repeated svg render failed: stderr={}",
+        String::from_utf8_lossy(&repeated.stderr)
+    );
+
+    assert_eq!(baseline.stdout, repeated.stdout);
+}
+
+#[test]
 fn cli_svg_defaults_to_flux_layered_behavior() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 

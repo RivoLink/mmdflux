@@ -33,7 +33,13 @@ pub(in crate::runtime) fn render_payload(
             OutputFormat::Svg => {
                 let metrics = measure::default_proportional_text_metrics();
                 let font_family = "\"trebuchet ms\", verdana, arial, sans-serif";
-                Ok(timeline::render_svg(&model, &metrics, font_family))
+                let theme = super::resolve_configured_svg_theme(config)?;
+                Ok(timeline::render_svg(
+                    &model,
+                    &metrics,
+                    font_family,
+                    theme.as_ref(),
+                ))
             }
             OutputFormat::Mmds => {
                 let metrics = measure::default_proportional_text_metrics();

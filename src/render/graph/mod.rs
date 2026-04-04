@@ -18,6 +18,7 @@ use crate::graph::direction_policy::build_node_directions;
 use crate::graph::geometry::{GraphGeometry, LayoutEdge, RoutedGraphGeometry, SelfEdgeGeometry};
 use crate::graph::routing::{self, EdgeRouting};
 use crate::graph::{Direction, Graph};
+use crate::render::svg::theme::ResolvedSvgTheme;
 use crate::simplification::PathSimplification;
 
 pub(crate) fn edge_routing_from_style(routing_style: RoutingStyle) -> EdgeRouting {
@@ -53,8 +54,9 @@ impl Default for TextRenderOptions {
     }
 }
 
-/// Render SVG directly from precomputed graph geometry.
-pub fn render_svg_from_geometry(
+/// Render SVG directly from precomputed graph geometry for crate-local tests.
+#[cfg(test)]
+pub(crate) fn render_svg_from_geometry(
     diagram: &Graph,
     geometry: &GraphGeometry,
     options: &SvgRenderOptions,
@@ -67,11 +69,12 @@ pub fn render_svg_from_geometry(
     )
 }
 
-/// Render SVG directly from precomputed routed graph geometry.
+/// Render SVG directly from precomputed routed graph geometry for crate-local tests.
 ///
 /// Routed geometry owns the edge path topology, so SVG emission uses the
 /// provided routed paths directly instead of generating routes from style.
-pub fn render_svg_from_routed_geometry(
+#[cfg(test)]
+pub(crate) fn render_svg_from_routed_geometry(
     diagram: &Graph,
     routed: &RoutedGraphGeometry,
     options: &SvgRenderOptions,
@@ -80,13 +83,40 @@ pub fn render_svg_from_routed_geometry(
     render_svg_from_geometry_with_routing(diagram, &geometry, options, EdgeRouting::EngineProvided)
 }
 
+#[cfg(test)]
 pub(crate) fn render_svg_from_geometry_with_routing(
     diagram: &Graph,
     geometry: &GraphGeometry,
     options: &SvgRenderOptions,
     edge_routing: EdgeRouting,
 ) -> String {
-    svg::render_svg_from_geometry(diagram, options, geometry, edge_routing)
+    render_svg_from_geometry_with_theme_and_routing(diagram, geometry, options, edge_routing, None)
+}
+
+pub(crate) fn render_svg_from_geometry_with_theme_and_routing(
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    options: &SvgRenderOptions,
+    edge_routing: EdgeRouting,
+    theme: Option<&ResolvedSvgTheme>,
+) -> String {
+    svg::render_svg_from_geometry_with_theme(diagram, options, geometry, edge_routing, theme)
+}
+
+pub(crate) fn render_svg_from_routed_geometry_with_theme(
+    diagram: &Graph,
+    routed: &RoutedGraphGeometry,
+    options: &SvgRenderOptions,
+    theme: Option<&ResolvedSvgTheme>,
+) -> String {
+    let geometry = geometry_for_routed_svg(diagram, routed);
+    render_svg_from_geometry_with_theme_and_routing(
+        diagram,
+        &geometry,
+        options,
+        EdgeRouting::EngineProvided,
+        theme,
+    )
 }
 
 fn geometry_for_routed_svg(diagram: &Graph, routed: &RoutedGraphGeometry) -> GraphGeometry {

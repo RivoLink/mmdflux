@@ -14,7 +14,7 @@ use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::mermaid::parse_flowchart;
 use crate::render::graph::{render_svg_from_geometry, render_svg_from_routed_geometry};
 use crate::simplification::PathSimplification;
-use crate::{OutputFormat, RenderConfig};
+use crate::{OutputFormat, RenderConfig, SvgThemeConfig};
 
 fn render_svg(diagram: &crate::graph::Graph, config: &RenderConfig) -> String {
     let engine = FluxLayeredEngine::text();
@@ -4023,6 +4023,35 @@ fn svg_render_applies_fill_stroke_and_label_color_from_node_style() {
 }
 
 #[test]
+fn runtime_svg_theme_does_not_override_node_style_colors() {
+    let input = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("flowchart")
+            .join("style-basic.mmd"),
+    )
+    .expect("fixture should load");
+    let svg = crate::render_diagram(
+        &input,
+        OutputFormat::Svg,
+        &RenderConfig {
+            svg_theme: Some(SvgThemeConfig {
+                name: Some("dark".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("runtime SVG render should succeed");
+
+    assert!(svg.contains("background-color: #333333;"), "{svg}");
+    assert!(svg.contains("fill=\"#ffeeaa\""), "{svg}");
+    assert!(svg.contains("stroke=\"#333\""), "{svg}");
+    assert!(svg.contains("fill=\"#111\">Alpha</text>"), "{svg}");
+}
+
+#[test]
 fn unstyled_svg_keeps_existing_default_colors() {
     let input = "graph TD\nA-->B\n";
     let flowchart = parse_flowchart(input).unwrap();
@@ -4272,6 +4301,7 @@ fn render_svg_positioned_mmds_routed_basic_includes_paths_and_subgraph() {
         config.geometry_level,
         &config.text_render_options(OutputFormat::Svg),
         &config.svg_render_options(),
+        None,
     )
     .expect("routed MMDS should render SVG");
 
@@ -5409,4 +5439,21 @@ fn svg_lr_architecture_target_transit_runtime_to_errors_does_not_cross_errors_in
         },
     );
     assert_edge_does_not_transit_target_rect_interior(&diagram, &svg, "runtime", "errors", -0.5);
+}
+
+#[test]
+fn svg_root_stays_transparent_when_no_theme_is_selected() {
+    let flowchart =
+        parse_flowchart("graph TD\nA[Start] --> B[End]\n").expect("inline flowchart should parse");
+    let diagram = compile_to_graph(&flowchart);
+    let svg = render_svg(&diagram, &RenderConfig::default());
+
+    assert!(
+        svg.contains("background-color: transparent;"),
+        "default SVG root should stay transparent: {svg}"
+    );
+    assert!(
+        !svg.contains("--bg:"),
+        "default SVG root should not emit theme variables: {svg}"
+    );
 }

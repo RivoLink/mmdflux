@@ -26,7 +26,8 @@ use markers::{
 pub(super) use path_emit::{document_svg_path, polygon_points};
 use path_emit::{path_from_prepared_points, points_for_svg_path};
 
-use super::{Point, Rect};
+pub(super) use self::markers::marker_id_for_arrow;
+use super::{GraphSvgPalette, Point, Rect};
 use crate::format::{CornerStyle, Curve};
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::routing::EdgeRouting;
@@ -388,6 +389,7 @@ pub(super) fn render_edges(
     curve: Curve,
     edge_radius: f64,
     scale: f64,
+    palette: &GraphSvgPalette,
 ) {
     writer.start_group("edgePaths");
 
@@ -424,7 +426,7 @@ pub(super) fn render_edges(
         if d.is_empty() {
             continue;
         }
-        let mut attrs = edge_style_attrs(edge, scale);
+        let mut attrs = edge_style_attrs(edge, scale, &palette.edge_stroke, palette.dynamic_css);
         attrs.push_str(&edge_marker_attrs(edge));
         let line = format!("<path d=\"{d}\"{attrs} />", d = d, attrs = attrs);
         writer.push_line(&line);

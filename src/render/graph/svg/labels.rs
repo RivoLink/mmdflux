@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use super::text::render_text_centered;
-use super::{Point, TEXT_COLOR};
+use super::text::{TextRenderStyle, render_text_centered};
+use super::{GraphSvgPalette, Point, dynamic_css_attrs};
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::graph::routing::compute_end_label_positions;
@@ -106,8 +106,14 @@ pub(super) fn render_edge_labels(
     override_nodes: &HashMap<String, String>,
     metrics: &ProportionalTextMetrics,
     scale: f64,
+    palette: &GraphSvgPalette,
 ) {
     let label_positions = precomputed_label_positions(geom);
+    let dynamic_attrs = dynamic_css_attrs(
+        palette.dynamic_css,
+        "graph-edge-text",
+        &["fill:var(--_text);"],
+    );
 
     writer.start_group("edgeLabels");
 
@@ -153,12 +159,17 @@ pub(super) fn render_edge_labels(
         };
         render_text_centered(
             writer,
-            point.x * scale,
-            point.y * scale,
+            Point {
+                x: point.x * scale,
+                y: point.y * scale,
+            },
             label,
-            TEXT_COLOR,
             metrics,
             scale,
+            TextRenderStyle {
+                color: &palette.edge_label_text,
+                extra_attrs: dynamic_attrs.as_str(),
+            },
         );
     }
 
@@ -181,23 +192,33 @@ pub(super) fn render_edge_labels(
         if let (Some(label), Some(pos)) = (&edge.head_label, head_pos) {
             render_text_centered(
                 writer,
-                pos.x * scale,
-                pos.y * scale,
+                Point {
+                    x: pos.x * scale,
+                    y: pos.y * scale,
+                },
                 label,
-                TEXT_COLOR,
                 metrics,
                 scale,
+                TextRenderStyle {
+                    color: &palette.edge_label_text,
+                    extra_attrs: dynamic_attrs.as_str(),
+                },
             );
         }
         if let (Some(label), Some(pos)) = (&edge.tail_label, tail_pos) {
             render_text_centered(
                 writer,
-                pos.x * scale,
-                pos.y * scale,
+                Point {
+                    x: pos.x * scale,
+                    y: pos.y * scale,
+                },
                 label,
-                TEXT_COLOR,
                 metrics,
                 scale,
+                TextRenderStyle {
+                    color: &palette.edge_label_text,
+                    extra_attrs: dynamic_attrs.as_str(),
+                },
             );
         }
     }

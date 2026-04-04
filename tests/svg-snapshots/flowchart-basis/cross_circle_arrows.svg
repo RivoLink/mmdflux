@@ -1,22 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 84.91 486.00" style="max-width: 84.91px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
-    </marker>
-    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
-    </marker>
     <marker id="circlehead" viewBox="0 0 12.00 12.00" refX="11.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <circle cx="6" cy="6" r="5" stroke="#333" stroke-width="1" fill="white" />
     </marker>
-    <marker id="open-arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <polygon points="0,0 10.00,5.00 0,10.00" fill="white" stroke="#333" stroke-width="1" />
-    </marker>
-    <marker id="diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="#333" />
-    </marker>
-    <marker id="open-diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="white" stroke="#333" stroke-width="1" />
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
     </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
@@ -34,9 +22,9 @@
     </g>
     <g class="edgePaths">
       <path d="M42.45,62.00 L42.45,64.78 C42.45,67.56 42.45,73.11 42.45,78.67 C42.45,84.22 42.45,89.78 42.45,95.33 C42.45,100.89 42.45,106.44 42.45,109.22 L42.45,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#crosshead)" />
-      <path d="M42.45,166.00 L42.45,168.78 C42.45,171.56 42.45,177.11 42.45,182.67 C42.45,188.22 42.45,193.78 42.45,199.33 C42.45,204.89 42.45,210.44 42.45,213.22 L42.45,216.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M42.45,166.00 L42.45,168.78 C42.45,171.56 42.45,177.11 42.45,182.67 C42.45,188.22 42.45,193.78 42.45,197.67 C42.45,201.56 42.45,203.78 42.45,204.89 L42.45,206.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
       <path d="M42.45,270.00 L42.45,272.78 C42.45,275.56 42.45,281.11 42.45,286.67 C42.45,292.22 42.45,297.78 42.45,303.33 C42.45,308.89 42.45,314.44 42.45,317.22 L42.45,320.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#crosshead)" marker-end="url(#crosshead)" />
-      <path d="M42.45,374.00 L42.45,376.78 C42.45,379.56 42.45,385.11 42.45,390.67 C42.45,396.22 42.45,401.78 42.45,407.33 C42.45,412.89 42.45,418.44 42.45,421.22 L42.45,424.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" marker-end="url(#circlehead)" />
+      <path d="M42.45,384.00 L42.45,385.11 C42.45,386.22 42.45,388.44 42.45,392.33 C42.45,396.22 42.45,401.78 42.45,405.67 C42.45,409.56 42.45,411.78 42.45,412.89 L42.45,414.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" marker-end="url(#circlehead)" />
     </g>
     <g class="edgeLabels">
     </g>

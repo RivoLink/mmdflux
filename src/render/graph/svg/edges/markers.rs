@@ -1,20 +1,28 @@
 use std::fmt::Write;
 
-use super::super::{Point, STROKE_COLOR};
+use super::super::{Point, dynamic_css_attrs};
 use super::{SegmentAxis, points_approx_equal, segment_axis, segment_manhattan_len};
 use crate::format::{CornerStyle, Curve};
 use crate::graph::{Arrow, Direction, Edge, Stroke};
 use crate::render::svg::fmt_f64;
 
-pub(super) fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
+pub(super) fn edge_style_attrs(
+    edge: &Edge,
+    scale: f64,
+    stroke_color: &str,
+    dynamic_css: bool,
+) -> String {
     let stroke_width = match edge.stroke {
         Stroke::Thick => 2.0 * scale,
         _ => 1.0 * scale,
     };
+    let dynamic_attrs =
+        dynamic_css_attrs(dynamic_css, "graph-edge-stroke", &["stroke:var(--_line);"]);
     let mut attrs = format!(
-        " stroke=\"{stroke}\" stroke-width=\"{width}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"",
-        stroke = STROKE_COLOR,
-        width = fmt_f64(stroke_width)
+        " stroke=\"{stroke}\" stroke-width=\"{width}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dynamic_attrs}",
+        stroke = stroke_color,
+        width = fmt_f64(stroke_width),
+        dynamic_attrs = dynamic_attrs
     );
     match edge.stroke {
         Stroke::Dotted => {
@@ -327,7 +335,7 @@ pub(super) fn curve_adaptive_orthogonal_terminal_support(
     }
 }
 
-fn marker_id_for_arrow(arrow: Arrow) -> Option<&'static str> {
+pub(crate) fn marker_id_for_arrow(arrow: Arrow) -> Option<&'static str> {
     match arrow {
         Arrow::Normal => Some("arrowhead"),
         Arrow::Cross => Some("crosshead"),
@@ -341,9 +349,12 @@ fn marker_id_for_arrow(arrow: Arrow) -> Option<&'static str> {
 
 fn marker_offset_for_arrow(arrow: Arrow) -> f64 {
     match arrow {
-        Arrow::Normal | Arrow::OpenTriangle => 4.0,
-        Arrow::Diamond | Arrow::OpenDiamond => 5.0,
-        Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
+        Arrow::Normal => 4.0,
+        Arrow::OpenTriangle => 5.0,
+        Arrow::Diamond => 5.0,
+        Arrow::OpenDiamond => 6.0,
+        Arrow::Circle => 10.0,
+        Arrow::Cross | Arrow::None => 0.0,
     }
 }
 

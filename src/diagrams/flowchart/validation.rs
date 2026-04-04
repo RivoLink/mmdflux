@@ -5,7 +5,7 @@
 
 use crate::errors::ParseDiagnostic;
 use crate::graph::style::parse_node_style_statement;
-use crate::mermaid::{ParseOptions, parse_flowchart_with_options};
+use crate::mermaid::{ParseOptions, parse_flowchart_with_options, strip_theme_only_compat_syntax};
 
 const STRICT_PARSE_WARNING_PREFIX: &str = "Strict parsing would reject this input:";
 
@@ -128,14 +128,21 @@ fn collect_subgraph_warnings(input: &str) -> Vec<ParseDiagnostic> {
 
 fn collect_strict_parse_warning(input: &str) -> Option<ParseDiagnostic> {
     let strict = ParseOptions { strict: true };
-    parse_flowchart_with_options(input, &strict)
-        .err()
-        .map(|error| {
-            let mut diagnostic = ParseDiagnostic::from(&error);
-            diagnostic.severity = "warning".to_string();
-            diagnostic.message = format!("{STRICT_PARSE_WARNING_PREFIX} {}", diagnostic.message);
-            diagnostic
-        })
+    let original_error = match parse_flowchart_with_options(input, &strict) {
+        Ok(_) => return None,
+        Err(error) => error,
+    };
+
+    if let Some(stripped) = strip_theme_only_compat_syntax(input)
+        && parse_flowchart_with_options(&stripped, &strict).is_ok()
+    {
+        return None;
+    }
+
+    let mut diagnostic = ParseDiagnostic::from(&original_error);
+    diagnostic.severity = "warning".to_string();
+    diagnostic.message = format!("{STRICT_PARSE_WARNING_PREFIX} {}", diagnostic.message);
+    Some(diagnostic)
 }
 
 fn ci_starts_with(line: &str, prefix: &str) -> bool {
@@ -168,6 +175,33 @@ mod tests {
         let input = "graph TD\n  A --> B\n";
         let warning = collect_strict_parse_warning(input);
         assert!(warning.is_none());
+    }
+
+    #[test]
+    fn strict_warning_ignores_theme_only_frontmatter() {
+        let input = "---\nconfig:\n  theme: dark\n---\ngraph TD\nA --> B\n";
+        let warning = collect_strict_parse_warning(input);
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn strict_warning_ignores_theme_only_init_directive() {
+        let input = "%%{init: {\"theme\": \"dark\"}}%%\ngraph TD\nA --> B\n";
+        let warning = collect_strict_parse_warning(input);
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn strict_warning_keeps_non_theme_init_keys() {
+        let input = "%%{init: {\"theme\": \"dark\", \"flowchart\": {\"curve\": \"basis\"}}}%%\ngraph TD\nA --> B\n";
+        let warning = collect_strict_parse_warning(input);
+        assert!(warning.is_some());
+        assert!(
+            warning
+                .unwrap()
+                .message
+                .contains("Strict parsing would reject")
+        );
     }
 
     #[test]

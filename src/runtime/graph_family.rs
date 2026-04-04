@@ -14,10 +14,11 @@ use crate::graph::measure::{
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::render::graph::{
-    SvgRenderOptions, render_svg_from_geometry, render_svg_from_routed_geometry,
-    render_text_from_geometry,
+    SvgRenderOptions, render_svg_from_geometry_with_theme_and_routing,
+    render_svg_from_routed_geometry_with_theme, render_text_from_geometry,
 };
 use crate::runtime::config::RenderConfig;
+use crate::runtime::resolve_configured_svg_theme;
 use crate::simplification::PathSimplification;
 
 pub(in crate::runtime) fn render_graph_family(
@@ -50,7 +51,9 @@ pub(in crate::runtime) fn render_graph_family(
         ),
         OutputFormat::Svg => {
             let options = config.svg_render_options();
-            Ok(render_svg_from_solve_result(diagram, &result, &options))
+            Ok(render_svg_from_solve_result(
+                diagram, &result, &options, config,
+            )?)
         }
         OutputFormat::Text | OutputFormat::Ascii => {
             let options = config.text_render_options(format);
@@ -138,11 +141,22 @@ fn render_svg_from_solve_result(
     diagram: &Graph,
     result: &GraphSolveResult,
     options: &SvgRenderOptions,
-) -> String {
-    match result.routed.as_ref() {
-        Some(routed) => render_svg_from_routed_geometry(diagram, routed, options),
-        None => render_svg_from_geometry(diagram, &result.geometry, options),
-    }
+    config: &RenderConfig,
+) -> Result<String, RenderError> {
+    let theme = resolve_configured_svg_theme(config)?;
+
+    Ok(match result.routed.as_ref() {
+        Some(routed) => {
+            render_svg_from_routed_geometry_with_theme(diagram, routed, options, theme.as_ref())
+        }
+        None => render_svg_from_geometry_with_theme_and_routing(
+            diagram,
+            &result.geometry,
+            options,
+            crate::render::graph::edge_routing_from_style(options.routing_style),
+            theme.as_ref(),
+        ),
+    })
 }
 
 fn render_mmds_from_solve_result(
@@ -224,7 +238,13 @@ mod tests {
     #[test]
     fn svg_renderer_consumes_graph_solve_result() {
         let (diagram, result) = graph_solve_result_fixture();
-        let svg = render_svg_from_solve_result(&diagram, &result, &SvgRenderOptions::default());
+        let svg = render_svg_from_solve_result(
+            &diagram,
+            &result,
+            &SvgRenderOptions::default(),
+            &RenderConfig::default(),
+        )
+        .expect("SVG render should succeed");
         assert!(svg.starts_with("<svg"));
     }
 

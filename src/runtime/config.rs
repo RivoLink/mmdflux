@@ -7,6 +7,39 @@ use crate::graph::GeometryLevel;
 use crate::render::graph::{SvgRenderOptions, TextRenderOptions};
 use crate::simplification::PathSimplification;
 
+/// SVG theme rendering mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SvgThemeMode {
+    /// Emit concrete hex colors only.
+    #[default]
+    Static,
+    /// Emit CSS variables and style hooks alongside hex fallbacks.
+    Dynamic,
+}
+
+/// SVG theme configuration owned by the runtime facade.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SvgThemeConfig {
+    /// Named theme to resolve before applying slot overrides.
+    pub name: Option<String>,
+    /// Output mode for SVG theme emission.
+    pub mode: SvgThemeMode,
+    /// Background color override.
+    pub bg: Option<String>,
+    /// Foreground text color override.
+    pub fg: Option<String>,
+    /// Line and edge color override.
+    pub line: Option<String>,
+    /// Accent color override.
+    pub accent: Option<String>,
+    /// Muted color override.
+    pub muted: Option<String>,
+    /// Surface fill color override.
+    pub surface: Option<String>,
+    /// Border color override.
+    pub border: Option<String>,
+}
+
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
 pub struct RenderConfig {
@@ -36,6 +69,8 @@ pub struct RenderConfig {
     pub svg_node_padding_x: Option<f64>,
     /// SVG-specific: node padding on y-axis (px).
     pub svg_node_padding_y: Option<f64>,
+    /// SVG theme selection and per-slot overrides.
+    pub svg_theme: Option<SvgThemeConfig>,
     /// Show node IDs alongside labels.
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.
@@ -213,5 +248,17 @@ mod tests {
 
         assert_eq!(options.routing_style, RoutingStyle::Polyline);
         assert_eq!(options.curve, Curve::Basis);
+    }
+
+    #[test]
+    fn render_config_defaults_to_no_svg_theme() {
+        let config = RenderConfig::default();
+
+        assert!(config.svg_theme.is_none());
+    }
+
+    #[test]
+    fn svg_theme_mode_defaults_to_static() {
+        assert_eq!(SvgThemeMode::default(), SvgThemeMode::Static);
     }
 }

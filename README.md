@@ -148,6 +148,12 @@ NO_COLOR=1 mmdflux --format text --color always diagram.mmd
 # SVG output
 mmdflux --format svg diagram.mmd -o diagram.svg
 
+# SVG output with a named theme
+mmdflux --format svg --svg-theme dark diagram.mmd -o diagram.svg
+
+# Browser-oriented SVG with CSS variables plus hex fallbacks
+mmdflux --format svg --svg-theme dark --svg-theme-mode dynamic diagram.mmd -o diagram.svg
+
 # MMDS JSON output with routed geometry detail
 mmdflux --format mmds --geometry-level routed diagram.mmd
 
@@ -176,7 +182,7 @@ See more examples in the sections below.
 | Best fit   | Deterministic routed output     | Mermaid-compatible output |
 
 Sequence diagrams use a separate timeline renderer, currently support text/ascii
-output only, and do not accept `--layout-engine`.
+and SVG output, and do not accept `--layout-engine`.
 
 ### SVG edge presets
 
@@ -198,6 +204,37 @@ mmdflux --format svg --edge-preset curved-step diagram.mmd -o diagram.svg
 # Explicit curve control
 mmdflux --format svg --curve linear-rounded diagram.mmd -o diagram.svg
 ```
+
+## SVG Theming
+
+SVG theming is opt-in and affects SVG output only.
+
+- **Explicit config wins.** CLI flags and `RenderConfig.svg_theme` take precedence over Mermaid source hints.
+- **Mermaid hints are supported.** `config.theme` in YAML frontmatter and `%%{init: {"theme": "..."}}%%` both select a named SVG theme when no explicit SVG theme is supplied.
+- **Unthemed output stays available.** If no explicit theme or Mermaid hint is present, SVG rendering keeps the existing unthemed palette.
+- **Static mode is the default.** Static mode emits concrete hex colors for maximum rasterizer compatibility.
+- **Dynamic mode is additive.** `--svg-theme-mode dynamic` emits the same hex fallbacks plus root CSS variables and a `<style>` block for browser embedding.
+
+Supported theme slots match the runtime facade: `bg`, `fg`, `line`, `accent`, `muted`, `surface`, and `border`.
+
+```rust
+use mmdflux::{OutputFormat, RenderConfig, SvgThemeConfig, SvgThemeMode, render_diagram};
+
+let svg = render_diagram(
+    "graph TD\nA-->B\n",
+    OutputFormat::Svg,
+    &RenderConfig {
+        svg_theme: Some(SvgThemeConfig {
+            name: Some("dark".into()),
+            mode: SvgThemeMode::Dynamic,
+            ..Default::default()
+        }),
+        ..Default::default()
+    },
+)?;
+```
+
+SVG `<defs>` blocks are also pruned to the markers each diagram actually uses, so simple flowcharts and sequence diagrams no longer carry unused arrowhead definitions.
 
 ## Documentation
 

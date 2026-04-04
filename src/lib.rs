@@ -194,9 +194,9 @@ pub use format::ColorWhen;
 pub use format::OutputFormat;
 /// Text output color mode (plain, styled, or ANSI).
 pub use format::TextColorMode;
-pub use runtime::config::RenderConfig;
 /// Layout configuration for the Sugiyama hierarchical engine.
 pub use runtime::config::{LabelDummyStrategy, LayoutConfig, LayoutDirection, Ranker};
+pub use runtime::config::{RenderConfig, SvgThemeConfig, SvgThemeMode};
 /// Serde-friendly config input for JSON consumers (WASM, API).
 pub use runtime::config_input::RuntimeConfigInput;
 /// Apply default SVG surface settings (curve, engine) when format is SVG.

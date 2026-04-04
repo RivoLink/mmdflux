@@ -13,9 +13,11 @@ use crate::mmds::{
     hydrate_routed_geometry_from_output, parse_input, resolve_logical_diagram_id,
 };
 use crate::render::graph::{
-    SvgRenderOptions, TextRenderOptions, render_svg_from_geometry, render_svg_from_routed_geometry,
+    SvgRenderOptions, TextRenderOptions, edge_routing_from_style,
+    render_svg_from_geometry_with_theme_and_routing, render_svg_from_routed_geometry_with_theme,
     render_text_from_geometry,
 };
+use crate::render::svg::theme::ResolvedSvgTheme;
 
 /// Render MMDS input through the MMDS replay path.
 pub fn render_input(
@@ -24,10 +26,18 @@ pub fn render_input(
     geometry_level: GeometryLevel,
     text_options: &TextRenderOptions,
     svg_options: &SvgRenderOptions,
+    svg_theme: Option<&ResolvedSvgTheme>,
 ) -> Result<String, RenderError> {
     let payload =
         parse_input(input).map_err(|error| prefixed_display_error("parse error", error))?;
-    render_output(&payload, format, geometry_level, text_options, svg_options)
+    render_output(
+        &payload,
+        format,
+        geometry_level,
+        text_options,
+        svg_options,
+        svg_theme,
+    )
 }
 
 /// Render a parsed MMDS payload through the MMDS replay path.
@@ -37,6 +47,7 @@ pub fn render_output(
     geometry_level: GeometryLevel,
     text_options: &TextRenderOptions,
     svg_options: &SvgRenderOptions,
+    svg_theme: Option<&ResolvedSvgTheme>,
 ) -> Result<String, RenderError> {
     let diagram_id = resolve_logical_diagram_id(payload)?;
     let has_routed_geometry = payload.geometry_level == "routed";
@@ -85,8 +96,16 @@ pub fn render_output(
             ))
         }
         OutputFormat::Svg => Ok(match routed.as_ref() {
-            Some(routed) => render_svg_from_routed_geometry(&diagram, routed, svg_options),
-            None => render_svg_from_geometry(&diagram, &geometry, svg_options),
+            Some(routed) => {
+                render_svg_from_routed_geometry_with_theme(&diagram, routed, svg_options, svg_theme)
+            }
+            None => render_svg_from_geometry_with_theme_and_routing(
+                &diagram,
+                &geometry,
+                svg_options,
+                edge_routing_from_style(svg_options.routing_style),
+                svg_theme,
+            ),
         }),
         _ => Err(RenderError {
             message: format!("{format} output is not supported for {diagram_id} diagrams"),
