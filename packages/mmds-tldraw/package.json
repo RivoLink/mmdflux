@@ -1,6 +1,6 @@
 {
   "name": "@mmds/tldraw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Convert MMDS JSON to tldraw .tldr format",
   "main": "dist/index.js",
@@ -33,7 +33,7 @@
     "preview": "vite --config vite.preview.config.ts"
   },
   "dependencies": {
-    "@mmds/core": "^0.1.0",
+    "@mmds/core": "^0.2.0",
     "@tldraw/editor": "4.4.0",
     "fractional-indexing": "^3.2.0"
   },
