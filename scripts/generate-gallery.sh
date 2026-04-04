@@ -82,7 +82,17 @@ while IFS= read -r f; do
   class_files+=("$f")
 done < <(collect_fixtures "$REPO/tests/fixtures/class")
 
-total_count=$(( ${#flowchart_files[@]} + ${#class_files[@]} ))
+sequence_files=()
+while IFS= read -r f; do
+  sequence_files+=("$f")
+done < <(collect_fixtures "$REPO/tests/fixtures/sequence")
+
+state_files=()
+while IFS= read -r f; do
+  state_files+=("$f")
+done < <(collect_fixtures "$REPO/tests/fixtures/state")
+
+total_count=$(( ${#flowchart_files[@]} + ${#class_files[@]} + ${#sequence_files[@]} + ${#state_files[@]} ))
 
 if [[ $total_count -eq 0 ]]; then
   echo "No fixtures found." >&2
@@ -98,6 +108,8 @@ commit_sha="$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown
   echo
   echo "- [Flowchart](#flowchart) (${#flowchart_files[@]})"
   echo "- [Class](#class) (${#class_files[@]})"
+  echo "- [Sequence](#sequence) (${#sequence_files[@]})"
+  echo "- [State](#state) (${#state_files[@]})"
   echo
 } > "$OUTFILE"
 
@@ -186,6 +198,18 @@ emit_section "Class" \
   "$REPO/tests/snapshots/class" \
   "$REPO/tests/svg-snapshots/class" \
   "${class_files[@]}"
+
+emit_section "Sequence" \
+  "$REPO/tests/fixtures/sequence" \
+  "$REPO/tests/snapshots/sequence" \
+  "$REPO/tests/svg-snapshots/sequence" \
+  "${sequence_files[@]}"
+
+emit_section "State" \
+  "$REPO/tests/fixtures/state" \
+  "$REPO/tests/snapshots/state" \
+  "$REPO/tests/svg-snapshots/state" \
+  "${state_files[@]}"
 
 if [[ $missing_text -gt 0 || $missing_svg -gt 0 ]]; then
   echo "---" >> "$OUTFILE"

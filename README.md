@@ -97,7 +97,7 @@ compound graph, not rendered recursively. This produces globally optimized
 positioning and consistent cross-boundary edge routing.
 
 **Multiple engines for graph-family diagrams.** The default `flux-layered`
-engine handles flowchart/class text, SVG, and MMDS output. Switch to
+engine handles flowchart/class/state text, SVG, and MMDS output. Switch to
 `mermaid-layered` for Mermaid-compatible graph output.
 
 ## Ecosystem
@@ -165,7 +165,7 @@ See more examples in the sections below.
 
 ## What It Supports
 
-- **Diagram types:** flowchart, class, sequence
+- **Diagram types:** flowchart, class, sequence, state
 - **Output formats:** Unicode text, ASCII text, SVG, MMDS JSON
 - **Layout directions:** `TD`, `BT`, `LR`, `RL` (with per-subgraph overrides)
 - **Edge styles:** solid, dotted, thick, invisible, cross-arrow, circle-arrow
@@ -174,15 +174,15 @@ See more examples in the sections below.
 
 ## Graph-Family Engines
 
-|            | `flux-layered`                  | `mermaid-layered`         |
-| ---------- | ------------------------------- | ------------------------- |
-| Applies to | Flowchart/class text, SVG, MMDS | Flowchart/class SVG, MMDS |
-| Routing    | Orthogonal, polyline, direct    | Polyline                  |
-| Subgraphs  | Compound graph (global layout)  | Compound graph            |
-| Best fit   | Deterministic routed output     | Mermaid-compatible output |
+|            | `flux-layered`                        | `mermaid-layered`         |
+| ---------- | ------------------------------------- | ------------------------- |
+| Applies to | Flowchart/class/state text, SVG, MMDS | Flowchart/class SVG, MMDS |
+| Routing    | Orthogonal, polyline, direct          | Polyline                  |
+| Subgraphs  | Compound graph (global layout)        | Compound graph            |
+| Best fit   | Deterministic routed output           | Mermaid-compatible output |
 
-Sequence diagrams use a separate timeline renderer, currently support text/ascii
-and SVG output, and do not accept `--layout-engine`.
+Sequence diagrams use a separate timeline renderer, support text/ascii, SVG, and
+MMDS output, and do not accept `--layout-engine`.
 
 ### SVG edge presets
 
@@ -239,7 +239,7 @@ SVG `<defs>` blocks are also pruned to the markers each diagram actually uses, s
 ## Documentation
 
 - [Developer setup](docs/development/setup.md) — prerequisites and first-time setup
-- [Gallery](docs/gallery.md) — rendered output for 110 fixtures
+- [Gallery](docs/gallery.md) — rendered output for 152 fixtures
 - [MMDS specification](docs/mmds.md) — structured JSON format
 - [Edge routing design](docs/edge-routing-heuristics.md) — routing internals
 

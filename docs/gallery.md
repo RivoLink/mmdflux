@@ -1,11 +1,11 @@
 # mmdflux gallery
 
-_Generated from commit `e35d5c67` — 112 fixtures_
+_Generated from commit `47066879` — 152 fixtures_
 
-- [Flowchart](#flowchart) (95)
+- [Flowchart](#flowchart) (98)
 - [Class](#class) (17)
-
-SVG snapshots in this gallery use the static SVG renderer path. Mermaid compatibility fixtures that carry a `theme` hint render with that theme intentionally, and each snapshot's `<defs>` block includes only the marker definitions actually referenced by the diagram.
+- [Sequence](#sequence) (28)
+- [State](#state) (9)
 
 # Flowchart
 
@@ -1265,6 +1265,148 @@ graph TD
     D ==> H[Notify Admin]
     G & H --> I[Cleanup]
     I --> F
+
+```
+
+</details>
+
+## compound_backward_cross_boundary
+
+`tests/fixtures/flowchart/compound_backward_cross_boundary.mmd`
+
+**Text**
+
+```text
+┌─────────────────────── Input Layer ───────────────────────┐
+│       ╭─────────────╮             ┌───────────────┐       │
+│       │ API Gateway │             │ Load Balancer │       │
+│       ╰─────────────╯             └───────────────┘       │
+│              │                           │                │
+└──────────────┼───────────────────────────┼────────────────┘
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+            request                     health
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+               │                           │
+             ┌─┘                           │
+             │                             │
+           ┌─┼──────────────── Processing ─┼─────────────────┐
+           │ ▼    ▼                                          │
+           │┌────────┐                                       │
+           │< Route? >◄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┄┄┐
+           │└────────┘                                       │  ┆
+           │ └──┴┄┄┬┴┄┄┄┄┄┄┄┄┬───────┐                       │  ┆
+           │       │       write     │                       │  ┆
+           │       │         ┆   fast path                   │  ┆
+           │       │         ┆       └────────────┐          │  ┆
+           │       │         ▼                    ▼          │  ┆
+           │     read  ┌───────────┐             ┌───────────┐  ┆
+           │       │   │ Transform │             │ Cache Hit │  ┆
+           │       │   └───────────┘             └───────────┘  ┆
+           │       └───────────┼─┐                     │     │  ┆
+           │                   └─┼────────┐            │     │  ┆
+           │                     │        │            │     │  ┆
+           │                     │        │            │     │  ┆
+           │                     ▼        ▼            │     │  ┆
+           │                    ┌──────────┐           │     │  ┆
+           │                    ( Database )           │     │  ┆
+           │                    └──────────┘           │     │  ┆
+           │                          │                │     │  ┆
+           └──────────────────────────┼────────────────┼─────┘  ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │      retry
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                      │                │        ┆
+                                   result              │        ┆
+                    ┌─────────────────┘                │        ┆
+    ┌────────── Output Layer ───────────┬────────────hit        ┆
+    │               ▼  ▼                │                       ┆
+    │           ┌───────────┐           │                       ┆
+    │           ║ Formatter ║           │                       ┆
+    │           └───────────┘           │                       ┆
+    │                 │                 │                       ┆
+    │                 │                 │                       ┆
+    │                 │                 │                       ┆
+    │                 │                 │                       ┆
+    │             response              │                       ┆
+    │                 │                 │                       ┆
+    │                 │                 │                       ┆
+    │                 │                 │                       ┆
+    │                 ▼                 │                       ┆
+    │           ╭────────╮              │                       ┆
+    │           │ Status │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘
+    │           ╰────────╯              │
+    │                                   │
+    └───────────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![compound_backward_cross_boundary svg](../tests/svg-snapshots/flowchart/compound_backward_cross_boundary.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph input[Input Layer]
+        A([API Gateway])
+        B[\Load Balancer/]
+    end
+
+    subgraph processing[Processing]
+        C{Route?}
+        D[/Transform\]
+        E[(Database)]
+        F>Cache Hit]
+    end
+
+    subgraph output[Output Layer]
+        G((Status))
+        H[[Formatter]]
+    end
+
+    A -->|request| C
+    B -->|health| C
+    C -->|read| E
+    C -->|fast path| F
+    C -.->|write| D
+    D --> E
+    E -->|result| H
+    F -->|hit| H
+    H -->|response| G
+    G -.->|retry| C
 
 ```
 
@@ -4344,7 +4486,7 @@ graph TD
 **Text**
 
 ```text
-●  ───► ◉  ───► ⊗
+● ───►  ◉ ───►  ⊗
 ```
 
 <details>
@@ -5529,6 +5671,103 @@ graph TD
 
 </details>
 
+## system-architecture
+
+`tests/fixtures/flowchart/system-architecture.mmd`
+
+**Text**
+
+```text
+┌──────────────────── Client Layer ─────────────────────┐
+│           ╭─────────╮                                 │                 ┌────── Service Layer ──────┐                         ┌──────── Data Layer ────────┐
+│           │ Web App │                                 │                 │          ┌──────────────┐ │                         │              ┌─────────┐   │
+│           ╰─────────╯───┐                             │                 │          │ Auth Service │─┼─────────────────────────┼─────────────►( Auth DB )   │
+│                         │                    ┌────────┼─────────────────┼─────────►└──────────────┘ │                         │              └─────────┘   │
+│                         │                    │        │                 │                           │                         │                            │
+│                         │                    │        │                 │                           │                         │                            │
+│                         │                    │        │                 │                           │                         │                            │
+│                         └───►┌─────────────┐─┘        │                 │          ┌──────────────┐ │                         │              ┌─────────┐   │
+│                              │ API Gateway │──────────┼─────────────────┼─────────►│ User Service │─┼─────────────────────────┼─────────────►( User DB )   │
+│                          ┌──►└─────────────┘─┐        │                 │          └──────────────┘ │                         │              └─────────┘   │
+│                          │                   │        │                 │                           │                         │                            │
+│                          │                   │        │                 │                           │                         │                            │
+│          ╭────────────╮──┘                   │        │                 │                           │                         │                            │
+│          │ Mobile App │                      │        │                 │                           │                         │             ┌──────────┐   │
+│          ╰────────────╯                      │        │                 │                           │                         │             ( Order DB )   │
+└──────────────────────────────────────────────┼────────┘                 │                           │┌────────────────────────┼────────────►└──────────┘   │
+                                               └──────────────────────────┼─────────►┌───────────────┐┼┘                        │                            │
+                                                                          │          │ Order Service ││                         │                            │
+                                                                          │          └───────────────┘┼┐                        │                            │
+                                                                          └───────────────────────────┘└────────────────────────┼──────────►╭───────────────╮│
+                                                                                                                                │           │ Message Queue ││
+                                                                                                                                │           ╰───────────────╯│
+                                                                                                                                └────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![system-architecture svg](../tests/svg-snapshots/flowchart/system-architecture.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+  subgraph clients [Client Layer]
+    A([Web App]) --> B[API Gateway]
+    C([Mobile App]) --> B
+  end
+  subgraph services [Service Layer]
+    B --> D[Auth Service]
+    B --> E[User Service]
+    B --> F[Order Service]
+  end
+  subgraph data [Data Layer]
+    D --> G[(Auth DB)]
+    E --> H[(User DB)]
+    F --> I[(Order DB)]
+    F --> J([Message Queue])
+  end
+
+```
+
+</details>
+
+## unicode_identifiers
+
+`tests/fixtures/flowchart/unicode_identifiers.mmd`
+
+**Text**
+
+```text
+┌────────┐     ┌─────────┐     ┌──────┐      ┌──────┐
+│ Lasaña │────►│ Máquina │────►│ Ñoño │─────►│ Über │
+└────────┘     └─────────┘     └──────┘      └──────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![unicode_identifiers svg](../tests/svg-snapshots/flowchart/unicode_identifiers.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+    Lasaña --> Máquina
+    Máquina --> Ñoño
+    Ñoño --> Über
+
+```
+
+</details>
+
 ## very_narrow_fan_in
 
 `tests/fixtures/flowchart/very_narrow_fan_in.mmd`
@@ -6396,3 +6635,1730 @@ foo ()-- Class01
 ```
 
 </details>
+
+# Sequence
+
+## activation_explicit
+
+`tests/fixtures/sequence/activation_explicit.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Hello────────────>║
+    │                   ║
+    │<Reply─────────────║
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![activation_explicit svg](../tests/svg-snapshots/sequence/activation_explicit.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Hello
+    activate Bob
+    Bob->>Alice: Reply
+    deactivate Bob
+
+```
+
+</details>
+
+## activation_nested
+
+`tests/fixtures/sequence/activation_nested.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Request 1────────>║
+    │                   ║
+    │─Request 2────────>║║
+    │                   ║║
+    │<Response 2┄┄┄┄┄┄┄┄║║
+    │                   ║
+    │<Response 1┄┄┄┄┄┄┄┄║
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![activation_nested svg](../tests/svg-snapshots/sequence/activation_nested.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>+Bob: Request 1
+    Alice->>+Bob: Request 2
+    Bob-->>-Alice: Response 2
+    Bob-->>-Alice: Response 1
+
+```
+
+</details>
+
+## activation_shorthand
+
+`tests/fixtures/sequence/activation_shorthand.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Request──────────>║
+    │                   ║
+    │<Response┄┄┄┄┄┄┄┄┄┄║
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![activation_shorthand svg](../tests/svg-snapshots/sequence/activation_shorthand.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>+Bob: Request
+    Bob-->>-Alice: Response
+
+```
+
+</details>
+
+## all_arrows
+
+`tests/fixtures/sequence/all_arrows.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Solid filled─────>│
+  │                   │
+  │┄Dashed filled┄┄┄┄>│
+  │                   │
+  │─Solid plain───────│
+  │                   │
+  │┄Dashed plain┄┄┄┄┄┄│
+  │                   │
+  │─Solid cross──────x│
+  │                   │
+  │┄Dashed cross┄┄┄┄┄x│
+  │                   │
+  │─Solid async──────)│
+  │                   │
+  │┄Dashed async┄┄┄┄┄)│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![all_arrows svg](../tests/svg-snapshots/sequence/all_arrows.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Solid filled
+    A-->>B: Dashed filled
+    A->B: Solid plain
+    A-->B: Dashed plain
+    A-xB: Solid cross
+    A--xB: Dashed cross
+    A-)B: Solid async
+    A--)B: Dashed async
+
+```
+
+</details>
+
+## alt_else
+
+`tests/fixtures/sequence/alt_else.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Check status─────>│
+    │                   │
+  ┌─[alt] available─────┼─┐
+  │ │<Available─────────│ │
+  │ │                   │ │
+  ├┄[else] busy┄┄┄┄┄┄┄┄┄┼┄┤
+  │ │<Busy┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
+  │ │                   │ │
+  └─┼───────────────────┼─┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![alt_else svg](../tests/svg-snapshots/sequence/alt_else.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Check status
+    alt available
+        Bob->>Alice: Available
+    else busy
+        Bob-->>Alice: Busy
+    end
+
+```
+
+</details>
+
+## async_arrow
+
+`tests/fixtures/sequence/async_arrow.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Fire and forget──)│
+    │                   │
+    │(Async return┄┄┄┄┄┄│
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![async_arrow svg](../tests/svg-snapshots/sequence/async_arrow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice-)Bob: Fire and forget
+    Bob--)Alice: Async return
+
+```
+
+</details>
+
+## autonumber_controls
+
+`tests/fixtures/sequence/autonumber_controls.mmd`
+
+**Text**
+
+```text
+┌────────┐             ┌─────┐
+│ Client │             │ API │
+└────┬───┘             └──┬──┘
+     │                    │
+     │─10. Login request─>│
+     │                    │
+     │<12. Challenge┄┄┄┄┄┄│
+     │                    │
+     │─Background ping───>│
+     │                    │
+     │<14. Session ready┄┄│
+     │                    │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![autonumber_controls svg](../tests/svg-snapshots/sequence/autonumber_controls.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Client
+    participant API
+    autonumber 10 2
+    Client->>API: Login request
+    API-->>Client: Challenge
+    autonumber off
+    Client->>API: Background ping
+    autonumber
+    API-->>Client: Session ready
+
+```
+
+</details>
+
+## autonumber
+
+`tests/fixtures/sequence/autonumber.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─1. First─────────>│
+  │                   │
+  │<2. Second─────────│
+  │                   │
+  │─3. Third─────────>│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![autonumber svg](../tests/svg-snapshots/sequence/autonumber.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    autonumber
+    participant A
+    participant B
+    A->>B: First
+    B->>A: Second
+    A->>B: Third
+
+```
+
+</details>
+
+## break_block
+
+`tests/fixtures/sequence/break_block.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+  ┌─[loop] Retries──────┼─┐
+  │ │─Try──────────────>│ │
+  │ │                   │ │
+  │ ├─[break] Success───┤ │
+  │ │<Done──────────────│ │
+  │ │                   │ │
+  │ ├───────────────────┤ │
+  │ │                   │ │
+  └─┼───────────────────┼─┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![break_block svg](../tests/svg-snapshots/sequence/break_block.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    loop Retries
+        Alice->>Bob: Try
+        break Success
+            Bob->>Alice: Done
+        end
+    end
+
+```
+
+</details>
+
+## create_participant
+
+`tests/fixtures/sequence/create_participant.mmd`
+
+**Text**
+
+```text
+┌───────┐
+│ Alice │
+└───┬───┘
+    │                ┌─────┐
+    │─Create Bob────>│ Bob │
+    │                └──┬──┘
+    │                   │
+    │<Hello Alice┄┄┄┄┄┄┄│
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![create_participant svg](../tests/svg-snapshots/sequence/create_participant.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    create participant Bob
+    Alice->>Bob: Create Bob
+    Bob-->>Alice: Hello Alice
+
+```
+
+</details>
+
+## critical_option
+
+`tests/fixtures/sequence/critical_option.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+  ┌─[critical] Establish connection┐
+  │ │─Connect──────────>│          │
+  │ │                   │          │
+  ├┄[option] Timeout┄┄┄┄┼┄┄┄┄┄┄┄┄┄┄┤
+  │ ├───┐ Retry         │          │
+  │ │   │               │          │
+  │ <───┘               │          │
+  │ │                   │          │
+  └─┼───────────────────┼──────────┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![critical_option svg](../tests/svg-snapshots/sequence/critical_option.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    critical Establish connection
+        Alice->>Bob: Connect
+    option Timeout
+        Alice->>Alice: Retry
+    end
+
+```
+
+</details>
+
+## cross_arrow
+
+`tests/fixtures/sequence/cross_arrow.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Lost message─────x│
+    │                   │
+    │xLost return┄┄┄┄┄┄┄│
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![cross_arrow svg](../tests/svg-snapshots/sequence/cross_arrow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice-xBob: Lost message
+    Bob--xAlice: Lost return
+
+```
+
+</details>
+
+## dashed
+
+`tests/fixtures/sequence/dashed.mmd`
+
+**Text**
+
+```text
+┌────────┐          ┌────────┐
+│ Client │          │ Server │
+└────┬───┘          └────┬───┘
+     │                   │
+     │─Request──────────>│
+     │                   │
+     │<Response┄┄┄┄┄┄┄┄┄┄│
+     │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![dashed svg](../tests/svg-snapshots/sequence/dashed.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Client
+    participant Server
+    Client->>Server: Request
+    Server-->>Client: Response
+
+```
+
+</details>
+
+## destroy_participant
+
+`tests/fixtures/sequence/destroy_participant.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Working──────────>│
+    │                   │
+    │─Goodbye──────────XXX
+    │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![destroy_participant svg](../tests/svg-snapshots/sequence/destroy_participant.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Working
+    destroy Bob
+    Alice->>Bob: Goodbye
+
+```
+
+</details>
+
+## loop
+
+`tests/fixtures/sequence/loop.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+  ┌─[loop] Every 5 seconds┐
+  │ │─Heartbeat────────>│ │
+  │ │                   │ │
+  │ │<Ack┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
+  │ │                   │ │
+  └─┼───────────────────┼─┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![loop svg](../tests/svg-snapshots/sequence/loop.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    loop Every 5 seconds
+        Alice->>Bob: Heartbeat
+        Bob-->>Alice: Ack
+    end
+
+```
+
+</details>
+
+## nested_blocks
+
+`tests/fixtures/sequence/nested_blocks.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+  ┌─[loop] Retry until ready┐
+  │ │─Check────────────>│   │
+  │ │                   │   │
+  │ ├─[alt] ready───────┤   │
+  │ │<Proceed───────────│   │
+  │ │                   │   │
+  │ ├┄[else] retry┄┄┄┄┄┄┤   │
+  │ │<Wait┄┄┄┄┄┄┄┄┄┄┄┄┄┄│   │
+  │ │                   │   │
+  │ ├───────────────────┤   │
+  │ │                   │   │
+  └─┼───────────────────┼───┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![nested_blocks svg](../tests/svg-snapshots/sequence/nested_blocks.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    loop Retry until ready
+        Alice->>Bob: Check
+        alt ready
+            Bob->>Alice: Proceed
+        else retry
+            Bob-->>Alice: Wait
+        end
+    end
+
+```
+
+</details>
+
+## note_left
+
+`tests/fixtures/sequence/note_left.mmd`
+
+**Text**
+
+```text
+           ┌───┐               ┌───┐
+           │ A │               │ B │
+           └─┬─┘               └─┬─┘
+             │                   │
+             │─Hello────────────>│
+             │                   │
+┌──────────┐ │                   │
+│ Thinking │ │                   │
+└──────────┘ │                   │
+             │                   │
+             │<Reply─────────────│
+             │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![note_left svg](../tests/svg-snapshots/sequence/note_left.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    Note left of A: Thinking
+    B->>A: Reply
+
+```
+
+</details>
+
+## note_right
+
+`tests/fixtures/sequence/note_right.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Hello────────────>│
+  │                   │
+  │                   │ ┌──────────┐
+  │                   │ │ Thinking │
+  │                   │ └──────────┘
+  │                   │
+  │<Reply─────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![note_right svg](../tests/svg-snapshots/sequence/note_right.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    Note right of B: Thinking
+    B->>A: Reply
+
+```
+
+</details>
+
+## note_spanning
+
+`tests/fixtures/sequence/note_spanning.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Hello────────────>│
+  │                   │
+┌──────────────────────┐
+│    Both thinking     │
+└──────────────────────┘
+  │                   │
+  │<Reply─────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![note_spanning svg](../tests/svg-snapshots/sequence/note_spanning.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    Note over A,B: Both thinking
+    B->>A: Reply
+
+```
+
+</details>
+
+## note
+
+`tests/fixtures/sequence/note.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Hello────────────>│
+  │                   │
+  │             ┌──────────┐
+  │             │ Thinking │
+  │             └──────────┘
+  │                   │
+  │<Reply─────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![note svg](../tests/svg-snapshots/sequence/note.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    Note over B: Thinking
+    B->>A: Reply
+
+```
+
+</details>
+
+## open_arrow
+
+`tests/fixtures/sequence/open_arrow.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Sync call─────────│
+    │                   │
+    │┄Return┄┄┄┄┄┄┄┄┄┄┄┄│
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![open_arrow svg](../tests/svg-snapshots/sequence/open_arrow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->Bob: Sync call
+    Bob-->Alice: Return
+
+```
+
+</details>
+
+## opt
+
+`tests/fixtures/sequence/opt.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Fetch────────────>│
+    │                   │
+  ┌─[opt] Extra data needed┐
+  │ │<Details───────────│  │
+  │ │                   │  │
+  └─┼───────────────────┼──┘
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![opt svg](../tests/svg-snapshots/sequence/opt.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>Bob: Fetch
+    opt Extra data needed
+        Bob->>Alice: Details
+    end
+
+```
+
+</details>
+
+## par_and
+
+`tests/fixtures/sequence/par_and.mmd`
+
+**Text**
+
+```text
+┌───────┐            ┌─────┐           ┌─────────┐
+│ Alice │            │ Bob │           │ Charlie │
+└───┬───┘            └──┬──┘           └────┬────┘
+    │                   │                   │
+  ┌─[par] Notifications─┼───────────────────┼─┐
+  │ │─Email────────────>│                   │ │
+  │ │                   │                   │ │
+  ├┄[and]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┄┤
+  │ │─SMS──────────────────────────────────>│ │
+  │ │                   │                   │ │
+  └─┼───────────────────┼───────────────────┼─┘
+    │                   │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![par_and svg](../tests/svg-snapshots/sequence/par_and.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant Alice
+    participant Bob
+    participant Charlie
+    par Notifications
+        Alice->>Bob: Email
+    and
+        Alice->>Charlie: SMS
+    end
+
+```
+
+</details>
+
+## participant_box_color_only
+
+`tests/fixtures/sequence/participant_box_color_only.mmd`
+
+**Text**
+
+```text
+┌─────────────────────────────┐
+│                             │
+│┌───────┐            ┌─────┐ │
+││ Alice │            │ Bob │ │
+│└───┬───┘            └──┬──┘ │
+│    │                   │    │
+│    │─Sync─────────────>│    │
+│    │                   │    │
+└─────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![participant_box_color_only svg](../tests/svg-snapshots/sequence/participant_box_color_only.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    box aqua
+        participant Alice
+        participant Bob
+    end
+    Alice->>Bob: Sync
+
+```
+
+</details>
+
+## participant_boxes
+
+`tests/fixtures/sequence/participant_boxes.mmd`
+
+**Text**
+
+```text
+┌─────────────────────────────┐       ┌─────────────┐
+│          Frontend           │       │   Backend   │
+│┌───────┐            ┌─────┐ │       │ ┌─────────┐ │
+││ Alice │            │ Bob │ │       │ │ Charlie │ │
+│└───┬───┘            └──┬──┘ │       │ └────┬────┘ │
+│    │                   │    │       │      │      │
+│    │─Request──────────────────────────────>│      │
+│    │                   │    │       │      │      │
+│    │                   │<Response┄┄┄┄┄┄┄┄┄┄│      │
+│    │                   │    │       │      │      │
+└─────────────────────────────┘       └─────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![participant_boxes svg](../tests/svg-snapshots/sequence/participant_boxes.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    box lightblue Frontend
+        participant Alice
+        participant Bob
+    end
+    box Backend
+        actor Charlie
+    end
+    Alice->>Charlie: Request
+    Charlie-->>Bob: Response
+
+```
+
+</details>
+
+## self_message
+
+`tests/fixtures/sequence/self_message.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Start────────────>│
+  │                   │
+  │                   ├───┐ Process
+  │                   │   │
+  │                   <───┘
+  │                   │
+  │<Done──────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![self_message svg](../tests/svg-snapshots/sequence/self_message.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Start
+    B->>B: Process
+    B->>A: Done
+
+```
+
+</details>
+
+## simple
+
+`tests/fixtures/sequence/simple.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Hello────────────>│
+  │                   │
+  │<Hi────────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![simple svg](../tests/svg-snapshots/sequence/simple.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    B->>A: Hi
+
+```
+
+</details>
+
+## title
+
+`tests/fixtures/sequence/title.mmd`
+
+**Text**
+
+```text
+     Authentication Flow
+
+┌───────┐            ┌─────┐
+│ Alice │            │ Bob │
+└───┬───┘            └──┬──┘
+    │                   │
+    │─Login request────>│
+    │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![title svg](../tests/svg-snapshots/sequence/title.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    title: Authentication Flow
+    participant Alice
+    participant Bob
+    Alice->>Bob: Login request
+
+```
+
+</details>
+
+# State
+
+## composite
+
+`tests/fixtures/state/composite.mmd`
+
+**Text**
+
+```text
+           ●
+
+           │
+           │
+           │
+           │
+           │
+           │
+           ▼
+┌───── Active ──────┐
+│                   │
+│                   │
+│      ●            │
+│                   │
+│      │            │
+│      │            │
+│      ▼            │
+│ ╭─────────╮       │
+│ │ Running │       │
+│ ╰─────────╯       │
+│  │   └───▲────┐   │
+│  └───┐   └──┐ │   │
+│      ▼      │ │   │
+│           pause   │
+│      ◉   resume   │
+│         ┌───┼─┘   │
+│         │   │     │
+│         │   │     │
+│         ▼   └──┐  │
+│        ╭────────╮ │
+│        │ Paused │ │
+│        ╰────────╯ │
+└───────────────────┘
+           │
+           │
+           │
+           │
+           │
+           │
+           │
+           ▼
+
+           ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![composite svg](../tests/svg-snapshots/state/composite.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Active
+    state Active {
+        [*] --> Running
+        Running --> Paused : pause
+        Paused --> Running : resume
+        Running --> [*]
+    }
+    Active --> [*]
+
+```
+
+</details>
+
+## descriptions
+
+`tests/fixtures/state/descriptions.mmd`
+
+**Text**
+
+```text
+            ●
+
+            │
+            │
+            ▼
+╭──────────────────────╮
+│ The system is active │
+╰──────────────────────╯
+            │
+            │
+            │
+         timeout
+            │
+            ▼
+  ╭───────────────────╮
+  │ Waiting for input │
+  ╰───────────────────╯
+            │
+            │
+            ▼
+
+            ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![descriptions svg](../tests/svg-snapshots/state/descriptions.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Active
+    Active : The system is active
+    Active --> Idle : timeout
+    Idle : Waiting for input
+    Idle --> [*]
+
+```
+
+</details>
+
+## direction_lr
+
+`tests/fixtures/state/direction_lr.mmd`
+
+**Text**
+
+```text
+       ╭───╮    ╭───╮    ╭───╮
+● ────►│ A │───►│ B │───►│ C │───►  ◉
+       ╰───╯    ╰───╯    ╰───╯
+```
+
+<details>
+<summary>SVG output</summary>
+
+![direction_lr svg](../tests/svg-snapshots/state/direction_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    direction LR
+    [*] --> A
+    A --> B
+    B --> C
+    C --> [*]
+
+```
+
+</details>
+
+## multiline_descriptions
+
+`tests/fixtures/state/multiline_descriptions.mmd`
+
+**Text**
+
+```text
+             ●
+
+             │
+             │
+             │
+             ▼
+╭─────────────────────────╮
+│ Listening on port 8080  │
+├─────────────────────────┤
+│ Accepts TCP connections │
+╰─────────────────────────╯
+             │
+             │
+             │
+             ▼
+
+             ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![multiline_descriptions svg](../tests/svg-snapshots/state/multiline_descriptions.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Server
+    Server : Listening on port 8080
+    Server : Accepts TCP connections
+    Server --> [*]
+
+```
+
+</details>
+
+## notes
+
+`tests/fixtures/state/notes.mmd`
+
+**Text**
+
+```text
+                                      ┌──────────────────────────────────────┐
+  ╭───────────────────────╮┄┄┄┄┄┐     │ Important information! You can write │
+  │ The state with a note │     └┄┄┄┄┄│                notes.                │
+  ╰───────────────────────╯─────────┐ └──────────────────────────────────────┘
+                                    │
+                                    │
+                                    │
+                                    │
+┌───────────────────────────────┐   └────────►╭────────╮
+│ This is the note to the left. │┄┄┄┄┄┄┐      │ State2 │
+└───────────────────────────────┘      └┄┄┄┄┄┄╰────────╯
+```
+
+<details>
+<summary>SVG output</summary>
+
+![notes svg](../tests/svg-snapshots/state/notes.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    direction LR
+    State1: The state with a note
+    note right of State1
+        Important information! You can write
+        notes.
+    end note
+    State1 --> State2
+    note left of State2 : This is the note to the left.
+
+```
+
+</details>
+
+## pseudo_states
+
+`tests/fixtures/state/pseudo_states.mmd`
+
+**Text**
+
+```text
+            ●
+
+            │
+            │
+            │
+            │
+            ▼
+
+          ━━━━
+
+          │ │
+      ┌───┘ └──────┐
+      │            │
+      │            │
+      ▼            ▼
+╭────────╮       ╭────────╮
+│ State2 │       │ State3 │
+╰────────╯       ╰────────╯
+      │            │
+      └───┐ ┌──────┘
+          │ │
+          │ │
+          ▼ ▼
+
+          ━━━━
+
+            │
+            │
+            │
+            │
+            ▼
+          ┌──┐
+          <  >
+     ┌────└──┘
+     │      └───────┐
+     │              │
+     │              │
+     │              │
+    yes            no
+     │              │
+     │              │
+     │              │
+     ▼              ▼
+╭────────╮       ╭────────╮
+│ State4 │       │ State5 │
+╰────────╯       ╰────────╯
+      │            │
+      └───┐ ┌──────┘
+          │ │
+          │ │
+          ▼ ▼
+
+            ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![pseudo_states svg](../tests/svg-snapshots/state/pseudo_states.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    state fork_state <<fork>>
+    state join_state <<join>>
+    state if_state <<choice>>
+    [*] --> fork_state
+    fork_state --> State2
+    fork_state --> State3
+    State2 --> join_state
+    State3 --> join_state
+    join_state --> if_state
+    if_state --> State4 : yes
+    if_state --> State5 : no
+    State4 --> [*]
+    State5 --> [*]
+
+```
+
+</details>
+
+## self_transition
+
+`tests/fixtures/state/self_transition.mmd`
+
+**Text**
+
+```text
+       ●
+
+       │
+       │
+       ▼
+╭────────────╮───┐
+│ Processing │ retry
+╰────────────╯◄──┘
+       │
+       │
+       │
+       │
+       │
+       │
+       │
+       │
+       ▼
+   ╭──────╮
+   │ Done │
+   ╰──────╯
+       │
+       │
+       ▼
+
+       ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![self_transition svg](../tests/svg-snapshots/state/self_transition.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Processing
+    Processing --> Processing : retry
+    Processing --> Done
+    Done --> [*]
+
+```
+
+</details>
+
+## simple
+
+`tests/fixtures/state/simple.mmd`
+
+**Text**
+
+```text
+     ●
+
+     │
+     │
+     ▼
+ ╭──────╮
+ │ Idle │
+ ╰──────╯
+     │
+     │
+     ▼
+╭────────╮
+│ Active │
+╰────────╯
+     │
+     │
+     ▼
+
+     ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![simple svg](../tests/svg-snapshots/state/simple.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Active
+    Active --> [*]
+
+```
+
+</details>
+
+## transitions
+
+`tests/fixtures/state/transitions.mmd`
+
+**Text**
+
+```text
+         ●
+
+         │
+         │
+         │
+         │
+         ▼
+     ╭──────╮
+     │ Idle │◄────────────────┐
+     ╰──────╯                 │
+      └──┐                  retry
+         │                    │
+      submit                  │
+         │                    │
+         ▼                    │
+  ╭────────────╮              │
+  │ Processing │              │
+  ╰────────────╯              │
+   └┐         └┐              │
+    │          │              │
+    │          │              │
+    │          │              │
+complete     fail             │
+    │          │              │
+    │          └─────┐        │
+    │                │        │
+    ▼                ▼        │
+╭──────╮            ╭───────╮ │
+│ Done │            │ Error │─┘
+╰──────╯            ╰───────╯
+     │
+     └┐
+      │
+      │
+      ▼
+
+       ◉
+```
+
+<details>
+<summary>SVG output</summary>
+
+![transitions svg](../tests/svg-snapshots/state/transitions.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : submit
+    Processing --> Done : complete
+    Processing --> Error : fail
+    Error --> Idle : retry
+    Done --> [*]
+
+```
+
+</details>
+
