@@ -4,7 +4,7 @@
 //! compound node children to be ranked between the border nodes. After ranking,
 //! cleanup removes the nesting edges and root node.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::graph::LayoutGraph;
 use super::types::NodeId;
@@ -31,6 +31,30 @@ fn is_descendant(lg: &LayoutGraph, node: usize, ancestor: usize) -> bool {
             return true;
         }
         current = lg.parents[p];
+    }
+    false
+}
+
+/// Check if `start` can reach any node inside `compound_idx` via forward edges.
+fn can_reach_compound(
+    start: usize,
+    compound_idx: usize,
+    lg: &LayoutGraph,
+    fwd_adj: &[Vec<usize>],
+) -> bool {
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    visited.insert(start);
+    queue.push_back(start);
+    while let Some(node) = queue.pop_front() {
+        for &next in &fwd_adj[node] {
+            if is_descendant(lg, next, compound_idx) {
+                return true;
+            }
+            if visited.insert(next) {
+                queue.push_back(next);
+            }
+        }
     }
     false
 }
@@ -143,19 +167,41 @@ pub fn run(lg: &mut LayoutGraph) {
     // wrong compound's border).  The reversed edge's own minlen and the
     // nesting structure are sufficient without an explicit exit constraint.
     // See issue #152.
-    for ei in 0..orig_edge_count {
-        if lg.reversed_edges.contains(&ei) {
-            continue;
+    //
+    // Skip exit constraints when the target can reach back into the
+    // compound via forward edges.  Adding border_bottom → target while
+    // a path target → … → internal_node exists creates a constraint cycle
+    // (border_bottom → target → … → internal_node → border_bottom) that
+    // the ranker resolves by placing external nodes far above/below the
+    // subgraph, producing layouts divergent from dagre.js.  See #173.
+    {
+        // Build forward adjacency from original non-reversed edges.
+        let mut fwd_adj: Vec<Vec<usize>> = vec![Vec::new(); lg.node_ids.len()];
+        for ei in 0..orig_edge_count {
+            if lg.reversed_edges.contains(&ei) {
+                continue;
+            }
+            let (from, to, _) = lg.edges[ei];
+            fwd_adj[from].push(to);
         }
-        let (from, to, _) = lg.edges[ei];
-        if let Some(compound_idx) = lg.parents[from]
-            && lg.compound_nodes.contains(&compound_idx)
-            && !is_descendant(lg, to, compound_idx)
-            && to != compound_idx
-            && let Some(&bot_idx) = lg.border_bottom.get(&compound_idx)
-        {
-            let e = lg.add_nesting_edge_with_minlen(bot_idx, to, 0.0, 1);
-            lg.nesting_edges.insert(e);
+
+        for ei in 0..orig_edge_count {
+            if lg.reversed_edges.contains(&ei) {
+                continue;
+            }
+            let (from, to, _) = lg.edges[ei];
+            if let Some(compound_idx) = lg.parents[from]
+                && lg.compound_nodes.contains(&compound_idx)
+                && !is_descendant(lg, to, compound_idx)
+                && to != compound_idx
+                && let Some(&bot_idx) = lg.border_bottom.get(&compound_idx)
+            {
+                if can_reach_compound(to, compound_idx, lg, &fwd_adj) {
+                    continue;
+                }
+                let e = lg.add_nesting_edge_with_minlen(bot_idx, to, 0.0, 1);
+                lg.nesting_edges.insert(e);
+            }
         }
     }
 

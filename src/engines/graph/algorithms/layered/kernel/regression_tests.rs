@@ -1687,16 +1687,22 @@ fn test_layout_multi_edge_with_labels() {
     );
 }
 
-/// Regression test for #173: an edge that the acyclic DFS does not reverse
-/// but that ends up going backward in the rank assignment (due to compound
-/// graph constraints) must be included in `reversed_edges`.
+/// Regression test for #173: compound exit constraints must not create
+/// infeasible constraint cycles.
 ///
 /// Graph: subgraph ci contains {A, B, C, D}. D->A creates a cycle
-/// (reversed by acyclic). C->E exits the subgraph. E->F connects two
-/// nodes outside the subgraph, but compound constraints force F above
-/// the subgraph and E below, making E->F rank-backward.
+/// (reversed by acyclic). C->E exits the subgraph. E->F->D re-enters
+/// the subgraph.
+///
+/// Without the reachability guard on exit constraints, the nesting phase
+/// adds border_bottom_ci → E, which combined with E→F→D→border_bottom_ci
+/// creates an infeasible cycle, forcing E→F to be rank-reversed and
+/// producing layouts divergent from dagre.js.
+///
+/// With the guard, the exit constraint is skipped (E can reach D inside
+/// ci), so E→F remains a forward edge ranked normally.
 #[test]
-fn test_compound_rank_reversed_edge_detected_as_backward() {
+fn test_compound_exit_constraint_skipped_when_target_reenters() {
     let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
     graph.add_node("ci", (0.0, 0.0));
     graph.add_node("A", (40.0, 20.0));
@@ -1712,9 +1718,9 @@ fn test_compound_rank_reversed_edge_detected_as_backward() {
     graph.add_edge("B", "D"); // 2
     graph.add_edge("D", "A"); // 3 — reversed by acyclic (cycle)
     graph.add_edge("C", "E"); // 4
-    graph.add_edge("E", "F"); // 5 — rank-backward due to compound constraints
+    graph.add_edge("E", "F"); // 5
     graph.add_edge("F", "G"); // 6
-    graph.add_edge("F", "D"); // 7
+    graph.add_edge("F", "D"); // 7 — re-enters compound ci
 
     graph.set_parent("A", "ci");
     graph.set_parent("B", "ci");
@@ -1724,17 +1730,17 @@ fn test_compound_rank_reversed_edge_detected_as_backward() {
     let config = LayoutConfig::default();
     let result = layout(&graph, &config, |_, dims| *dims);
 
-    // Edge 5 (E->F) should be marked as backward because compound
-    // constraints force F to a lower rank than E.
+    // Edge 5 (E->F) should NOT be rank-reversed — the exit constraint
+    // for C→E is skipped because E can reach D (inside ci) via E→F→D.
     assert!(
-        result.reversed_edges.contains(&5),
-        "Edge 5 (E->F) should be in reversed_edges; \
-         compound constraints force F above the subgraph and E below it. \
+        !result.reversed_edges.contains(&5),
+        "Edge 5 (E->F) should NOT be in reversed_edges; \
+         exit constraint skipped because target E can reach back into ci. \
          Got reversed_edges={:?}",
         result.reversed_edges
     );
 
-    // Edge 3 (D->A) should also be backward (detected by acyclic DFS).
+    // Edge 3 (D->A) should be backward (detected by acyclic DFS).
     assert!(
         result.reversed_edges.contains(&3),
         "Edge 3 (D->A) should be in reversed_edges (cycle). \
