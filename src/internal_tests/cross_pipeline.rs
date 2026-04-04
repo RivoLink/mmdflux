@@ -434,6 +434,7 @@ mod all_fixtures {
         "nested_subgraph.mmd",
         "nested_subgraph_only.mmd",
         "nested_with_siblings.mmd",
+        "unicode_identifiers.mmd",
     ];
 
     #[test]

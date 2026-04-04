@@ -178,7 +178,7 @@ fn looks_like_flowchart_statement(line: &str) -> bool {
         return false;
     }
     let first_char = line.chars().next().unwrap_or(' ');
-    first_char.is_ascii_alphanumeric() || first_char == '_' || first_char == ';'
+    first_char.is_alphanumeric() || first_char == '_' || first_char == ';'
 }
 
 /// Options for the flowchart parser.

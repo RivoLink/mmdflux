@@ -231,7 +231,7 @@ pub(crate) fn parse_node_style_declarations(raw: &str) -> ParsedNodeStyleDeclara
 }
 
 fn strip_keyword<'a>(input: &'a str, keyword: &str) -> Option<&'a str> {
-    if input.len() < keyword.len() {
+    if input.len() < keyword.len() || !input.is_char_boundary(keyword.len()) {
         return None;
     }
 
@@ -241,7 +241,7 @@ fn strip_keyword<'a>(input: &'a str, keyword: &str) -> Option<&'a str> {
     }
 
     if let Some(next) = rest.chars().next()
-        && (next.is_ascii_alphanumeric() || next == '_')
+        && (next.is_alphanumeric() || next == '_')
     {
         return None;
     }

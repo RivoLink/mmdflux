@@ -24,13 +24,13 @@ header = {
     (graph_keyword | flowchart_keyword) ~ direction?
 }
 
-// Node identifiers: alphanumeric with underscores, hyphens, and dots.
+// Node identifiers: alphanumeric (Unicode) with underscores, hyphens, and dots.
 // Can start with letter, underscore, or digit.
 // Hyphens must not be followed by another hyphen or arrow chars to avoid
 // consuming edge syntax like --> or ---.
 identifier = @{
-    (ASCII_ALPHANUMERIC | "_") ~
-    (ASCII_ALPHANUMERIC | "_" | "." | ("-" ~ !("-" | ">" | ".")))*
+    (LETTER | NUMBER | "_") ~
+    (LETTER | NUMBER | "_" | "." | ("-" ~ !("-" | ">" | ".")))*
 }
 
 // Text content inside shapes (any chars except shape delimiters)
@@ -73,7 +73,7 @@ shape = {
 }
 
 // Class annotation: :::className (parsed and discarded)
-class_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
+class_name = @{ (LETTER | NUMBER | "_" | "-")+ }
 class_annotation = _{ ":::" ~ class_name }
 
 // Node definition: identifier with optional shape and optional class annotation
@@ -140,7 +140,7 @@ vertex_statement = { node_group ~ edge_segment* }
 subgraph_keyword = { ^"subgraph" }
 end_keyword = { ^"end" }
 
-subgraph_id = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-" | ".")* }
+subgraph_id = @{ (LETTER | NUMBER | "_") ~ (LETTER | NUMBER | "_" | "-" | ".")* }
 subgraph_title_text = @{ (!"]" ~ ANY)+ }
 subgraph_title_bracket = { "[" ~ subgraph_title_text ~ "]" }
 
@@ -175,12 +175,12 @@ subgraph_stmt = {
 // Word boundary: keyword+boundary is atomic to prevent implicit whitespace insertion
 // between the keyword and the lookahead.
 style_rest = _{ (!NEWLINE ~ !";" ~ ANY)* }
-style_kw = @{ ^"style" ~ !(ASCII_ALPHANUMERIC | "_") }
-classdef_kw = @{ ^"classDef" ~ !(ASCII_ALPHANUMERIC | "_") }
-class_kw = @{ ^"class" ~ !(ASCII_ALPHANUMERIC | "_") }
-click_kw = @{ ^"click" ~ !(ASCII_ALPHANUMERIC | "_") }
-linkstyle_kw = @{ ^"linkStyle" ~ !(ASCII_ALPHANUMERIC | "_") }
-direction_kw = @{ ^"direction" ~ !(ASCII_ALPHANUMERIC | "_") }
+style_kw = @{ ^"style" ~ !(LETTER | NUMBER | "_") }
+classdef_kw = @{ ^"classDef" ~ !(LETTER | NUMBER | "_") }
+class_kw = @{ ^"class" ~ !(LETTER | NUMBER | "_") }
+click_kw = @{ ^"click" ~ !(LETTER | NUMBER | "_") }
+linkstyle_kw = @{ ^"linkStyle" ~ !(LETTER | NUMBER | "_") }
+direction_kw = @{ ^"direction" ~ !(LETTER | NUMBER | "_") }
 direction_value = @{ (^"TD" | ^"TB" | ^"BT" | ^"LR" | ^"RL") }
 
 style_stmt = _{ style_kw ~ style_rest }
