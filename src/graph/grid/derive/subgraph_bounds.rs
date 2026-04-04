@@ -833,6 +833,14 @@ pub(super) fn ensure_subgraph_contains_members(
         let mut sg_bottom = sb.y + sb.height;
 
         for member_id in &sg.nodes {
+            // Skip cross-boundary nodes (e.g. edge sources declared in a
+            // sibling subgraph) — their positions lie in another subgraph's
+            // territory and must not expand this subgraph's bounds.
+            if let Some(node) = diagram.nodes.get(member_id)
+                && node.parent.as_deref() != Some(sg_id.as_str())
+            {
+                continue;
+            }
             let Some(nb) = node_bounds.get(member_id.as_str()) else {
                 continue;
             };

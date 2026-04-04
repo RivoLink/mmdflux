@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1025.51 459.44" style="max-width: 1025.51px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(-35.00,-4.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="43.00" y="33.35" width="376.66" height="286.45" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="231.33" y="37.35" text-anchor="middle" dominant-baseline="hanging" fill="#333">Client Layer</text>
+      <rect class="subgraph" x="849.70" y="12.00" width="202.81" height="443.44" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="951.11" y="16.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Data Layer</text>
+      <rect class="subgraph" x="539.66" y="17.17" width="190.04" height="383.58" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="634.68" y="21.17" text-anchor="middle" dominant-baseline="hanging" fill="#333">Service Layer</text>
+    </g>
+    <g class="nodes">
+      <rect x="58.00" y="64.35" width="121.59" height="54.00" rx="27.00" ry="27.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="118.79" y="91.35" text-anchor="middle" dominant-baseline="middle" fill="#333">Web App</text>
+      <rect x="247.41" y="162.52" width="157.25" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="326.03" y="189.52" text-anchor="middle" dominant-baseline="middle" fill="#333">API Gateway</text>
+      <rect x="58.00" y="250.79" width="139.41" height="54.00" rx="27.00" ry="27.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="127.70" y="277.79" text-anchor="middle" dominant-baseline="middle" fill="#333">Mobile App</text>
+      <rect x="554.66" y="48.17" width="154.10" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="631.71" y="75.17" text-anchor="middle" dominant-baseline="middle" fill="#333">Auth Service</text>
+      <rect x="554.66" y="162.52" width="154.10" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="631.71" y="189.52" text-anchor="middle" dominant-baseline="middle" fill="#333">User Service</text>
+      <rect x="554.66" y="331.75" width="160.04" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="634.68" y="358.75" text-anchor="middle" dominant-baseline="middle" fill="#333">Order Service</text>
+      <path d="M864.70,53.35 A44.14,10.35 0 0,0 952.98,53.35 A44.14,10.35 0 0,0 864.70,53.35 L864.70,97.00 A44.14,10.35 0 0,0 952.98,97.00 L952.98,53.35" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <path d="M864.70,53.35 A44.14,10.35 0 0,1 952.98,53.35" fill="none" stroke="#333" stroke-width="1.00" />
+      <text x="908.84" y="80.35" text-anchor="middle" dominant-baseline="middle" fill="#333">Auth DB</text>
+      <path d="M864.70,167.70 A44.14,10.35 0 0,0 952.98,167.70 A44.14,10.35 0 0,0 864.70,167.70 L864.70,211.35 A44.14,10.35 0 0,0 952.98,211.35 L952.98,167.70" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <path d="M864.70,167.70 A44.14,10.35 0 0,1 952.98,167.70" fill="none" stroke="#333" stroke-width="1.00" />
+      <text x="908.84" y="194.70" text-anchor="middle" dominant-baseline="middle" fill="#333">User DB</text>
+      <path d="M864.70,282.44 A47.11,10.74 0 0,0 958.92,282.44 A47.11,10.74 0 0,0 864.70,282.44 L864.70,325.70 A47.11,10.74 0 0,0 958.92,325.70 L958.92,282.44" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <path d="M864.70,282.44 A47.11,10.74 0 0,1 958.92,282.44" fill="none" stroke="#333" stroke-width="1.00" />
+      <text x="911.81" y="309.44" text-anchor="middle" dominant-baseline="middle" fill="#333">Order DB</text>
+      <rect x="864.70" y="386.44" width="172.81" height="54.00" rx="27.00" ry="27.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="951.11" y="413.44" text-anchor="middle" dominant-baseline="middle" fill="#333">Message Queue</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M179.59,118.35 L183.36,118.35 C187.12,118.35 194.66,118.35 202.19,125.71 C209.73,133.07 217.27,147.80 224.13,155.16 C231.00,162.52 237.20,162.52 240.31,162.52 L243.41,162.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M197.41,250.79 L200.18,250.79 C202.96,250.79 208.52,250.79 214.07,245.08 C219.63,239.37 225.18,227.95 230.07,222.23 C234.96,216.52 239.18,216.52 241.30,216.52 L243.41,216.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M404.66,162.52 L408.64,155.58 L416.31,142.18 C423.98,128.78 439.32,101.98 455.32,88.57 C471.33,75.17 487.99,75.17 502.66,75.17 C517.33,75.17 529.99,75.17 536.33,75.17 L542.66,75.17 L550.66,75.17" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M404.66,189.52 L412.66,189.52 L419.66,189.52 C426.66,189.52 440.66,189.52 455.99,189.52 C471.33,189.52 487.99,189.52 502.66,189.52 C517.33,189.52 529.99,189.52 536.33,189.52 L542.66,189.52 L550.66,189.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M404.66,216.52 L407.31,224.07 L415.21,246.52 C423.10,268.96 438.88,313.86 455.10,336.31 C471.33,358.75 487.99,358.75 502.66,358.75 C517.33,358.75 529.99,358.75 536.33,358.75 L542.66,358.75 L550.66,358.75" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M708.76,75.17 L716.76,75.17 L724.75,75.17 C732.74,75.17 748.72,75.17 765.04,75.17 C781.37,75.17 798.03,75.17 812.70,75.17 C827.37,75.17 840.03,75.17 846.37,75.17 L852.70,75.17 L860.70,75.17" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M708.76,189.52 L716.76,189.52 L724.75,189.52 C732.74,189.52 748.72,189.52 765.04,189.52 C781.37,189.52 798.03,189.52 812.70,189.52 C827.37,189.52 840.03,189.52 846.37,189.52 L852.70,189.52 L860.70,189.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M714.70,331.75 L721.70,327.88 L728.86,323.91 C736.03,319.94 750.37,312.00 765.87,308.04 C781.37,304.07 798.03,304.07 812.70,304.07 C827.37,304.07 840.03,304.07 846.37,304.07 L852.70,304.07 L860.70,304.07" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M714.70,385.75 L721.70,389.63 L728.86,393.60 C736.03,397.57 750.37,405.50 765.87,409.47 C781.37,413.44 798.03,413.44 812.70,413.44 C827.37,413.44 840.03,413.44 846.37,413.44 L852.70,413.44 L860.70,413.44" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+  </g>
+</svg>

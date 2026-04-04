@@ -670,8 +670,16 @@ pub(crate) fn expand_parent_bounds(
         };
         let mut found_content = !recompute_tight;
 
-        // Check member nodes.
+        // Check member nodes.  Only include nodes whose actual parent is
+        // this subgraph — sg.nodes can contain cross-boundary references
+        // (e.g. edge sources declared in a sibling subgraph) whose positions
+        // would pull the bounds into another subgraph's territory.
         for member_id in &sg.nodes {
+            if let Some(node) = diagram.nodes.get(member_id)
+                && node.parent.as_deref() != Some(sg_id.as_str())
+            {
+                continue;
+            }
             if let Some(rect) = layout.nodes.get(&layered::NodeId(member_id.clone())) {
                 found_content = true;
                 min_x = min_x.min(rect.x);
