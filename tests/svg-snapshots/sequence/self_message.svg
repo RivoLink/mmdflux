@@ -15,11 +15,11 @@
     <text x="180.45" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
   </g>
   <g class="events">
-    <line x1="30.45" y1="74.00" x2="180.45" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="30.45" y1="74.00" x2="180.45" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="105.45" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Start</text>
-    <path d="M 180.45 124.00 L 210.45 124.00 L 210.45 154.00 L 180.45 154.00" fill="none" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <path d="M 180.45 124.00 L 210.45 124.00 L 210.45 154.00 L 180.45 154.00" fill="none" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="218.45" y="128.00" text-anchor="start" dominant-baseline="auto" fill="#333">Process</text>
-    <line x1="180.45" y1="204.00" x2="30.45" y2="204.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="180.45" y1="204.00" x2="30.45" y2="204.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="105.45" y="200.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Done</text>
   </g>
 </svg>

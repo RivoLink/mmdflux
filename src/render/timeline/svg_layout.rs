@@ -1185,7 +1185,7 @@ mod tests {
                     from: 1,
                     to: 0,
                     line_style: LineStyle::Dashed,
-                    arrow_head: ArrowHead::Open,
+                    arrow_head: ArrowHead::None,
                     text: "Retry later".into(),
                     number: None,
                 },

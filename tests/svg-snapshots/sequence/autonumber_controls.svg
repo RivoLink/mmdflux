@@ -15,13 +15,13 @@
     <text x="221.72" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">API</text>
   </g>
   <g class="events">
-    <line x1="46.60" y1="74.00" x2="221.72" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="46.60" y1="74.00" x2="221.72" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="134.16" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">10. Login request</text>
-    <line x1="221.72" y1="124.00" x2="46.60" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)" />
+    <line x1="221.72" y1="124.00" x2="46.60" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)"/>
     <text x="134.16" y="120.00" text-anchor="middle" dominant-baseline="auto" fill="#333">12. Challenge</text>
-    <line x1="46.60" y1="174.00" x2="221.72" y2="174.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="46.60" y1="174.00" x2="221.72" y2="174.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="134.16" y="170.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Background ping</text>
-    <line x1="221.72" y1="224.00" x2="46.60" y2="224.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)" />
+    <line x1="221.72" y1="224.00" x2="46.60" y2="224.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)"/>
     <text x="134.16" y="220.00" text-anchor="middle" dominant-baseline="auto" fill="#333">14. Session ready</text>
   </g>
 </svg>

@@ -15,9 +15,9 @@
     <text x="197.78" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Bob</text>
   </g>
   <g class="events">
-    <line x1="43.63" y1="74.00" x2="187.78" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-async-arrowhead)" />
+    <line x1="43.63" y1="74.00" x2="187.78" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-async-arrowhead)"/>
     <text x="120.70" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Fire and forget</text>
-    <line x1="197.78" y1="124.00" x2="53.63" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-async-arrowhead)" />
+    <line x1="197.78" y1="124.00" x2="53.63" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-async-arrowhead)"/>
     <text x="120.70" y="120.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Async return</text>
   </g>
 </svg>

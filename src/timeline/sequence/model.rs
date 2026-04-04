@@ -67,13 +67,13 @@ pub enum LineStyle {
 /// Arrowhead shape for a message arrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowHead {
+    /// No arrowhead (`-`).
+    None,
     /// Filled arrowhead (`>>`).
     Filled,
-    /// Open arrowhead (`>`).
-    Open,
     /// Cross terminal (`x`).
     Cross,
-    /// Async (open arrow) terminal (`)`).
+    /// Async open-chevron terminal (`)`).
     Async,
 }
 

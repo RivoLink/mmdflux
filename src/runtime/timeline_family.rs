@@ -29,8 +29,8 @@ fn line_style_str(s: LineStyle) -> &'static str {
 
 fn arrow_head_str(a: ArrowHead) -> &'static str {
     match a {
+        ArrowHead::None => "none",
         ArrowHead::Filled => "filled",
-        ArrowHead::Open => "open",
         ArrowHead::Cross => "cross",
         ArrowHead::Async => "async",
     }

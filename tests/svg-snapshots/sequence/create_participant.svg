@@ -15,9 +15,9 @@
     <text x="193.63" y="74.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Bob</text>
   </g>
   <g class="events">
-    <line x1="43.63" y1="74.00" x2="164.64" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="43.63" y1="74.00" x2="164.64" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="104.14" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Create Bob</text>
-    <line x1="193.63" y1="146.00" x2="43.63" y2="146.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)" />
+    <line x1="193.63" y1="146.00" x2="43.63" y2="146.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)"/>
     <text x="118.63" y="142.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Hello Alice</text>
   </g>
 </svg>

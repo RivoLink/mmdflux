@@ -1199,6 +1199,19 @@ fn sequence_mmds_has_messages_with_coordinates() {
 }
 
 #[test]
+fn sequence_mmds_uses_none_for_plain_messages() {
+    let input = "sequenceDiagram\n    Alice->Bob: hello\n    Bob-->Alice: world";
+    let output = render_json(input);
+    let json: Value = serde_json::from_str(&output).unwrap();
+    let messages = json["messages"].as_array().unwrap();
+
+    assert_eq!(messages[0]["line_style"], "solid");
+    assert_eq!(messages[0]["arrow_head"], "none");
+    assert_eq!(messages[1]["line_style"], "dashed");
+    assert_eq!(messages[1]["arrow_head"], "none");
+}
+
+#[test]
 fn sequence_mmds_has_notes() {
     let input = "sequenceDiagram\n    Alice->>Bob: hi\n    Note right of Bob: thinking";
     let output = render_json(input);

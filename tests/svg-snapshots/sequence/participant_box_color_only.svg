@@ -18,7 +18,7 @@
     <text x="211.63" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Bob</text>
   </g>
   <g class="events">
-    <line x1="61.63" y1="102.00" x2="211.63" y2="102.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="61.63" y1="102.00" x2="211.63" y2="102.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="136.63" y="98.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Sync</text>
   </g>
 </svg>

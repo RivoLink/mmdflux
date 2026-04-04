@@ -962,7 +962,7 @@ sequenceDiagram
     #[test]
     fn compile_all_arrow_heads() {
         let model =
-            compile_input("sequenceDiagram\nA->>B: filled\nA->B: open\nA-xB: cross\nA-)B: async");
+            compile_input("sequenceDiagram\nA->>B: filled\nA->B: sync\nA-xB: cross\nA-)B: async");
         let heads: Vec<_> = model
             .events
             .iter()
@@ -975,7 +975,7 @@ sequenceDiagram
             heads,
             vec![
                 ArrowHead::Filled,
-                ArrowHead::Open,
+                ArrowHead::None,
                 ArrowHead::Cross,
                 ArrowHead::Async
             ]

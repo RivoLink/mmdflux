@@ -15,12 +15,12 @@
     <text x="180.45" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
   </g>
   <g class="events">
-    <line x1="30.45" y1="74.00" x2="180.45" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="30.45" y1="74.00" x2="180.45" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="105.45" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Hello</text>
     <path d="M 190.45 124.00 L 264.33 124.00 L 271.33 131.00 L 271.33 164.00 L 190.45 164.00 Z" fill="#ffffcc" stroke="#333" stroke-width="1" />
     <path d="M 264.33 124.00 L 264.33 131.00 L 271.33 131.00" fill="none" stroke="#333" stroke-width="1" />
     <text x="230.89" y="144.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Thinking</text>
-    <line x1="180.45" y1="214.00" x2="30.45" y2="214.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="180.45" y1="214.00" x2="30.45" y2="214.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="105.45" y="210.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Reply</text>
   </g>
 </svg>

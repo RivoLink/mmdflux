@@ -317,20 +317,6 @@ fn render_defs(
         writer.end_tag("</marker>");
     }
 
-    if used_marker_ids.contains("seq-open-arrowhead") {
-        writer.start_tag(
-            "<marker id=\"seq-open-arrowhead\" viewBox=\"0 0 10 10\" refX=\"0\" refY=\"5\" \
-             markerWidth=\"8\" markerHeight=\"8\" orient=\"auto-start-reverse\" \
-             markerUnits=\"userSpaceOnUse\">",
-        );
-        writer.push_line(&format!(
-            "<polygon points=\"0,0 10,5 0,10\" fill=\"none\" stroke=\"{color}\" stroke-width=\"1\"{dynamic_attrs} />",
-            color = palette.marker_color,
-            dynamic_attrs = stroke_dynamic_attrs,
-        ));
-        writer.end_tag("</marker>");
-    }
-
     if used_marker_ids.contains("seq-crosshead") {
         writer.start_tag(
             "<marker id=\"seq-crosshead\" viewBox=\"0 0 11 11\" refX=\"11\" refY=\"5.5\" \
@@ -707,11 +693,12 @@ fn render_message(writer: &mut SvgWriter, msg: &SvgMessage, palette: &SequenceSv
 
     writer.push_line(&format!(
         "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" \
-         stroke=\"{stroke}\" stroke-width=\"1\"{dash} {marker} {dynamic_attrs}/>",
+         stroke=\"{stroke}\" stroke-width=\"1\"{dash}{marker}{dynamic_attrs}/>",
         x1 = fmt_f64(msg.from_x),
         x2 = fmt_f64(target_x),
         y = fmt_f64(msg.y),
         stroke = palette.lifeline_stroke,
+        marker = marker,
         dynamic_attrs = line_dynamic_attrs,
     ));
 
@@ -750,13 +737,14 @@ fn render_self_message(writer: &mut SvgWriter, sm: &SvgSelfMessage, palette: &Se
     // Right-angle loop: right → down → left with arrow
     writer.push_line(&format!(
         "<path d=\"M {x0} {y0} L {x1} {y0} L {x1} {y1} L {x2} {y1}\" \
-         fill=\"none\" stroke=\"{stroke}\" stroke-width=\"1\"{dash} {marker} {dynamic_attrs}/>",
+         fill=\"none\" stroke=\"{stroke}\" stroke-width=\"1\"{dash}{marker}{dynamic_attrs}/>",
         x0 = fmt_f64(x),
         y0 = fmt_f64(y),
         x1 = fmt_f64(x + arm),
         y1 = fmt_f64(y + h),
         x2 = fmt_f64(end_x),
         stroke = palette.lifeline_stroke,
+        marker = marker,
         dynamic_attrs = path_dynamic_attrs,
     ));
 
@@ -873,10 +861,14 @@ fn collect_used_marker_ids(layout: &SvgSequenceLayout) -> BTreeSet<&'static str>
     for row in &layout.rows {
         match row {
             SvgRow::Message(msg) => {
-                used_marker_ids.insert(marker_id_for_arrow_head(&msg.arrow_head));
+                if let Some(id) = marker_id_for_arrow_head(&msg.arrow_head) {
+                    used_marker_ids.insert(id);
+                }
             }
             SvgRow::SelfMessage(sm) => {
-                used_marker_ids.insert(marker_id_for_arrow_head(&sm.arrow_head));
+                if let Some(id) = marker_id_for_arrow_head(&sm.arrow_head) {
+                    used_marker_ids.insert(id);
+                }
             }
             SvgRow::Note(_) => {}
         }
@@ -885,23 +877,26 @@ fn collect_used_marker_ids(layout: &SvgSequenceLayout) -> BTreeSet<&'static str>
     used_marker_ids
 }
 
-fn marker_id_for_arrow_head(arrow_head: &ArrowHead) -> &'static str {
+fn marker_id_for_arrow_head(arrow_head: &ArrowHead) -> Option<&'static str> {
     match arrow_head {
-        ArrowHead::Filled => "seq-arrowhead",
-        ArrowHead::Open => "seq-open-arrowhead",
-        ArrowHead::Cross => "seq-crosshead",
-        ArrowHead::Async => "seq-async-arrowhead",
+        ArrowHead::None => None,
+        ArrowHead::Filled => Some("seq-arrowhead"),
+        ArrowHead::Cross => Some("seq-crosshead"),
+        ArrowHead::Async => Some("seq-async-arrowhead"),
     }
 }
 
 fn marker_attr(arrow_head: &ArrowHead) -> String {
-    let id = marker_id_for_arrow_head(arrow_head);
-    format!("marker-end=\"url(#{id})\"")
+    match marker_id_for_arrow_head(arrow_head) {
+        Some(id) => format!(" marker-end=\"url(#{id})\""),
+        None => String::new(),
+    }
 }
 
 fn sequence_arrow_pullback(arrow_head: &ArrowHead) -> f64 {
     match arrow_head {
-        ArrowHead::Open | ArrowHead::Async => 10.0,
+        ArrowHead::None => 0.0,
+        ArrowHead::Async => 10.0,
         ArrowHead::Filled | ArrowHead::Cross => 0.0,
     }
 }

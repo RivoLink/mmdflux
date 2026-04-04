@@ -6,9 +6,9 @@
   │                   │
   │┄Dashed filled┄┄┄┄>│
   │                   │
-  │─Solid open───────>│
+  │─Solid plain───────│
   │                   │
-  │┄Dashed open┄┄┄┄┄┄>│
+  │┄Dashed plain┄┄┄┄┄┄│
   │                   │
   │─Solid cross──────x│
   │                   │

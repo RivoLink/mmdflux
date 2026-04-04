@@ -30,9 +30,9 @@
     <text x="361.63" y="90.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Charlie</text>
   </g>
   <g class="events">
-    <line x1="61.63" y1="112.00" x2="361.63" y2="112.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="61.63" y1="112.00" x2="361.63" y2="112.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="211.63" y="108.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Request</text>
-    <line x1="361.63" y1="162.00" x2="211.63" y2="162.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)" />
+    <line x1="361.63" y1="162.00" x2="211.63" y2="162.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)"/>
     <text x="286.63" y="158.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Response</text>
   </g>
 </svg>

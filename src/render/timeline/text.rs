@@ -412,22 +412,22 @@ fn set_connection(
 }
 
 /// Resolve the arrowhead character for the given direction and head type.
-fn arrow_char(arrow_head: &ArrowHead, left_to_right: bool) -> char {
+fn arrow_char(arrow_head: &ArrowHead, left_to_right: bool) -> Option<char> {
     match arrow_head {
-        // Filled and Open look identical in monospace text mode
-        ArrowHead::Filled | ArrowHead::Open => {
+        ArrowHead::None => None,
+        ArrowHead::Filled => {
             if left_to_right {
-                '>'
+                Some('>')
             } else {
-                '<'
+                Some('<')
             }
         }
-        ArrowHead::Cross => 'x',
+        ArrowHead::Cross => Some('x'),
         ArrowHead::Async => {
             if left_to_right {
-                ')'
+                Some(')')
             } else {
-                '('
+                Some('(')
             }
         }
     }
@@ -467,10 +467,12 @@ fn draw_message(
         canvas.set(x, y, lc);
     }
 
-    if left_to_right {
-        canvas.set(end_x - 1, y, ac);
-    } else {
-        canvas.set(start_x, y, ac);
+    if let Some(ac) = ac {
+        if left_to_right {
+            canvas.set(end_x - 1, y, ac);
+        } else {
+            canvas.set(start_x, y, ac);
+        }
     }
 
     let label = format_label(text, number);
@@ -506,7 +508,11 @@ fn draw_self_message(
 
     canvas.set(arm_end, y + 1, cs.vertical);
 
-    canvas.set(center_x, y + 2, arrow_char(arrow_head, false));
+    canvas.set(
+        center_x,
+        y + 2,
+        arrow_char(arrow_head, false).unwrap_or(cs.tee_right),
+    );
     for x in (center_x + 1)..arm_end {
         canvas.set(x, y + 2, cs.horizontal);
     }

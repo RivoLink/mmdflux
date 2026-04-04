@@ -23,9 +23,9 @@
     <text x="193.63" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Bob</text>
   </g>
   <g class="events">
-    <line x1="43.63" y1="138.00" x2="193.63" y2="138.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="43.63" y1="138.00" x2="193.63" y2="138.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="118.63" y="134.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Connect</text>
-    <path d="M 43.63 252.00 L 73.63 252.00 L 73.63 282.00 L 43.63 282.00" fill="none" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <path d="M 43.63 252.00 L 73.63 252.00 L 73.63 282.00 L 43.63 282.00" fill="none" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="81.63" y="256.00" text-anchor="start" dominant-baseline="auto" fill="#333">Retry</text>
   </g>
 </svg>

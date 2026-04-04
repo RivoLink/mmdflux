@@ -586,12 +586,12 @@ static ARROWS: &[ArrowPattern] = &[
     ArrowPattern {
         syntax: "-->",
         line_style: LineStyle::Dashed,
-        arrow_head: ArrowHead::Open,
+        arrow_head: ArrowHead::None,
     },
     ArrowPattern {
         syntax: "->",
         line_style: LineStyle::Solid,
-        arrow_head: ArrowHead::Open,
+        arrow_head: ArrowHead::None,
     },
     ArrowPattern {
         syntax: "--x",
@@ -904,8 +904,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_solid_open_message() {
-        let stmts = parse_stmts("sequenceDiagram\nA->B: open");
+    fn parse_solid_plain_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA->B: sync");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -913,16 +913,16 @@ mod tests {
                 from: "A".to_string(),
                 to: "B".to_string(),
                 line_style: LineStyle::Solid,
-                arrow_head: ArrowHead::Open,
-                text: "open".to_string(),
+                arrow_head: ArrowHead::None,
+                text: "sync".to_string(),
                 activate: None,
             }
         );
     }
 
     #[test]
-    fn parse_dashed_open_message() {
-        let stmts = parse_stmts("sequenceDiagram\nA-->B: dashed open");
+    fn parse_dashed_plain_message() {
+        let stmts = parse_stmts("sequenceDiagram\nA-->B: dashed sync");
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -930,8 +930,8 @@ mod tests {
                 from: "A".to_string(),
                 to: "B".to_string(),
                 line_style: LineStyle::Dashed,
-                arrow_head: ArrowHead::Open,
-                text: "dashed open".to_string(),
+                arrow_head: ArrowHead::None,
+                text: "dashed sync".to_string(),
                 activate: None,
             }
         );
@@ -1315,8 +1315,8 @@ sequenceDiagram
 sequenceDiagram
     A->>B: filled solid
     A-->>B: filled dashed
-    A->B: open solid
-    A-->B: open dashed
+    A->B: plain solid
+    A-->B: plain dashed
     A-xB: cross solid
     A--xB: cross dashed
     A-)B: async solid
@@ -1327,8 +1327,8 @@ sequenceDiagram
         let expected = [
             (LineStyle::Solid, ArrowHead::Filled),
             (LineStyle::Dashed, ArrowHead::Filled),
-            (LineStyle::Solid, ArrowHead::Open),
-            (LineStyle::Dashed, ArrowHead::Open),
+            (LineStyle::Solid, ArrowHead::None),
+            (LineStyle::Dashed, ArrowHead::None),
             (LineStyle::Solid, ArrowHead::Cross),
             (LineStyle::Dashed, ArrowHead::Cross),
             (LineStyle::Solid, ArrowHead::Async),

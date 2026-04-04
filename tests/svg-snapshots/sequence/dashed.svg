@@ -15,9 +15,9 @@
     <text x="196.60" y="32.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server</text>
   </g>
   <g class="events">
-    <line x1="46.60" y1="74.00" x2="196.60" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)" />
+    <line x1="46.60" y1="74.00" x2="196.60" y2="74.00" stroke="#333" stroke-width="1" marker-end="url(#seq-arrowhead)"/>
     <text x="121.60" y="70.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Request</text>
-    <line x1="196.60" y1="124.00" x2="46.60" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)" />
+    <line x1="196.60" y1="124.00" x2="46.60" y2="124.00" stroke="#333" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#seq-arrowhead)"/>
     <text x="121.60" y="120.00" text-anchor="middle" dominant-baseline="auto" fill="#333">Response</text>
   </g>
 </svg>

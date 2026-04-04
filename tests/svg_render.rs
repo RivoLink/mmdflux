@@ -335,6 +335,20 @@ fn simple_sequence_only_emits_filled_arrowhead_def() {
 }
 
 #[test]
+fn plain_sequence_messages_emit_no_marker_defs() {
+    let svg = render_svg(
+        "sequenceDiagram\n    Alice->Bob: Hello\n    Bob-->Alice: World\n",
+        &RenderConfig::default(),
+    );
+
+    assert!(!svg.contains("id=\"seq-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-open-arrowhead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-crosshead\""), "{svg}");
+    assert!(!svg.contains("id=\"seq-async-arrowhead\""), "{svg}");
+    assert!(!svg.contains("marker-end="), "{svg}");
+}
+
+#[test]
 fn mixed_sequence_only_emits_referenced_marker_defs_once() {
     let input = load_sequence_fixture("all_arrows.mmd")
         .replace("    A-xB: Solid cross\n", "")
@@ -342,35 +356,35 @@ fn mixed_sequence_only_emits_referenced_marker_defs_once() {
     let svg = render_svg(&input, &RenderConfig::default());
 
     assert_eq!(svg.matches("id=\"seq-arrowhead\"").count(), 1, "{svg}");
-    assert_eq!(svg.matches("id=\"seq-open-arrowhead\"").count(), 1, "{svg}");
     assert_eq!(
         svg.matches("id=\"seq-async-arrowhead\"").count(),
         1,
         "{svg}"
     );
+    assert!(!svg.contains("id=\"seq-open-arrowhead\""), "{svg}");
     assert!(!svg.contains("id=\"seq-crosshead\""), "{svg}");
 }
 
 #[test]
-fn sequence_open_arrow_markers_are_unfilled() {
-    let input = load_sequence_fixture("open_arrow.mmd");
+fn sequence_async_arrow_markers_are_unfilled() {
+    let input = load_sequence_fixture("async_arrow.mmd");
     let svg = render_svg(&input, &RenderConfig::default());
 
-    assert!(svg.contains("id=\"seq-open-arrowhead\""), "{svg}");
+    assert!(svg.contains("id=\"seq-async-arrowhead\""), "{svg}");
     assert!(
         svg.contains(
-            "<marker id=\"seq-open-arrowhead\" viewBox=\"0 0 10 10\" refX=\"0\" refY=\"5\""
+            "<marker id=\"seq-async-arrowhead\" viewBox=\"0 0 10 10\" refX=\"0\" refY=\"5\""
         ),
         "{svg}"
     );
     assert!(
-        svg.contains("<polygon points=\"0,0 10,5 0,10\" fill=\"none\" stroke=\"#333\""),
+        svg.contains("<path d=\"M 0 0 L 10 5 L 0 10\" fill=\"none\" stroke=\"#333\""),
         "{svg}"
     );
 }
 
 #[test]
-fn sequence_open_and_async_paths_stop_at_marker_back_edge() {
+fn sequence_async_paths_stop_at_marker_back_edge() {
     let input = load_sequence_fixture("all_arrows.mmd");
     let svg = render_svg(
         &input,
@@ -383,14 +397,6 @@ fn sequence_open_and_async_paths_stop_at_marker_back_edge() {
         },
     );
 
-    assert!(
-        svg.contains("<line x1=\"30.45\" y1=\"174.00\" x2=\"170.45\" y2=\"174.00\""),
-        "{svg}"
-    );
-    assert!(
-        svg.contains("<line x1=\"30.45\" y1=\"224.00\" x2=\"170.45\" y2=\"224.00\""),
-        "{svg}"
-    );
     assert!(
         svg.contains("<line x1=\"30.45\" y1=\"374.00\" x2=\"170.45\" y2=\"374.00\""),
         "{svg}"
