@@ -215,7 +215,36 @@ SVG theming is opt-in and affects SVG output only.
 - **Static mode is the default.** Static mode emits concrete hex colors for maximum rasterizer compatibility.
 - **Dynamic mode is additive.** `--svg-theme-mode dynamic` emits the same hex fallbacks plus root CSS variables and a `<style>` block for browser embedding.
 
-Supported theme slots match the runtime facade: `bg`, `fg`, `line`, `accent`, `muted`, `surface`, and `border`.
+### Built-in themes
+
+| Theme               | Family            |
+| ------------------- | ----------------- |
+| `zinc-light`        | beautiful-mermaid |
+| `zinc-dark`         | beautiful-mermaid |
+| `tokyo-night`       | beautiful-mermaid |
+| `tokyo-night-storm` | beautiful-mermaid |
+| `tokyo-night-light` | beautiful-mermaid |
+| `catppuccin-mocha`  | beautiful-mermaid |
+| `catppuccin-latte`  | beautiful-mermaid |
+| `nord`              | beautiful-mermaid |
+| `nord-light`        | beautiful-mermaid |
+| `dracula`           | beautiful-mermaid |
+| `github-light`      | beautiful-mermaid |
+| `github-dark`       | beautiful-mermaid |
+| `solarized-light`   | beautiful-mermaid |
+| `solarized-dark`    | beautiful-mermaid |
+| `one-dark`          | beautiful-mermaid |
+| `default`           | mermaid           |
+| `dark`              | mermaid           |
+| `forest`            | mermaid           |
+| `neutral`           | mermaid           |
+
+The beautiful-mermaid themes are adapted from [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid) by lukilabs.
+Mermaid-family themes (`default`, `dark`, `forest`, `neutral`) are also resolved
+from `%%{init: {"theme": "..."}}%%` directives and YAML frontmatter when no
+explicit `--svg-theme` is provided.
+
+Supported theme slots for per-slot overrides: `bg`, `fg`, `line`, `accent`, `muted`, `surface`, and `border`.
 
 ```rust
 use mmdflux::{OutputFormat, RenderConfig, SvgThemeConfig, SvgThemeMode, render_diagram};
