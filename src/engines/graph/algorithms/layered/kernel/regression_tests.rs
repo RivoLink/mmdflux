@@ -1686,3 +1686,59 @@ fn test_layout_multi_edge_with_labels() {
         "Edge 1 should have a label position"
     );
 }
+
+/// Regression test for #173: an edge that the acyclic DFS does not reverse
+/// but that ends up going backward in the rank assignment (due to compound
+/// graph constraints) must be included in `reversed_edges`.
+///
+/// Graph: subgraph ci contains {A, B, C, D}. D->A creates a cycle
+/// (reversed by acyclic). C->E exits the subgraph. E->F connects two
+/// nodes outside the subgraph, but compound constraints force F above
+/// the subgraph and E below, making E->F rank-backward.
+#[test]
+fn test_compound_rank_reversed_edge_detected_as_backward() {
+    let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+    graph.add_node("ci", (0.0, 0.0));
+    graph.add_node("A", (40.0, 20.0));
+    graph.add_node("B", (40.0, 20.0));
+    graph.add_node("C", (40.0, 20.0));
+    graph.add_node("D", (40.0, 20.0));
+    graph.add_node("E", (40.0, 20.0));
+    graph.add_node("F", (40.0, 20.0));
+    graph.add_node("G", (40.0, 20.0));
+
+    graph.add_edge("A", "B"); // 0
+    graph.add_edge("B", "C"); // 1
+    graph.add_edge("B", "D"); // 2
+    graph.add_edge("D", "A"); // 3 — reversed by acyclic (cycle)
+    graph.add_edge("C", "E"); // 4
+    graph.add_edge("E", "F"); // 5 — rank-backward due to compound constraints
+    graph.add_edge("F", "G"); // 6
+    graph.add_edge("F", "D"); // 7
+
+    graph.set_parent("A", "ci");
+    graph.set_parent("B", "ci");
+    graph.set_parent("C", "ci");
+    graph.set_parent("D", "ci");
+
+    let config = LayoutConfig::default();
+    let result = layout(&graph, &config, |_, dims| *dims);
+
+    // Edge 5 (E->F) should be marked as backward because compound
+    // constraints force F to a lower rank than E.
+    assert!(
+        result.reversed_edges.contains(&5),
+        "Edge 5 (E->F) should be in reversed_edges; \
+         compound constraints force F above the subgraph and E below it. \
+         Got reversed_edges={:?}",
+        result.reversed_edges
+    );
+
+    // Edge 3 (D->A) should also be backward (detected by acyclic DFS).
+    assert!(
+        result.reversed_edges.contains(&3),
+        "Edge 3 (D->A) should be in reversed_edges (cycle). \
+         Got reversed_edges={:?}",
+        result.reversed_edges
+    );
+}

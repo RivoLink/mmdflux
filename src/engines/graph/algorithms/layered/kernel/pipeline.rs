@@ -122,6 +122,26 @@ where
         debug_dump_pipeline(&lg, "after_rank_minmax");
     }
 
+    // Phase 2.4: Detect rank-reversed edges that the acyclic DFS missed.
+    //
+    // The DFS-based acyclic phase breaks directed cycles, but compound graph
+    // constraints (nesting minlens, border nodes) can force an edge to go
+    // backward in the rank assignment even when no directed cycle exists.
+    // For example, E→F where compound constraints push F above the subgraph
+    // and E below it.  These edges need backward classification so the
+    // routing layer applies corridor routing instead of a straight line.
+    if has_compound {
+        for (pos, &(from, to, _)) in lg.edges.iter().enumerate() {
+            if !lg.reversed_edges.contains(&pos)
+                && !lg.is_dummy_index(from)
+                && !lg.is_dummy_index(to)
+                && lg.ranks[from] > lg.ranks[to]
+            {
+                lg.reversed_edges.insert(pos);
+            }
+        }
+    }
+
     // Capture original edge indices of reversed edges BEFORE normalization,
     // because normalization removes long edges (and their reversed_edges entries).
     // The rendering layer needs these to identify backward edges for waypoint routing.
