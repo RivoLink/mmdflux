@@ -10,7 +10,7 @@ mod backward;
 mod bounds;
 mod derive;
 mod intersect;
-mod label_placement;
+pub(crate) mod label_placement;
 mod layout;
 mod routing;
 

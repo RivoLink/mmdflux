@@ -42,7 +42,8 @@ use super::label_placement::{
     CellRole, PathFootprint, choose_corridor_aware_anchor, extend_grid_polyline_into,
 };
 use super::layout::{
-    CoordTransform, GridLayout, NodeBounds, RawCenter, SelfEdgeDrawData, TransformContext,
+    CoordTransform, GridLayout, GridProjection, NodeBounds, RawCenter, SelfEdgeDrawData,
+    TransformContext,
 };
 use crate::graph::geometry::{EdgeLabelGeometry, GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::grid_node_dimensions;
@@ -897,6 +898,8 @@ pub fn geometry_to_grid_layout_with_routed(
         }
     }
 
+    let grid_projection = GridProjection::from(&ctx);
+
     GridLayout {
         grid_positions,
         draw_positions,
@@ -914,6 +917,7 @@ pub fn geometry_to_grid_layout_with_routed(
         subgraph_bounds,
         self_edges,
         node_directions,
+        grid_projection,
     }
 }
 

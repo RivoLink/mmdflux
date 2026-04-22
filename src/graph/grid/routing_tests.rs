@@ -232,6 +232,7 @@ fn minimal_layout(
         subgraph_bounds: std::collections::HashMap::new(),
         self_edges: Vec::new(),
         node_directions: std::collections::HashMap::new(),
+        grid_projection: Default::default(),
     }
 }
 

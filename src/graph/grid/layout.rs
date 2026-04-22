@@ -194,12 +194,28 @@ pub struct GridLayout {
     /// Nodes inside a direction-override subgraph use the subgraph's direction;
     /// other nodes use the diagram's root direction.
     pub node_directions: HashMap<String, Direction>,
+
+    /// Graph-owned snapshot of the float-to-grid projection used by the
+    /// derive-time pipeline. Render-time code reaches for this through
+    /// `project_layout_point` to project `EdgeLabelGeometry.center` without
+    /// depending on the derive-private `TransformContext`.
+    pub(crate) grid_projection: GridProjection,
 }
 
 impl GridLayout {
     /// Get the bounding box for a node.
     pub fn get_bounds(&self, node_id: &str) -> Option<&NodeBounds> {
         self.node_bounds.get(node_id)
+    }
+
+    /// Project a float-space layout point to grid coordinates.
+    ///
+    /// Used by the render-time label placer to convert
+    /// `EdgeLabelGeometry.center` (which lives in float space) to the same
+    /// integer cell the derive-time pipeline would have produced, without
+    /// leaking `TransformContext` across the graph→render boundary.
+    pub(crate) fn project_layout_point(&self, x: f64, y: f64) -> (usize, usize) {
+        self.grid_projection.project_point(x, y)
     }
 
     /// Get the effective layout direction for an edge.
@@ -267,6 +283,70 @@ pub(crate) struct TransformContext {
     pub(crate) overhang_y: usize,
 }
 
+/// Graph-owned snapshot of the float-to-grid projection parameters produced by
+/// `geometry_to_grid_layout_with_routed`. Held on `GridLayout` so render-time
+/// code can project `EdgeLabelGeometry.center` without depending on the
+/// derive-private `TransformContext`.
+///
+/// The default value is the identity projection (scale = 1, no offsets); this
+/// keeps `GridLayout::default()` — and therefore test helpers that synthesize
+/// minimal layouts — byte-identical to previous behavior.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct GridProjection {
+    pub(crate) layout_min_x: f64,
+    pub(crate) layout_min_y: f64,
+    pub(crate) scale_x: f64,
+    pub(crate) scale_y: f64,
+    pub(crate) padding: usize,
+    pub(crate) left_label_margin: usize,
+    pub(crate) overhang_x: usize,
+    pub(crate) overhang_y: usize,
+}
+
+impl Default for GridProjection {
+    fn default() -> Self {
+        Self {
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            padding: 0,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        }
+    }
+}
+
+impl GridProjection {
+    /// Transform a layout (x, y) coordinate to grid coordinates.
+    pub(crate) fn project_point(&self, layout_x: f64, layout_y: f64) -> (usize, usize) {
+        let x = ((layout_x - self.layout_min_x) * self.scale_x).round() as usize
+            + self.overhang_x
+            + self.padding
+            + self.left_label_margin;
+        let y = ((layout_y - self.layout_min_y) * self.scale_y).round() as usize
+            + self.overhang_y
+            + self.padding;
+        (x, y)
+    }
+}
+
+impl From<&TransformContext> for GridProjection {
+    fn from(ctx: &TransformContext) -> Self {
+        Self {
+            layout_min_x: ctx.layout_min_x,
+            layout_min_y: ctx.layout_min_y,
+            scale_x: ctx.scale_x,
+            scale_y: ctx.scale_y,
+            padding: ctx.padding,
+            left_label_margin: ctx.left_label_margin,
+            overhang_x: ctx.overhang_x,
+            overhang_y: ctx.overhang_y,
+        }
+    }
+}
+
 impl TransformContext {
     /// Transform a layout top-left-based rect to grid coordinates (x, y, width, height).
     #[allow(dead_code)]
@@ -295,5 +375,20 @@ impl TransformContext {
             + self.overhang_y
             + self.padding;
         (x, y)
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+
+    #[test]
+    fn grid_layout_projection_projects_float_point() {
+        // Default GridLayout is an empty canvas with the identity projection.
+        // The accessor must project a float point to grid coordinates through
+        // the graph-owned seam — no derive-time TransformContext required.
+        let layout = GridLayout::default();
+        let (gx, gy) = layout.project_layout_point(0.0, 0.0);
+        assert_eq!((gx, gy), (0, 0));
     }
 }

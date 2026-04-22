@@ -8,7 +8,9 @@
 
 use std::collections::BTreeMap;
 
+use super::{GridLayout, SubgraphBounds};
 use crate::graph::geometry::EdgeLabelSide;
+use crate::graph::grid::routing::Segment;
 
 pub(crate) type GridCell = (usize, usize);
 
@@ -73,6 +75,232 @@ pub(crate) fn extend_grid_polyline_into(path: &[GridCell], dest: &mut PathFootpr
 
     dest.cells.insert(path[0], CellRole::Terminal);
     dest.cells.insert(path[path.len() - 1], CellRole::Terminal);
+}
+
+/// Build a `PathFootprint` directly from an ordered slice of Pass 3 segments.
+///
+/// Mirrors `extend_grid_polyline_into` semantics but derives the polyline
+/// implicitly from segment endpoints. Used at render time, where
+/// `RoutedEdge.segments` is the source-of-truth for what the renderer will
+/// actually paint. See
+/// `.gumbo/research/0067-corridor-aware-placer-render-time/q1-pass3-footprint-contract.md`
+/// §What for the spec and §Empirical for the 154-edge comparison.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn segments_to_footprint(segments: &[Segment]) -> PathFootprint {
+    let mut footprint = PathFootprint::default();
+    extend_segments_into(segments, &mut footprint);
+    footprint
+}
+
+/// Union the footprint of Pass 3 segments into `dest`. Used by the render-time
+/// placer to build a single global footprint across every routed edge.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn extend_segments_into(segments: &[Segment], dest: &mut PathFootprint) {
+    if segments.is_empty() {
+        return;
+    }
+
+    // (1) Corridor fill: each segment contributes every cell on its active
+    //     axis, using `entry().or_insert` so overlapping corridors don't
+    //     downgrade a Corner or Terminal placed by an adjacent segment.
+    for seg in segments {
+        match *seg {
+            Segment::Horizontal { y, x_start, x_end } => {
+                let (lo, hi) = (x_start.min(x_end), x_start.max(x_end));
+                for col in lo..=hi {
+                    dest.cells.entry((col, y)).or_insert(CellRole::Corridor);
+                }
+            }
+            Segment::Vertical { x, y_start, y_end } => {
+                let (lo, hi) = (y_start.min(y_end), y_start.max(y_end));
+                for row in lo..=hi {
+                    dest.cells.entry((x, row)).or_insert(CellRole::Corridor);
+                }
+            }
+        }
+    }
+
+    // (2) Corner upgrade: consecutive segments meeting at a shared cell with
+    //     different axes produce a Corner. Terminal wins over Corner.
+    for w in segments.windows(2) {
+        let prev_end = segment_end_cell(&w[0]);
+        let next_start = segment_start_cell(&w[1]);
+        if prev_end == next_start && segment_axis(&w[0]) != segment_axis(&w[1]) {
+            dest.cells
+                .entry(prev_end)
+                .and_modify(|role| {
+                    if !matches!(role, CellRole::Terminal) {
+                        *role = CellRole::Corner;
+                    }
+                })
+                .or_insert(CellRole::Corner);
+        }
+    }
+
+    // (3) Terminal upgrade: first cell of first segment + last cell of last
+    //     segment. Unconditional insert — Terminal is the top of the role
+    //     lattice. These are exactly where the text renderer paints the
+    //     launch glyph and the arrowhead.
+    let first = segment_start_cell(&segments[0]);
+    let last = segment_end_cell(&segments[segments.len() - 1]);
+    dest.cells.insert(first, CellRole::Terminal);
+    dest.cells.insert(last, CellRole::Terminal);
+}
+
+fn segment_axis(seg: &Segment) -> Axis {
+    match seg {
+        Segment::Horizontal { .. } => Axis::Horizontal,
+        Segment::Vertical { .. } => Axis::Vertical,
+    }
+}
+
+/// Seed the footprint with rendered subgraph obstacles: visible border cells
+/// plus concurrent-region divider cells and their tee junctions.
+///
+/// Mirrors `render_subgraph_borders` in `src/render/graph/text/subgraph.rs`:
+/// invisible subgraphs contribute no cells; each visible subgraph stamps its
+/// frame; every parent with `concurrent_regions.len() >= 2` stamps dashed
+/// dividers between adjacent regions plus tee junctions on the parent's top
+/// and bottom borders. All cells land as `Terminal` so the placer treats them
+/// as load-bearing.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn seed_subgraph_borders_into(dest: &mut PathFootprint, layout: &GridLayout) {
+    for bounds in layout.subgraph_bounds.values() {
+        if bounds.invisible {
+            continue;
+        }
+        if bounds.width < 2 || bounds.height < 2 {
+            continue;
+        }
+        seed_subgraph_border_box(dest, bounds);
+    }
+    seed_subgraph_region_dividers(dest, &layout.subgraph_bounds);
+}
+
+fn seed_subgraph_border_box(dest: &mut PathFootprint, bounds: &SubgraphBounds) {
+    let x0 = bounds.x;
+    let y0 = bounds.y;
+    let x1 = x0 + bounds.width - 1;
+    let y1 = y0 + bounds.height - 1;
+    for col in x0..=x1 {
+        dest.cells.insert((col, y0), CellRole::Terminal);
+        dest.cells.insert((col, y1), CellRole::Terminal);
+    }
+    for row in y0..=y1 {
+        dest.cells.insert((x0, row), CellRole::Terminal);
+        dest.cells.insert((x1, row), CellRole::Terminal);
+    }
+}
+
+fn seed_subgraph_region_dividers(
+    dest: &mut PathFootprint,
+    subgraph_bounds: &std::collections::HashMap<String, SubgraphBounds>,
+) {
+    for parent in subgraph_bounds.values() {
+        if parent.concurrent_regions.len() < 2 {
+            continue;
+        }
+        let region_bounds: Vec<&SubgraphBounds> = parent
+            .concurrent_regions
+            .iter()
+            .filter_map(|id| subgraph_bounds.get(id))
+            .collect();
+        for pair in region_bounds.windows(2) {
+            let left_region = pair[0];
+            let right_region = pair[1];
+            let left_right_edge = left_region.x + left_region.width;
+            let right_left_edge = right_region.x;
+            if right_left_edge <= left_right_edge {
+                continue;
+            }
+            let divider_x = left_right_edge + (right_left_edge - left_right_edge) / 2;
+            // Parent top/bottom tees.
+            dest.cells
+                .insert((divider_x, parent.y), CellRole::Terminal);
+            dest.cells.insert(
+                (divider_x, parent.y + parent.height - 1),
+                CellRole::Terminal,
+            );
+            // Dotted vertical between top and bottom (exclusive bottom).
+            let top = parent.y + 1;
+            let bottom = parent.y + parent.height - 1;
+            for row in top..bottom {
+                dest.cells
+                    .entry((divider_x, row))
+                    .and_modify(|r| *r = CellRole::Terminal)
+                    .or_insert(CellRole::Terminal);
+            }
+        }
+    }
+}
+
+/// Stamp a label rect into `dest` as `Terminal` so subsequent labels steer
+/// around it. The rect is specified by its center + dimensions (the same
+/// convention `choose_corridor_aware_anchor` uses).
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn claim_label_cells_into(
+    center: GridCell,
+    dims: (usize, usize),
+    dest: &mut PathFootprint,
+) {
+    let (w, h) = (dims.0.max(1), dims.1.max(1));
+    let base_x = center.0.saturating_sub(w / 2);
+    let base_y = center.1.saturating_sub(h / 2);
+    for row in base_y..base_y.saturating_add(h) {
+        for col in base_x..base_x.saturating_add(w) {
+            dest.cells.insert((col, row), CellRole::Terminal);
+        }
+    }
+}
+
+/// Check whether a label rect (specified by center + dimensions) overlaps any
+/// node's bounding box.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn label_rect_overlaps_nodes(
+    center: GridCell,
+    dims: (usize, usize),
+    node_bounds: &std::collections::HashMap<String, super::NodeBounds>,
+) -> bool {
+    let (w, h) = (dims.0.max(1), dims.1.max(1));
+    let base_x = center.0.saturating_sub(w / 2);
+    let base_y = center.1.saturating_sub(h / 2);
+    for bounds in node_bounds.values() {
+        let overlaps_x =
+            base_x < bounds.x.saturating_add(bounds.width) && bounds.x < base_x.saturating_add(w);
+        let overlaps_y =
+            base_y < bounds.y.saturating_add(bounds.height) && bounds.y < base_y.saturating_add(h);
+        if overlaps_x && overlaps_y {
+            return true;
+        }
+    }
+    false
+}
+
+/// Seed the footprint with every cell inside every node's bounding box. Marks
+/// each cell as `Terminal` so the placer never lands a label on a node glyph.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn seed_node_cells_into(dest: &mut PathFootprint, layout: &GridLayout) {
+    for bounds in layout.node_bounds.values() {
+        for row in bounds.y..bounds.y.saturating_add(bounds.height) {
+            for col in bounds.x..bounds.x.saturating_add(bounds.width) {
+                dest.cells.insert((col, row), CellRole::Terminal);
+            }
+        }
+    }
+}
+
+fn segment_start_cell(seg: &Segment) -> GridCell {
+    match *seg {
+        Segment::Horizontal { y, x_start, .. } => (x_start, y),
+        Segment::Vertical { x, y_start, .. } => (x, y_start),
+    }
+}
+
+fn segment_end_cell(seg: &Segment) -> GridCell {
+    match *seg {
+        Segment::Horizontal { y, x_end, .. } => (x_end, y),
+        Segment::Vertical { x, y_end, .. } => (x, y_end),
+    }
 }
 
 fn fill_grid_segment_cells(a: GridCell, b: GridCell, cells: &mut BTreeMap<GridCell, CellRole>) {
@@ -465,5 +693,367 @@ mod tests {
             "Above fallback landed on a load-bearing cell: {:?}",
             anchor_above
         );
+    }
+}
+
+#[cfg(test)]
+mod seed_footprint_tests {
+    use super::*;
+    use crate::graph::grid::{GridLayout, NodeBounds, SubgraphBounds};
+
+    fn node(x: usize, y: usize, w: usize, h: usize) -> NodeBounds {
+        NodeBounds {
+            x,
+            y,
+            width: w,
+            height: h,
+            layout_center_x: None,
+            layout_center_y: None,
+        }
+    }
+
+    fn subgraph(
+        id: &str,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        invisible: bool,
+        concurrent_regions: Vec<String>,
+    ) -> (String, SubgraphBounds) {
+        (
+            id.to_string(),
+            SubgraphBounds {
+                x,
+                y,
+                width: w,
+                height: h,
+                title: String::new(),
+                depth: 0,
+                invisible,
+                concurrent_regions,
+            },
+        )
+    }
+
+    #[test]
+    fn seed_subgraph_borders_skips_invisible_subgraphs() {
+        let mut layout = GridLayout::default();
+        let (id, bounds) = subgraph("s", 0, 0, 6, 4, true, Vec::new());
+        layout.subgraph_bounds.insert(id, bounds);
+        let mut fp = PathFootprint::default();
+        seed_subgraph_borders_into(&mut fp, &layout);
+        assert!(
+            fp.cells.is_empty(),
+            "invisible subgraph must contribute no cells"
+        );
+    }
+
+    #[test]
+    fn seed_subgraph_borders_marks_divider_cells_for_concurrent_regions() {
+        // Parent occupies 0..20 x 0..8; two 9-wide regions at x=1..10 and x=11..20.
+        let mut layout = GridLayout::default();
+        let (pid, parent) = subgraph(
+            "parent",
+            0,
+            0,
+            20,
+            8,
+            false,
+            vec!["a".to_string(), "b".to_string()],
+        );
+        let (aid, a) = subgraph("a", 1, 1, 9, 6, false, Vec::new());
+        let (bid, b) = subgraph("b", 11, 1, 9, 6, false, Vec::new());
+        layout.subgraph_bounds.insert(pid, parent);
+        layout.subgraph_bounds.insert(aid, a);
+        layout.subgraph_bounds.insert(bid, b);
+
+        let mut fp = PathFootprint::default();
+        seed_subgraph_borders_into(&mut fp, &layout);
+        // Divider x midpoint = 10 + (11 - 10) / 2 = 10. Parent inner y = 1..7 exclusive.
+        // Divider cells for rows 1..7 at x=10.
+        for y in 1..7 {
+            assert!(
+                fp.cells.contains_key(&(10, y)),
+                "missing divider cell at (10, {y})"
+            );
+        }
+        // Tee junctions at top (y=0) and bottom (y=7).
+        assert!(
+            fp.cells.contains_key(&(10, 0)),
+            "missing top tee junction"
+        );
+        assert!(
+            fp.cells.contains_key(&(10, 7)),
+            "missing bottom tee junction"
+        );
+    }
+
+    #[test]
+    fn seed_node_cells_marks_node_interior_as_terminal() {
+        let mut layout = GridLayout::default();
+        layout.node_bounds.insert("n".to_string(), node(2, 3, 4, 2));
+        let mut fp = PathFootprint::default();
+        seed_node_cells_into(&mut fp, &layout);
+        for y in 3..5 {
+            for x in 2..6 {
+                assert_eq!(
+                    fp.cells.get(&(x, y)),
+                    Some(&CellRole::Terminal),
+                    "({x}, {y}) should be Terminal"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod segments_to_footprint_tests {
+    use super::*;
+    use crate::graph::grid::routing::Segment;
+
+    // ---- Degenerate cases per Q1 §What lines 100-104 ----
+
+    #[test]
+    fn empty_segments_returns_empty_footprint() {
+        let footprint = segments_to_footprint(&[]);
+        assert!(footprint.cells.is_empty());
+    }
+
+    #[test]
+    fn single_horizontal_segment_marks_terminals_and_interior() {
+        let segs = vec![Segment::Horizontal {
+            y: 3,
+            x_start: 1,
+            x_end: 5,
+        }];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(1, 3)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(5, 3)), Some(&CellRole::Terminal));
+        for x in 2..=4 {
+            assert_eq!(footprint.cells.get(&(x, 3)), Some(&CellRole::Corridor));
+        }
+    }
+
+    #[test]
+    fn single_vertical_segment_marks_terminals_and_interior() {
+        let segs = vec![Segment::Vertical {
+            x: 2,
+            y_start: 0,
+            y_end: 4,
+        }];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(2, 0)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(2, 4)), Some(&CellRole::Terminal));
+        for y in 1..=3 {
+            assert_eq!(footprint.cells.get(&(2, y)), Some(&CellRole::Corridor));
+        }
+    }
+
+    #[test]
+    fn degenerate_one_cell_segment_idempotent() {
+        // Q1 §What line 103: `H y x_start=x_end` — one cell marked Terminal twice.
+        let segs = vec![Segment::Horizontal {
+            y: 2,
+            x_start: 3,
+            x_end: 3,
+        }];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.len(), 1);
+        assert_eq!(footprint.cells.get(&(3, 2)), Some(&CellRole::Terminal));
+    }
+
+    // ---- Two-segment cases: shared endpoint, different axes -> Corner ----
+
+    #[test]
+    fn two_segments_different_axes_shared_endpoint_marks_corner() {
+        // L-bend: H y=0 x=0..3, V x=3 y=0..3. Shared cell (3, 0).
+        let segs = vec![
+            Segment::Horizontal {
+                y: 0,
+                x_start: 0,
+                x_end: 3,
+            },
+            Segment::Vertical {
+                x: 3,
+                y_start: 0,
+                y_end: 3,
+            },
+        ];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(0, 0)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(3, 3)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(3, 0)), Some(&CellRole::Corner));
+        assert_eq!(footprint.cells.get(&(1, 0)), Some(&CellRole::Corridor));
+        assert_eq!(footprint.cells.get(&(2, 0)), Some(&CellRole::Corridor));
+        assert_eq!(footprint.cells.get(&(3, 1)), Some(&CellRole::Corridor));
+        assert_eq!(footprint.cells.get(&(3, 2)), Some(&CellRole::Corridor));
+    }
+
+    // ---- Two-segment shared endpoint, SAME axis -> no corner (degenerate join) ----
+
+    #[test]
+    fn two_segments_same_axis_shared_endpoint_no_corner() {
+        // Two horizontals joined at x=3, y=2.
+        // Not a corner (axes match); just a long Corridor with Terminals at the far ends.
+        let segs = vec![
+            Segment::Horizontal {
+                y: 2,
+                x_start: 0,
+                x_end: 3,
+            },
+            Segment::Horizontal {
+                y: 2,
+                x_start: 3,
+                x_end: 6,
+            },
+        ];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(0, 2)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(6, 2)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(3, 2)), Some(&CellRole::Corridor));
+    }
+
+    // ---- U-channel: 3 segments -> 2 corners, 2 terminals ----
+
+    #[test]
+    fn u_channel_three_segments_marks_two_corners_two_terminals() {
+        // V down-H left-V up.
+        let segs = vec![
+            Segment::Vertical {
+                x: 6,
+                y_start: 1,
+                y_end: 3,
+            },
+            Segment::Horizontal {
+                y: 3,
+                x_start: 6,
+                x_end: 1,
+            },
+            Segment::Vertical {
+                x: 1,
+                y_start: 3,
+                y_end: 1,
+            },
+        ];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(6, 1)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(1, 1)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(6, 3)), Some(&CellRole::Corner));
+        assert_eq!(footprint.cells.get(&(1, 3)), Some(&CellRole::Corner));
+        for x in 2..=5 {
+            assert_eq!(footprint.cells.get(&(x, 3)), Some(&CellRole::Corridor));
+        }
+    }
+
+    // ---- Self-edge shape (C5 / C8 precondition per Q7) ----
+
+    #[test]
+    fn self_edge_three_segments_marks_corners_at_both_bends() {
+        // Per Q1 §Empirical self_loop_labeled edge idx=1 B→B "retry":
+        // [H y=7 x=11→14, V x=14 y=7→9, H y=9 x=11→14]
+        let segs = vec![
+            Segment::Horizontal {
+                y: 7,
+                x_start: 11,
+                x_end: 14,
+            },
+            Segment::Vertical {
+                x: 14,
+                y_start: 7,
+                y_end: 9,
+            },
+            Segment::Horizontal {
+                y: 9,
+                x_start: 14,
+                x_end: 11,
+            },
+        ];
+        let footprint = segments_to_footprint(&segs);
+        assert_eq!(footprint.cells.get(&(11, 7)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(11, 9)), Some(&CellRole::Terminal));
+        assert_eq!(footprint.cells.get(&(14, 7)), Some(&CellRole::Corner));
+        assert_eq!(footprint.cells.get(&(14, 9)), Some(&CellRole::Corner));
+    }
+
+    // ---- Plan 0153 Red canaries C1 and C3 (see Q7 §Canary List). ----
+
+    /// C1: forward vertical (TD) 2-segment L-path. The projected label center
+    /// lands on the Corner cell where the vertical meets the horizontal; the
+    /// corridor-aware placer must steer it off the Corner onto a Corridor or
+    /// unclaimed cell.
+    #[test]
+    fn c1_forward_vertical_corner_avoid() {
+        // H at y=0 from x=0..3, V at x=3 from y=0..5. Corner at (3, 0).
+        let segs = vec![
+            Segment::Horizontal {
+                y: 0,
+                x_start: 0,
+                x_end: 3,
+            },
+            Segment::Vertical {
+                x: 3,
+                y_start: 0,
+                y_end: 5,
+            },
+        ];
+        let footprint = segments_to_footprint(&segs);
+        // Candidate sits on the Corner; side=Below should steer it onto a
+        // Corridor cell off the load-bearing corner.
+        let anchor = choose_corridor_aware_anchor((3, 0), EdgeLabelSide::Below, &footprint, 10, 10, 1, 1);
+        assert_ne!(anchor, (3, 0), "placer must shift off the corner");
+        assert!(
+            !matches!(
+                footprint.cells.get(&anchor),
+                Some(CellRole::Corner | CellRole::Terminal)
+            ),
+            "anchor landed on a load-bearing cell: {:?}",
+            footprint.cells.get(&anchor)
+        );
+    }
+
+    /// C3: forward horizontal (LR) 1-segment path, side=Above. The placer
+    /// must honour the declared Above side when shifting off a load-bearing
+    /// Terminal at the target endpoint.
+    #[test]
+    fn c3_forward_horizontal_side_above() {
+        // H at y=5 from x=0..6. Terminals at (0, 5) and (6, 5).
+        let segs = vec![Segment::Horizontal {
+            y: 5,
+            x_start: 0,
+            x_end: 6,
+        }];
+        let footprint = segments_to_footprint(&segs);
+        // Candidate on a Terminal (right endpoint). side=Above -> shift up.
+        let anchor = choose_corridor_aware_anchor((6, 5), EdgeLabelSide::Above, &footprint, 10, 10, 1, 1);
+        assert_ne!(anchor, (6, 5), "placer must shift off terminal");
+        assert!(
+            anchor.1 < 5 || !matches!(footprint.cells.get(&anchor), Some(CellRole::Terminal)),
+            "Above must not land on a Terminal below the edge"
+        );
+    }
+
+    // ---- Parity with extend_grid_polyline_into on L-bend ----
+
+    #[test]
+    fn segments_to_footprint_matches_extend_grid_polyline_on_l_bend() {
+        // This test mirrors the spike harness at research-0067-footprint-helper
+        // b18d2466:src/internal_tests/routed_footprint_pass_diff.rs:
+        //   segments_footprint_matches_polyline_on_l_bend.
+        let segs = vec![
+            Segment::Horizontal {
+                y: 0,
+                x_start: 0,
+                x_end: 3,
+            },
+            Segment::Vertical {
+                x: 3,
+                y_start: 0,
+                y_end: 3,
+            },
+        ];
+        let fp_segments = segments_to_footprint(&segs);
+        let fp_polyline = project_grid_polyline(&[(0, 0), (3, 0), (3, 3)]);
+        assert_eq!(fp_segments.cells, fp_polyline.cells);
     }
 }

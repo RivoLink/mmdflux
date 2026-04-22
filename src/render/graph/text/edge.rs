@@ -2,36 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::graph::grid::{AttachDirection, Point, RoutedEdge, Segment, SubgraphBounds};
+use crate::graph::geometry::RoutedGraphGeometry;
+use crate::graph::grid::{AttachDirection, GridLayout, Point, RoutedEdge, Segment, SubgraphBounds};
 use crate::graph::{Arrow, Direction, Edge, Stroke, Subgraph};
 use crate::render::text::canvas::{Canvas, CellStyle, Connections};
 use crate::render::text::chars::CharSet;
-
-/// Calculate the label position at the midpoint of a routed path.
-///
-/// Walks the segments by Manhattan distance and returns the point at 50%
-/// of the total path length. Returns `None` if the path has no segments.
-pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
-    let first = segments.first()?;
-
-    let total_length: usize = segments.iter().map(Segment::length).sum();
-    if total_length == 0 {
-        return Some(first.start_point());
-    }
-
-    let target = total_length / 2;
-    let mut accumulated = 0usize;
-
-    for seg in segments {
-        let seg_len = seg.length();
-        if accumulated + seg_len >= target {
-            return Some(seg.point_at_offset(target - accumulated));
-        }
-        accumulated += seg_len;
-    }
-
-    segments.last().map(Segment::end_point)
-}
 
 /// Calculate label positions near the start and end of a routed path.
 ///
@@ -191,44 +166,9 @@ pub fn compute_edge_containment(
     containment
 }
 
-/// A label split into lines with precomputed dimensions.
-#[derive(Debug)]
-struct LabelBlock<'a> {
-    lines: Vec<&'a str>,
-    width: usize,
-    height: usize,
-}
-
-fn label_block(label: &str) -> LabelBlock<'_> {
-    let lines: Vec<&str> = label.split('\n').collect();
-    let width = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let height = lines.len().max(1);
-    LabelBlock {
-        lines,
-        width,
-        height,
-    }
-}
-
-/// Resolve the effective label string for text rendering, honouring the
-/// pre-engine wrap artifact (plan 0147). When `wrapped_label_lines` is
-/// populated, returns the `'\n'`-joined line vector so existing
-/// `'\n'`-splitting call sites (`label_block`, `draw_label_direct`) pick
-/// up the wrapped shape without threading an extra parameter.
-fn effective_edge_label<'a>(edge: &'a crate::graph::Edge) -> Option<std::borrow::Cow<'a, str>> {
-    if let Some(lines) = edge.wrapped_label_lines.as_deref() {
-        return Some(std::borrow::Cow::Owned(lines.join("\n")));
-    }
-    edge.label.as_deref().map(std::borrow::Cow::Borrowed)
-}
-
-fn label_top_for_center(center_y: usize, height: usize) -> usize {
-    center_y.saturating_sub(height / 2)
-}
+pub(super) use super::label_util::{
+    calc_label_position, clamp_label_x, effective_edge_label, label_block, label_top_for_center,
+};
 
 fn label_center_from_top(top_y: usize, height: usize) -> usize {
     top_y + height / 2
@@ -571,18 +511,6 @@ fn draw_edge_label_with_tracking(
         width: label_width,
         height: label_height,
     })
-}
-
-fn clamp_label_x(label_x: usize, label_width: usize, containment: Option<(usize, usize)>) -> usize {
-    let Some((c_min, c_max)) = containment else {
-        return label_x;
-    };
-    let avail = c_max.saturating_sub(c_min);
-    if label_width <= avail {
-        label_x.max(c_min).min(c_max.saturating_sub(label_width))
-    } else {
-        c_min + avail.saturating_sub(label_width) / 2
-    }
 }
 
 fn vertical_label_position(
@@ -1154,6 +1082,7 @@ pub fn render_all_edges(
     charset: &CharSet,
     diagram_direction: Direction,
 ) {
+    let layout = GridLayout::default();
     render_all_edges_with_labels(
         canvas,
         routed_edges,
@@ -1162,10 +1091,13 @@ pub fn render_all_edges(
         &HashMap::new(),
         &HashMap::new(),
         &HashSet::new(),
+        &layout,
+        None,
     )
 }
 
 /// Render all edges with optional pre-computed label positions.
+#[allow(clippy::too_many_arguments)]
 pub fn render_all_edges_with_labels(
     canvas: &mut Canvas,
     routed_edges: &[RoutedEdge],
@@ -1174,6 +1106,8 @@ pub fn render_all_edges_with_labels(
     label_positions: &HashMap<usize, (usize, usize)>,
     edge_containment: &HashMap<usize, (usize, usize)>,
     authoritative_label_positions: &HashSet<usize>,
+    layout: &GridLayout,
+    routed_geometry: Option<&RoutedGraphGeometry>,
 ) {
     // First pass: draw all segments and arrows
     for routed in routed_edges {
@@ -1182,6 +1116,21 @@ pub fn render_all_edges_with_labels(
         }
         draw_edge_path_and_arrows(canvas, routed, charset);
     }
+
+    // Plan 0153 PR #A: compute render-time placements for the authoritative
+    // subset only (`track != 0 || compartment_size > 1`). Other branches
+    // (backward, self-edge, precomputed, stale-precomputed, forward-default)
+    // stay on the legacy path until PR #B's branch collapse.
+    use super::label_placement::{RenderTimePlacementScope, compute_label_placements};
+    let render_time_placements = compute_label_placements(
+        routed_edges,
+        routed_geometry,
+        layout,
+        edge_containment,
+        canvas.width(),
+        canvas.height(),
+        RenderTimePlacementScope::AuthoritativeOnly,
+    );
 
     // Second pass: draw all labels (so they appear on top of segments)
     // Track placed labels to avoid collisions
@@ -1235,7 +1184,17 @@ pub fn render_all_edges_with_labels(
                 .then(|| label_positions.get(&routed.edge.index).copied())
                 .flatten();
 
-            let placed = if let Some((cx, cy)) = authoritative {
+            let render_time = render_time_placements.get(&routed.edge.index).copied();
+
+            let placed = if let Some(rt) = render_time {
+                // Plan 0153 PR #A: render-time corridor-aware placer. Footprint
+                // was built from Pass-3 segments; sibling-shift, clamp, and
+                // final-cell claim already happened inside the wrapper. Draw
+                // directly at the returned center.
+                let base_x = rt.center.0.saturating_sub(rt.label_dims.0 / 2);
+                let base_y = label_top_for_center(rt.center.1, rt.label_dims.1);
+                draw_label_direct(canvas, label, base_x, base_y, charset, rt.is_backward)
+            } else if let Some((cx, cy)) = authoritative {
                 // Plan 0152 Phase 3: corridor-aware placer already steered
                 // this anchor off load-bearing glyphs. Draw directly at the
                 // precomputed cell; skip drift / collision rechecks.

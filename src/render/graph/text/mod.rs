@@ -4,6 +4,8 @@
 //! geometry and paints it onto a character canvas.
 
 mod edge;
+pub(crate) mod label_placement;
+mod label_util;
 mod shape;
 mod subgraph;
 
@@ -17,6 +19,7 @@ mod regression_tests;
 use super::TextRenderOptions;
 use crate::format::OutputFormat;
 use crate::graph::Graph;
+use crate::graph::geometry::RoutedGraphGeometry;
 use crate::graph::grid::{GridLayout, RoutedEdge, Segment, SubgraphBounds, route_all_edges};
 use crate::render::text::canvas::{Cell, Connections};
 use crate::render::text::{Canvas, CharSet};
@@ -25,6 +28,7 @@ use crate::render::text::{Canvas, CharSet};
 pub fn render_text_from_grid_layout(
     diagram: &Graph,
     layout: &GridLayout,
+    routed: Option<&RoutedGraphGeometry>,
     options: &TextRenderOptions,
 ) -> String {
     let charset = match options.output_format {
@@ -60,6 +64,8 @@ pub fn render_text_from_grid_layout(
         &layout.edge_label_positions,
         &edge_containment,
         &layout.authoritative_label_positions,
+        layout,
+        routed,
     );
 
     apply_subgraph_border_junctions(

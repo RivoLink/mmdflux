@@ -742,6 +742,7 @@ mod edge_rendering_regression {
         crate::render::graph::text::render_text_from_grid_layout(
             diagram,
             &layout,
+            None,
             &crate::render::graph::TextRenderOptions::default(),
         )
     }

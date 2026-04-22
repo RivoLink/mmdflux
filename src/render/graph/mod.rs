@@ -212,7 +212,7 @@ pub fn render_text_from_geometry(
         Some(routed),
         &config,
     );
-    text::render_text_from_grid_layout(diagram, &layout, options)
+    text::render_text_from_grid_layout(diagram, &layout, Some(routed), options)
 }
 
 /// Render a diagram to the configured output format.

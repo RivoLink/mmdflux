@@ -13,8 +13,8 @@
         │         │
         │ git pull│
         │         │
-   git commit     │
         │         │
+   git commit     │
         ▼         │
  ┌────────────┐   │
  │ Local Repo │   │

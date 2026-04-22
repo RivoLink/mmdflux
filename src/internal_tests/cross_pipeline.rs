@@ -3085,6 +3085,8 @@ fn text_renderer_rejects_stale_precomputed_label_anchor_for_label_revalidation_f
             label_positions,
             &std::collections::HashMap::new(),
             &std::collections::HashSet::new(),
+            layout,
+            None,
         );
 
         let output = canvas.to_string();
