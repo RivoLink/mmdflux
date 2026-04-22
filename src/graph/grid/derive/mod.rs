@@ -33,19 +33,15 @@ use subgraph_bounds::{
     shrink_subgraph_horizontal_gaps, shrink_subgraph_vertical_gaps, subgraph_bounds_to_draw,
 };
 use waypoints::{
-    clip_waypoints_to_subgraph, nudge_colliding_waypoints, transform_label_positions_direct,
-    transform_waypoints_direct,
+    clip_waypoints_to_subgraph, nudge_colliding_waypoints, transform_waypoints_direct,
 };
 
 use super::GridLayoutConfig;
-use super::label_placement::{
-    CellRole, PathFootprint, choose_corridor_aware_anchor, extend_grid_polyline_into,
-};
 use super::layout::{
     CoordTransform, GridLayout, GridProjection, NodeBounds, RawCenter, SelfEdgeDrawData,
     TransformContext,
 };
-use crate::graph::geometry::{EdgeLabelGeometry, GraphGeometry, RoutedGraphGeometry};
+use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::grid_node_dimensions;
 use crate::graph::space::FRect;
 use crate::graph::{Direction, Edge, Graph, Shape};
@@ -56,42 +52,11 @@ type IndexedDrawPathPair = (usize, DrawPath, usize, DrawPath);
 
 const BACKWARD_ROUTE_GAP: usize = 2;
 
-// Convert the authoritative label rect into (width, height) grid cells.
-// The `EdgeLabelGeometry::rect` is padded on both axes; subtract the
-// per-side padding before quantizing so the returned footprint matches
-// the span of rendered characters, not the surrounding whitespace.
-fn label_geometry_to_grid_dims(
-    geometry: &EdgeLabelGeometry,
-    ctx: &TransformContext,
-) -> (usize, usize) {
-    let text_w = (geometry.rect.width - 2.0 * geometry.padding.0).max(0.0);
-    let text_h = (geometry.rect.height - 2.0 * geometry.padding.1).max(0.0);
-    let cells_w = (text_w * ctx.scale_x).ceil() as usize;
-    let cells_h = (text_h * ctx.scale_y).ceil() as usize;
-    (cells_w.max(1), cells_h.max(1))
-}
-
-fn label_block_overlaps_nodes(
-    center: (usize, usize),
-    dims: (usize, usize),
-    node_bounds: &HashMap<String, NodeBounds>,
-) -> bool {
-    let (width, height) = (dims.0.max(1), dims.1.max(1));
-    let base_x = center.0.saturating_sub(width / 2);
-    let base_y = center.1.saturating_sub(height / 2);
-    for bounds in node_bounds.values() {
-        let bx = bounds.x;
-        let by = bounds.y;
-        let bw = bounds.width;
-        let bh = bounds.height;
-        let overlaps_x = base_x < bx.saturating_add(bw) && bx < base_x.saturating_add(width);
-        let overlaps_y = base_y < by.saturating_add(bh) && by < base_y.saturating_add(height);
-        if overlaps_x && overlaps_y {
-            return true;
-        }
-    }
-    false
-}
+// Plan 0153 PR #B: `label_geometry_to_grid_dims` and
+// `label_block_overlaps_nodes` deleted from derive/mod.rs — the derive-time
+// corridor-aware placer that used them has been removed. Equivalent logic
+// lives in `src/graph/grid/label_placement.rs` and
+// `src/render/graph/text/label_placement.rs`.
 
 fn effective_rank_sep(diagram: &Graph, config: &GridLayoutConfig) -> f64 {
     let mut rank_sep = config.rank_sep;
@@ -449,19 +414,10 @@ pub fn geometry_to_grid_layout_with_routed(
         &mut preserve_routed_path_topology,
     );
 
-    let mut edge_label_positions = grid_projection
-        .map(|projection| {
-            transform_label_positions_direct(
-                &projection.label_positions,
-                &diagram.edges,
-                &ctx,
-                &layer_starts,
-                is_vertical,
-                width,
-                height,
-            )
-        })
-        .unwrap_or_default();
+    // Plan 0153 PR #B: derive-time `edge_label_positions` removed. The
+    // render-time placer projects `label_geometry.center` at render time via
+    // `layout.project_layout_point`; no precomputed per-edge cache lives on
+    // `GridLayout` anymore.
 
     // --- Phase I: Strip layout waypoints from backward edges ---
     // When ranks are doubled (labels present), backward edges get inflated layout
@@ -551,7 +507,6 @@ pub fn geometry_to_grid_layout_with_routed(
             if shifted.contains(&edge.from) || shifted.contains(&edge.to) {
                 edge_waypoints.remove(&edge.index);
                 routed_edge_paths.remove(&edge.index);
-                edge_label_positions.remove(&edge.index);
             }
         }
     }
@@ -774,7 +729,6 @@ pub fn geometry_to_grid_layout_with_routed(
                 } else {
                     routed_edge_paths.remove(&key);
                 }
-                edge_label_positions.remove(&key);
             }
         }
 
@@ -803,100 +757,12 @@ pub fn geometry_to_grid_layout_with_routed(
 
     let node_directions = geometry.node_directions.clone();
 
-    // Plan 0152 Phase 3: corridor-aware authoritative label placement.
-    // For each routed edge whose `label_geometry` was coordinated by the
-    // label-lane pass (track != 0 or multi-member compartment), project
-    // the routed path into grid space and steer the authoritative anchor
-    // off load-bearing `Terminal` / `Corner` cells. The text renderer
-    // downstream treats entries in `authoritative_label_positions` as
-    // already-safe and skips drift / collision rechecks.
-    //
-    // Stale-anchor gate: only override when the existing heuristic
-    // position disagrees with the authoritative center by more than
-    // `AUTHORITATIVE_OVERRIDE_DRIFT` cells. When the two agree the
-    // baseline heuristic already honours the producer's intent; taking
-    // over adds unnecessary layout churn and can collapse adjacent
-    // corridor glyphs into junctions.
-    // The heuristic already emits a readable placement when the
-    // authoritative center sits close to its own midpoint. Only
-    // override when the producer's center is further away than this
-    // threshold — the corridor-aware placer's job is to rescue
-    // egregiously stale anchors (the `state/transitions retry` 7-cell
-    // float, the `git_workflow_td git pull` 8-cell float), not to
-    // reshape already-good layouts.
-    const AUTHORITATIVE_OVERRIDE_DRIFT: usize = 5;
-    let mut authoritative_label_positions: HashSet<usize> = HashSet::new();
-    if let Some(routed) = routed {
-        // Union the footprints of every routed edge so a label on edge
-        // A can't stomp edge B's corner or terminal glyphs.
-        let mut global_footprint = PathFootprint::default();
-        for grid_path in routed_edge_paths.values() {
-            extend_grid_polyline_into(grid_path, &mut global_footprint);
-        }
-        // Track cells already claimed by a placed authoritative label so
-        // the next edge's placer steers around them. `Terminal` is the
-        // strongest role: once written, it rejects any overlap.
-        let claim_label_cells =
-            |footprint: &mut PathFootprint, center: (usize, usize), dims: (usize, usize)| {
-                let (w, h) = (dims.0.max(1), dims.1.max(1));
-                let base_x = center.0.saturating_sub(w / 2);
-                let base_y = center.1.saturating_sub(h / 2);
-                for row in base_y..base_y.saturating_add(h) {
-                    for col in base_x..base_x.saturating_add(w) {
-                        footprint.cells.insert((col, row), CellRole::Terminal);
-                    }
-                }
-            };
-        for edge in &routed.edges {
-            let Some(label_geometry) = edge.label_geometry else {
-                continue;
-            };
-            if label_geometry.track == 0 && label_geometry.compartment_size <= 1 {
-                continue;
-            }
-            if edge.path.len() < 2 {
-                continue;
-            }
-            if width == 0 || height == 0 {
-                continue;
-            }
-            let (cx, cy) = ctx.to_grid(label_geometry.center.x, label_geometry.center.y);
-            let candidate = (cx.min(width - 1), cy.min(height - 1));
-            if let Some(&existing) = edge_label_positions.get(&edge.index) {
-                let drift_x = existing.0.abs_diff(candidate.0);
-                let drift_y = existing.1.abs_diff(candidate.1);
-                if drift_x <= AUTHORITATIVE_OVERRIDE_DRIFT
-                    && drift_y <= AUTHORITATIVE_OVERRIDE_DRIFT
-                {
-                    continue;
-                }
-            }
-            if !routed_edge_paths.contains_key(&edge.index) {
-                continue;
-            }
-            let label_dims = label_geometry_to_grid_dims(&label_geometry, &ctx);
-            let anchor = choose_corridor_aware_anchor(
-                candidate,
-                label_geometry.side,
-                &global_footprint,
-                width,
-                height,
-                label_dims.0,
-                label_dims.1,
-            );
-            if label_block_overlaps_nodes(anchor, label_dims, &node_bounds) {
-                // The authoritative center falls inside a node's footprint
-                // after corridor-aware steering. Writing characters there is
-                // blocked by `is_node` cells in the text renderer, and the
-                // label would be clipped to a single char or fewer. Fall back
-                // to the existing heuristic.
-                continue;
-            }
-            edge_label_positions.insert(edge.index, anchor);
-            authoritative_label_positions.insert(edge.index);
-            claim_label_cells(&mut global_footprint, anchor, label_dims);
-        }
-    }
+    // Plan 0153 PR #B: derive-time corridor-aware placer removed. The
+    // render-time placer in `src/render/graph/text/label_placement.rs` now
+    // owns every body-label anchor and reads its footprint from Pass-3
+    // segments (not `routed_edge_paths`). `edge_label_positions` and
+    // `authoritative_label_positions` are no longer populated here.
+    let _ = routed;
 
     let grid_projection = GridProjection::from(&ctx);
 
@@ -911,8 +777,6 @@ pub fn geometry_to_grid_layout_with_routed(
         edge_waypoints,
         routed_edge_paths,
         preserve_routed_path_topology,
-        edge_label_positions,
-        authoritative_label_positions,
         node_shapes,
         subgraph_bounds,
         self_edges,

@@ -210,29 +210,58 @@ fn test_compute_layout_simple_diagram_no_compound() {
 
 #[test]
 fn label_position_within_canvas_bounds() {
+    // Plan 0153 PR #B: `edge_label_positions` field removed; the render-time
+    // placer projects `label_geometry.center` at render time via
+    // `layout.project_layout_point`. Reshape: route the diagram through the
+    // routing pipeline so each labeled edge carries `label_geometry`, then
+    // project the float-space label center through the graph-owned
+    // accessor and assert the projection lands inside the canvas the same
+    // layout produced.
+    use crate::graph::measure::default_proportional_text_metrics;
+    use crate::graph::routing::{EdgeRouting, route_graph_geometry};
     let diagram = compile_diagram("graph TD\n    A -->|yes| B");
-    let layout = compute_layout(&diagram, &GridLayoutConfig::default());
-
-    let edge_idx = diagram
-        .edges
-        .iter()
-        .find(|e| e.from == "A" && e.to == "B")
-        .expect("expected A -> B edge")
-        .index;
-    assert!(
-        layout.edge_label_positions.contains_key(&edge_idx),
-        "Should have precomputed label position for A->B, got keys: {:?}",
-        layout.edge_label_positions.keys().collect::<Vec<_>>()
+    let config = GridLayoutConfig::default();
+    let layered_config = layered_config_for_layout(&diagram, &config);
+    let engine = FluxLayeredEngine::text();
+    let request = GraphSolveRequest::new(
+        MeasurementMode::Grid,
+        GraphGeometryContract::Canonical,
+        crate::graph::GeometryLevel::Layout,
+        None,
+        Default::default(),
     );
+    let result = engine
+        .solve(&diagram, &EngineConfig::Layered(layered_config), &request)
+        .expect("layered layout test solve failed");
+    let metrics = default_proportional_text_metrics();
+    let routed = route_graph_geometry(
+        &diagram,
+        &result.geometry,
+        EdgeRouting::OrthogonalRoute,
+        &metrics,
+    );
+    let layout =
+        geometry_to_grid_layout_with_routed(&diagram, &result.geometry, Some(&routed), &config);
 
-    let (lx, ly) = layout.edge_label_positions[&edge_idx];
+    let mut checked = 0usize;
+    for edge in &routed.edges {
+        let Some(label_geom) = edge.label_geometry.as_ref() else {
+            continue;
+        };
+        let (gx, gy) = layout.project_layout_point(label_geom.center.x, label_geom.center.y);
+        assert!(
+            gx < layout.width && gy < layout.height,
+            "projected label center ({gx}, {gy}) for edge {}→{} falls outside canvas {}x{}",
+            edge.from,
+            edge.to,
+            layout.width,
+            layout.height
+        );
+        checked += 1;
+    }
     assert!(
-        lx < layout.width && ly < layout.height,
-        "Label position ({}, {}) should be within canvas ({}, {})",
-        lx,
-        ly,
-        layout.width,
-        layout.height
+        checked >= 1,
+        "A -->|yes| B should have at least one labeled edge with label_geometry"
     );
 }
 
