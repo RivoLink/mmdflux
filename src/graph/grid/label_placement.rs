@@ -215,8 +215,7 @@ fn seed_subgraph_region_dividers(
             }
             let divider_x = left_right_edge + (right_left_edge - left_right_edge) / 2;
             // Parent top/bottom tees.
-            dest.cells
-                .insert((divider_x, parent.y), CellRole::Terminal);
+            dest.cells.insert((divider_x, parent.y), CellRole::Terminal);
             dest.cells.insert(
                 (divider_x, parent.y + parent.height - 1),
                 CellRole::Terminal,
@@ -779,10 +778,7 @@ mod seed_footprint_tests {
             );
         }
         // Tee junctions at top (y=0) and bottom (y=7).
-        assert!(
-            fp.cells.contains_key(&(10, 0)),
-            "missing top tee junction"
-        );
+        assert!(fp.cells.contains_key(&(10, 0)), "missing top tee junction");
         assert!(
             fp.cells.contains_key(&(10, 7)),
             "missing bottom tee junction"
@@ -1000,7 +996,8 @@ mod segments_to_footprint_tests {
         let footprint = segments_to_footprint(&segs);
         // Candidate sits on the Corner; side=Below should steer it onto a
         // Corridor cell off the load-bearing corner.
-        let anchor = choose_corridor_aware_anchor((3, 0), EdgeLabelSide::Below, &footprint, 10, 10, 1, 1);
+        let anchor =
+            choose_corridor_aware_anchor((3, 0), EdgeLabelSide::Below, &footprint, 10, 10, 1, 1);
         assert_ne!(anchor, (3, 0), "placer must shift off the corner");
         assert!(
             !matches!(
@@ -1025,7 +1022,8 @@ mod segments_to_footprint_tests {
         }];
         let footprint = segments_to_footprint(&segs);
         // Candidate on a Terminal (right endpoint). side=Above -> shift up.
-        let anchor = choose_corridor_aware_anchor((6, 5), EdgeLabelSide::Above, &footprint, 10, 10, 1, 1);
+        let anchor =
+            choose_corridor_aware_anchor((6, 5), EdgeLabelSide::Above, &footprint, 10, 10, 1, 1);
         assert_ne!(anchor, (6, 5), "placer must shift off terminal");
         assert!(
             anchor.1 < 5 || !matches!(footprint.cells.get(&anchor), Some(CellRole::Terminal)),

@@ -14,7 +14,9 @@ use std::path::Path;
 
 use crate::diagrams::flowchart::compile_to_graph;
 use crate::engines::graph::EngineConfig;
-use crate::engines::graph::algorithms::layered::{LayoutConfig as LayeredConfig, run_layered_layout};
+use crate::engines::graph::algorithms::layered::{
+    LayoutConfig as LayeredConfig, run_layered_layout,
+};
 use crate::engines::graph::contracts::MeasurementMode;
 use crate::graph::Graph;
 use crate::graph::grid::{GridLayout, RoutedEdge};
@@ -96,8 +98,14 @@ fn compute_label_placements_returns_empty_map_on_empty_input() {
 #[test]
 fn c2_backward_vertical_avoids_corners() {
     let output = render_flowchart_fixture("label_clamp_bt_review.mmd");
-    assert!(output.contains("yes"), "rendered output missing 'yes'\n{output}");
-    assert!(output.contains("no"), "rendered output missing 'no'\n{output}");
+    assert!(
+        output.contains("yes"),
+        "rendered output missing 'yes'\n{output}"
+    );
+    assert!(
+        output.contains("no"),
+        "rendered output missing 'no'\n{output}"
+    );
     // Corners are represented by ┌/└/┐/┘; the labels must not sit on rows
     // where they would overwrite those glyphs. Simple lane check: the
     // characters immediately adjacent to a label on the same row should be

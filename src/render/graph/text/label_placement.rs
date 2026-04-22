@@ -179,28 +179,25 @@ pub(crate) fn compute_label_placements(
         // outright if even the Pass-3-midpoint retry is unsafe. Emitting a
         // label that overlaps a node glyph is strictly worse than letting the
         // legacy fallback branch handle the edge.
-        let node_safe_center = if label_rect_overlaps_nodes(
-            corridor_anchor,
-            label_dims,
-            &layout.node_bounds,
-        ) {
-            let Some(m) = midpoint else { continue };
-            let retry = choose_corridor_aware_anchor(
-                m,
-                side,
-                &footprint,
-                canvas_width,
-                canvas_height,
-                label_dims.0,
-                label_dims.1,
-            );
-            if label_rect_overlaps_nodes(retry, label_dims, &layout.node_bounds) {
-                continue;
-            }
-            retry
-        } else {
-            corridor_anchor
-        };
+        let node_safe_center =
+            if label_rect_overlaps_nodes(corridor_anchor, label_dims, &layout.node_bounds) {
+                let Some(m) = midpoint else { continue };
+                let retry = choose_corridor_aware_anchor(
+                    m,
+                    side,
+                    &footprint,
+                    canvas_width,
+                    canvas_height,
+                    label_dims.0,
+                    label_dims.1,
+                );
+                if label_rect_overlaps_nodes(retry, label_dims, &layout.node_bounds) {
+                    continue;
+                }
+                retry
+            } else {
+                corridor_anchor
+            };
 
         let shifted_center = shift_against_claimed_labels(
             node_safe_center,
