@@ -4,7 +4,6 @@
 //! crate-private parity checks, and cross-pipeline regression contracts that do
 //! not have a single obvious owner-local home.
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -19,19 +18,16 @@ use crate::engines::graph::flux::FluxLayeredEngine;
 use crate::format::{EdgePreset, RoutingStyle};
 use crate::graph::geometry::{FPoint, RoutedGraphGeometry};
 use crate::graph::grid::{
-    GridLayout, GridLayoutConfig, GridRanker, NodeBounds, RoutedEdge, Segment,
-    geometry_to_grid_layout_with_routed, route_all_edges,
+    GridLayout, GridLayoutConfig, GridRanker, NodeBounds, geometry_to_grid_layout_with_routed,
 };
 use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::{Direction, GeometryLevel, Graph, Shape};
 use crate::mmds::from_str;
 use crate::payload::Diagram as DiagramPayload;
-use crate::render::graph::text::{render_all_edges_with_labels, render_node};
 use crate::render::graph::{
     render_svg_from_geometry, render_svg_from_routed_geometry, render_text_from_geometry,
 };
-use crate::render::text::{Canvas, CharSet};
 use crate::{EngineAlgorithmId, OutputFormat, RenderConfig, TextColorMode};
 
 /// Load a fixture file by name from `tests/fixtures/flowchart/`.
@@ -3024,152 +3020,13 @@ fn flowchart_instance_render_is_stable_for_subgraph_direction_mixed() {
     }
 }
 
-#[test]
-fn text_renderer_rejects_stale_precomputed_label_anchor_for_label_revalidation_fixture() {
-    fn distance_to_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> f64 {
-        let (px, py) = point;
-        let (sx, sy) = start;
-        let (ex, ey) = end;
-        let dx = ex - sx;
-        let dy = ey - sy;
-        let len_sq = dx * dx + dy * dy;
-        if len_sq <= 0.000_001 {
-            return ((px - sx).powi(2) + (py - sy).powi(2)).sqrt();
-        }
-        let projection = ((px - sx) * dx + (py - sy) * dy) / len_sq;
-        let t = projection.clamp(0.0, 1.0);
-        let cx = sx + t * dx;
-        let cy = sy + t * dy;
-        ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
-    }
-
-    fn distance_to_routed_path(point: (usize, usize), segments: &[Segment]) -> f64 {
-        let p = (point.0 as f64, point.1 as f64);
-        segments
-            .iter()
-            .map(|segment| match segment {
-                Segment::Horizontal { y, x_start, x_end } => {
-                    distance_to_segment(p, (*x_start as f64, *y as f64), (*x_end as f64, *y as f64))
-                }
-                Segment::Vertical { x, y_start, y_end } => {
-                    distance_to_segment(p, (*x as f64, *y_start as f64), (*x as f64, *y_end as f64))
-                }
-            })
-            .fold(f64::INFINITY, f64::min)
-    }
-
-    fn render_label_center(
-        diagram: &Graph,
-        layout: &GridLayout,
-        routed_edges: &[RoutedEdge],
-        label: &str,
-        label_positions: &HashMap<usize, (usize, usize)>,
-    ) -> ((usize, usize), String) {
-        let mut canvas = Canvas::new(layout.width, layout.height);
-        let charset = CharSet::unicode();
-
-        let mut node_keys: Vec<&String> = diagram.nodes.keys().collect();
-        node_keys.sort();
-        for node_id in node_keys {
-            let node = &diagram.nodes[node_id];
-            if let Some(&(x, y)) = layout.draw_positions.get(node_id) {
-                render_node(&mut canvas, node, x, y, &charset, diagram.direction);
-            }
-        }
-
-        render_all_edges_with_labels(
-            &mut canvas,
-            routed_edges,
-            &charset,
-            diagram.direction,
-            label_positions,
-            &std::collections::HashMap::new(),
-            &std::collections::HashSet::new(),
-            layout,
-            None,
-        );
-
-        let output = canvas.to_string();
-        let mut matches = Vec::new();
-        for (y, line) in output.lines().enumerate() {
-            if let Some(x) = line.find(label) {
-                matches.push((x, y));
-            }
-        }
-        assert_eq!(
-            matches.len(),
-            1,
-            "expected exactly one rendered '{label}' label occurrence; got {:?}\n{output}",
-            matches
-        );
-        (matches[0], output)
-    }
-
-    let diagram =
-        prepare_flowchart("graph TD\nA[Very Wide Source Node] -->|cfg| B[Very Wide Target Node]\n");
-    let layout = compute_layout(&diagram, &GridLayoutConfig::default());
-    let routed_edges = route_all_edges(&diagram.edges, &layout, diagram.direction);
-
-    let target_edge = diagram
-        .edges
-        .iter()
-        .find(|edge| edge.label.as_deref() == Some("cfg"))
-        .expect("diagram should contain labeled edge");
-    let label = target_edge
-        .label
-        .as_ref()
-        .expect("target edge should include label");
-    let label_width = label.chars().count();
-    let routed_edge = routed_edges
-        .iter()
-        .find(|edge| edge.edge.index == target_edge.index)
-        .expect("routed edge should exist");
-
-    let (baseline_left, baseline_output) = render_label_center(
-        &diagram,
-        &layout,
-        &routed_edges,
-        label,
-        &layout.edge_label_positions,
-    );
-    let baseline_center = (baseline_left.0 + label_width / 2, baseline_left.1);
-    let baseline_drift = distance_to_routed_path(baseline_center, &routed_edge.segments);
-
-    let stale_candidates = [
-        (layout.width.saturating_sub(label_width + 2), 1usize),
-        (
-            layout.width.saturating_sub(label_width + 2),
-            layout.height / 2,
-        ),
-        (1usize + label_width / 2, layout.height.saturating_sub(2)),
-    ];
-    let stale_center = stale_candidates
-        .iter()
-        .copied()
-        .max_by(|a, b| {
-            distance_to_routed_path(*a, &routed_edge.segments)
-                .partial_cmp(&distance_to_routed_path(*b, &routed_edge.segments))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .expect("stale candidate list should be non-empty");
-    let stale_drift = distance_to_routed_path(stale_center, &routed_edge.segments);
-    assert!(
-        stale_drift > baseline_drift + 6.0,
-        "test setup invalid: stale candidate should be much farther than baseline (baseline={baseline_drift:.2}, stale={stale_drift:.2})\nbaseline output:\n{baseline_output}"
-    );
-
-    let mut poisoned_positions = layout.edge_label_positions.clone();
-    poisoned_positions.insert(target_edge.index, stale_center);
-    let (rendered_left, output) =
-        render_label_center(&diagram, &layout, &routed_edges, label, &poisoned_positions);
-    let rendered_center = (rendered_left.0 + label_width / 2, rendered_left.1);
-    let rendered_drift = distance_to_routed_path(rendered_center, &routed_edge.segments);
-
-    assert!(
-        rendered_drift <= baseline_drift + 1.0,
-        "stale precomputed anchor should be ignored so rendered drift stays near baseline; baseline={baseline_drift:.2}, stale={stale_drift:.2}, rendered={rendered_drift:.2}, stale_center={stale_center:?}, rendered_left={rendered_left:?}\n{output}"
-    );
-}
+// Plan 0153 PR #B: `text_renderer_rejects_stale_precomputed_label_anchor_for_
+// label_revalidation_fixture` deleted. The `edge_label_positions` /
+// `authoritative_label_positions` cache it poisoned is gone, and
+// `PRECOMPUTED_LABEL_BASE_DRIFT` is deleted. Equivalent coverage lives in
+// `src/render/graph/text/label_placement.rs` where the render-time placer
+// sources its footprint directly from `RoutedEdge.segments`, so "stale
+// precomputed anchor" is not a reachable state anymore.
 
 #[test]
 fn classify_face_matches_expected_common_approaches() {

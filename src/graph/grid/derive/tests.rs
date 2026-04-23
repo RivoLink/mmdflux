@@ -1,3 +1,4 @@
+use super::waypoints::transform_label_positions_direct;
 use super::*;
 use crate::graph::grid::GridLayoutConfig;
 use crate::graph::space::FPoint;

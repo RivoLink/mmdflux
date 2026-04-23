@@ -350,6 +350,7 @@ pub(super) fn transform_waypoints_direct(
 /// The primary axis (Y for TD/BT, X for LR/RL) uses rank-based snapping via
 /// `layer_starts[rank]`, matching how `transform_waypoints_direct()` works.
 /// The cross axis uses uniform scaling from layout coordinates.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn transform_label_positions_direct(
     label_positions: &HashMap<usize, (FPoint, i32)>,
     edges: &[Edge],

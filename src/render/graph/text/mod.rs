@@ -10,9 +10,7 @@ mod shape;
 mod subgraph;
 
 #[cfg(test)]
-pub(crate) use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
-#[cfg(test)]
-pub(crate) use shape::render_node;
+pub(crate) use edge::{render_all_edges, render_edge};
 #[cfg(test)]
 mod regression_tests;
 
@@ -61,9 +59,7 @@ pub fn render_text_from_grid_layout(
         &routed_edges,
         &charset,
         diagram.direction,
-        &layout.edge_label_positions,
         &edge_containment,
-        &layout.authoritative_label_positions,
         layout,
         routed,
     );

@@ -226,8 +226,6 @@ fn minimal_layout(
         edge_waypoints: std::collections::HashMap::new(),
         routed_edge_paths,
         preserve_routed_path_topology: std::collections::HashSet::new(),
-        edge_label_positions: std::collections::HashMap::new(),
-        authoritative_label_positions: std::collections::HashSet::new(),
         node_shapes,
         subgraph_bounds: std::collections::HashMap::new(),
         self_edges: Vec::new(),

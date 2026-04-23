@@ -87,52 +87,10 @@ fn offset_perpendicular(point: Point, segment: &Segment) -> Point {
     }
 }
 
-const PRECOMPUTED_LABEL_BASE_DRIFT: f64 = 2.0;
-const LABEL_POINT_EPS: f64 = 0.000_001;
-
-fn point_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
-    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
-}
-
-fn distance_point_to_segment(point: (f64, f64), segment: &Segment) -> f64 {
-    let start = segment.start_point();
-    let end = segment.end_point();
-    let a = (start.x as f64, start.y as f64);
-    let b = (end.x as f64, end.y as f64);
-    let dx = b.0 - a.0;
-    let dy = b.1 - a.1;
-    let seg_len_sq = dx * dx + dy * dy;
-    if seg_len_sq <= LABEL_POINT_EPS {
-        return point_distance(point, a);
-    }
-    let projection = ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / seg_len_sq;
-    let t = projection.clamp(0.0, 1.0);
-    let closest = (a.0 + t * dx, a.1 + t * dy);
-    point_distance(point, closest)
-}
-
-fn distance_point_to_path(point: (usize, usize), segments: &[Segment]) -> f64 {
-    if segments.is_empty() {
-        return f64::INFINITY;
-    }
-    let p = (point.0 as f64, point.1 as f64);
-    segments
-        .iter()
-        .map(|segment| distance_point_to_segment(p, segment))
-        .fold(f64::INFINITY, f64::min)
-}
-
-fn allowed_precomputed_label_drift(
-    direction: Direction,
-    label_width: usize,
-    label_height: usize,
-) -> f64 {
-    let cross_axis_span = match direction {
-        Direction::TopDown | Direction::BottomTop => label_width.max(1) as f64 / 2.0,
-        Direction::LeftRight | Direction::RightLeft => label_height.max(1) as f64 / 2.0,
-    };
-    PRECOMPUTED_LABEL_BASE_DRIFT + cross_axis_span + 1.0
-}
+// Plan 0153 PR #B: `PRECOMPUTED_LABEL_BASE_DRIFT` and
+// `allowed_precomputed_label_drift` deleted. The render-time placer sources
+// its footprint from Pass-3 segments, so "stale precomputed anchor" is no
+// longer a reachable state and the drift gate has no work to do.
 
 /// For each edge whose both endpoints live inside the same subgraph, return
 /// the tightest (innermost) horizontal containment range `(x_min, x_max)` so
@@ -166,9 +124,9 @@ pub fn compute_edge_containment(
     containment
 }
 
-pub(super) use super::label_util::{
-    calc_label_position, clamp_label_x, effective_edge_label, label_block, label_top_for_center,
-};
+#[cfg(test)]
+pub(super) use super::label_util::calc_label_position;
+pub(super) use super::label_util::{effective_edge_label, label_block, label_top_for_center};
 
 fn label_center_from_top(top_y: usize, height: usize) -> usize {
     top_y + height / 2
@@ -1089,23 +1047,19 @@ pub fn render_all_edges(
         charset,
         diagram_direction,
         &HashMap::new(),
-        &HashMap::new(),
-        &HashSet::new(),
         &layout,
         None,
     )
 }
 
-/// Render all edges with optional pre-computed label positions.
+/// Render all edges with labels via the render-time corridor-aware placer.
 #[allow(clippy::too_many_arguments)]
 pub fn render_all_edges_with_labels(
     canvas: &mut Canvas,
     routed_edges: &[RoutedEdge],
     charset: &CharSet,
     diagram_direction: Direction,
-    label_positions: &HashMap<usize, (usize, usize)>,
     edge_containment: &HashMap<usize, (usize, usize)>,
-    authoritative_label_positions: &HashSet<usize>,
     layout: &GridLayout,
     routed_geometry: Option<&RoutedGraphGeometry>,
 ) {
@@ -1117,10 +1071,15 @@ pub fn render_all_edges_with_labels(
         draw_edge_path_and_arrows(canvas, routed, charset);
     }
 
-    // Plan 0153 PR #A: compute render-time placements for the authoritative
-    // subset only (`track != 0 || compartment_size > 1`). Other branches
-    // (backward, self-edge, precomputed, stale-precomputed, forward-default)
-    // stay on the legacy path until PR #B's branch collapse.
+    // Plan 0153 PR #B: the render-time placer owns every body label. The
+    // wrapper builds the global Pass-3 segment footprint (seeded with
+    // subgraph obstacles + node cells), runs corridor-aware anchor
+    // selection with `label_geometry.side` projected through the
+    // graph-owned accessor, retries from the Pass-3 midpoint on
+    // node-overlap (skipping edges whose retry is still unsafe), shifts
+    // against previously claimed labels, clamps to containment, and
+    // claims the final cells back into the footprint. The body-label
+    // loop below is a pure consumer.
     use super::label_placement::{RenderTimePlacementScope, compute_label_placements};
     let render_time_placements = compute_label_placements(
         routed_edges,
@@ -1129,195 +1088,25 @@ pub fn render_all_edges_with_labels(
         edge_containment,
         canvas.width(),
         canvas.height(),
-        RenderTimePlacementScope::AuthoritativeOnly,
+        RenderTimePlacementScope::AllBodyLabels,
     );
 
-    // Second pass: draw all labels (so they appear on top of segments)
-    // Track placed labels to avoid collisions
+    // Second pass: draw all body labels from the render-time placements.
+    // `placed_labels` is still tracked so head/tail labels (third pass) can
+    // avoid overlapping body labels via `find_safe_label_position`.
     let mut placed_labels: Vec<PlacedLabel> = Vec::new();
     for routed in routed_edges {
-        // Plan 0147 Task 1.6: resolve wrapped label text once per edge.
-        let effective_label_cow = effective_edge_label(&routed.edge);
-        if let Some(effective) = effective_label_cow.as_deref() {
-            let label = effective;
-            let bounds = edge_containment.get(&routed.edge.index).copied();
-
-            // Check for pre-computed label position from normalization
-            let block = label_block(label);
-            let label_width = block.width;
-            let label_height = block.height;
-
-            // Use precomputed position if available and within canvas bounds,
-            // otherwise fall back to heuristic placement.
-            let allow_precomputed =
-                routed.edge.from_subgraph.is_none() && routed.edge.to_subgraph.is_none();
-            let mut stale_precomputed_anchor = false;
-            let precomputed = if allow_precomputed {
-                label_positions
-                    .get(&routed.edge.index)
-                    .and_then(|&(px, py)| {
-                        let in_bounds = px < canvas.width()
-                            && py < canvas.height()
-                            && px.saturating_add(label_width) <= canvas.width();
-                        if !in_bounds {
-                            return None;
-                        }
-                        let drift = distance_point_to_path((px, py), &routed.segments);
-                        let allowed_drift = allowed_precomputed_label_drift(
-                            diagram_direction,
-                            label_width,
-                            label_height,
-                        );
-                        if drift <= allowed_drift {
-                            Some((px, py))
-                        } else {
-                            stale_precomputed_anchor = true;
-                            None
-                        }
-                    })
-            } else {
-                None
-            };
-
-            let authoritative = authoritative_label_positions
-                .contains(&routed.edge.index)
-                .then(|| label_positions.get(&routed.edge.index).copied())
-                .flatten();
-
-            let render_time = render_time_placements.get(&routed.edge.index).copied();
-
-            let placed = if let Some(rt) = render_time {
-                // Plan 0153 PR #A: render-time corridor-aware placer. Footprint
-                // was built from Pass-3 segments; sibling-shift, clamp, and
-                // final-cell claim already happened inside the wrapper. Draw
-                // directly at the returned center.
-                let base_x = rt.center.0.saturating_sub(rt.label_dims.0 / 2);
-                let base_y = label_top_for_center(rt.center.1, rt.label_dims.1);
-                draw_label_direct(canvas, label, base_x, base_y, charset, rt.is_backward)
-            } else if let Some((cx, cy)) = authoritative {
-                // Plan 0152 Phase 3: corridor-aware placer already steered
-                // this anchor off load-bearing glyphs. Draw directly at the
-                // precomputed cell; skip drift / collision rechecks.
-                let base_x = cx.saturating_sub(label_width / 2);
-                let base_y = label_top_for_center(cy, label_height);
-                let base_x = clamp_label_x(base_x, label_width, bounds);
-                draw_label_direct(canvas, label, base_x, base_y, charset, routed.is_backward)
-            } else if routed.is_backward {
-                // For backward edges, compute label position from actual routed path.
-                // Corridor labels may overlap arrowheads from other edges, so
-                // disable arrow-collision avoidance and allow overwriting arrows.
-                if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    let base_x = midpoint.x.saturating_sub(label_width / 2);
-                    let base_y = label_top_for_center(midpoint.y, label_height);
-                    let (safe_x, safe_y) = find_safe_label_position_inner(
-                        canvas,
-                        (base_x, base_y),
-                        (label_width, label_height),
-                        diagram_direction,
-                        &placed_labels,
-                        false,
-                        false,
-                        charset,
-                    );
-                    let safe_x = clamp_label_x(safe_x, label_width, bounds);
-                    draw_label_direct(canvas, label, safe_x, safe_y, charset, true)
-                } else {
-                    draw_edge_label_with_tracking(
-                        canvas,
-                        routed,
-                        label,
-                        diagram_direction,
-                        &placed_labels,
-                        charset,
-                        bounds,
-                    )
-                }
-            } else if routed.is_self_edge {
-                // Self-edges use midpoint positioning but preserve normal
-                // arrow-collision avoidance to avoid clobbering their own arrows.
-                if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    let base_x = midpoint.x.saturating_sub(label_width / 2);
-                    let base_y = label_top_for_center(midpoint.y, label_height);
-                    let (safe_x, safe_y) = find_safe_label_position(
-                        canvas,
-                        (base_x, base_y),
-                        (label_width, label_height),
-                        diagram_direction,
-                        &placed_labels,
-                        false,
-                        charset,
-                    );
-                    let safe_x = clamp_label_x(safe_x, label_width, bounds);
-                    draw_label_direct(canvas, label, safe_x, safe_y, charset, false)
-                } else {
-                    draw_edge_label_with_tracking(
-                        canvas,
-                        routed,
-                        label,
-                        diagram_direction,
-                        &placed_labels,
-                        charset,
-                        bounds,
-                    )
-                }
-            } else if let Some((pre_x, pre_y)) = precomputed {
-                // Defensive safety net: route precomputed position through
-                // collision avoidance. When the midpoint formula is correct,
-                // find_safe_label_position returns the base position unchanged.
-                let base_x = pre_x.saturating_sub(label_width / 2);
-                let base_y = label_top_for_center(pre_y, label_height);
-                let (safe_x, safe_y) = find_safe_label_position(
-                    canvas,
-                    (base_x, base_y),
-                    (label_width, label_height),
-                    diagram_direction,
-                    &placed_labels,
-                    false,
-                    charset,
-                );
-                let safe_x = clamp_label_x(safe_x, label_width, bounds);
-                draw_label_direct(canvas, label, safe_x, safe_y, charset, false)
-            } else if stale_precomputed_anchor {
-                if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    let base_x = midpoint.x.saturating_sub(label_width / 2);
-                    let base_y = label_top_for_center(midpoint.y, label_height);
-                    let (safe_x, safe_y) = find_safe_label_position(
-                        canvas,
-                        (base_x, base_y),
-                        (label_width, label_height),
-                        diagram_direction,
-                        &placed_labels,
-                        false,
-                        charset,
-                    );
-                    let safe_x = clamp_label_x(safe_x, label_width, bounds);
-                    draw_label_direct(canvas, label, safe_x, safe_y, charset, false)
-                } else {
-                    draw_edge_label_with_tracking(
-                        canvas,
-                        routed,
-                        label,
-                        diagram_direction,
-                        &placed_labels,
-                        charset,
-                        bounds,
-                    )
-                }
-            } else {
-                draw_edge_label_with_tracking(
-                    canvas,
-                    routed,
-                    label,
-                    diagram_direction,
-                    &placed_labels,
-                    charset,
-                    bounds,
-                )
-            };
-
-            if let Some(p) = placed {
-                placed_labels.push(p);
-            }
+        let Some(effective) = effective_edge_label(&routed.edge) else {
+            continue;
+        };
+        let label = effective.as_ref();
+        let Some(rt) = render_time_placements.get(&routed.edge.index).copied() else {
+            continue;
+        };
+        let base_x = rt.center.0.saturating_sub(rt.label_dims.0 / 2);
+        let base_y = label_top_for_center(rt.center.1, rt.label_dims.1);
+        if let Some(p) = draw_label_direct(canvas, label, base_x, base_y, charset, rt.is_backward) {
+            placed_labels.push(p);
         }
     }
 
