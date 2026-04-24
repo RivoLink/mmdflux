@@ -649,6 +649,113 @@ fn solve_canonical_proportional_layout(
     engine.solve(diagram, &config, &request).unwrap()
 }
 
+fn compound_backward_disconnected_diagram() -> Graph {
+    let input =
+        include_str!("../../../tests/fixtures/flowchart/compound_backward_disconnected.mmd");
+    let flowchart = crate::mermaid::parse_flowchart(input).unwrap();
+    crate::diagrams::flowchart::compile_to_graph(&flowchart)
+}
+
+fn assert_compound_backward_feedback_edge(label: &str, result: &GraphSolveResult) {
+    assert!(
+        result.geometry.reversed_edges.contains(&2),
+        "{label}: c2 -.-> a2 (edge index 2) should be the compound feedback edge; got {:?}",
+        result.geometry.reversed_edges
+    );
+    assert!(
+        !result.geometry.reversed_edges.contains(&1),
+        "{label}: b1 --> c1 (edge index 1) should remain forward; got {:?}",
+        result.geometry.reversed_edges
+    );
+}
+
+fn render_compound_backward_routed_mmds(engine: EngineAlgorithmId) -> serde_json::Value {
+    let input =
+        include_str!("../../../tests/fixtures/flowchart/compound_backward_disconnected.mmd");
+    let json = crate::render_diagram(
+        input,
+        crate::OutputFormat::Mmds,
+        &crate::RenderConfig {
+            geometry_level: GeometryLevel::Routed,
+            layout_engine: Some(engine),
+            ..crate::RenderConfig::default()
+        },
+    )
+    .expect("routed MMDS render should succeed");
+
+    serde_json::from_str(&json).expect("routed MMDS should be valid JSON")
+}
+
+fn routed_mmds_edge_is_backward(json: &serde_json::Value, edge_id: &str) -> Option<bool> {
+    json.get("edges")?
+        .as_array()?
+        .iter()
+        .find(|edge| edge.get("id").and_then(|value| value.as_str()) == Some(edge_id))?
+        .get("is_backward")?
+        .as_bool()
+}
+
+fn assert_compound_backward_geometry_order(label: &str, result: &GraphSolveResult) {
+    let top = result.geometry.subgraphs["A"].rect;
+    let middle = result.geometry.subgraphs["B"].rect;
+    let bottom = result.geometry.subgraphs["C"].rect;
+
+    assert!(
+        top.y + top.height <= middle.y,
+        "{label}: Top/A should be above Middle/B without overlap; Top={top:?} Middle={middle:?}"
+    );
+    assert!(
+        middle.y + middle.height <= bottom.y,
+        "{label}: Middle/B should be above Bottom/C without overlap; Middle={middle:?} Bottom={bottom:?}"
+    );
+}
+
+#[test]
+fn compound_backward_disconnected_reverses_c_to_a_in_full_pipeline() {
+    let diagram = compound_backward_disconnected_diagram();
+
+    let mermaid = MermaidLayeredEngine::new();
+    let mermaid_result = solve_canonical_proportional_layout(&mermaid, &diagram);
+    assert_compound_backward_feedback_edge("mermaid-layered", &mermaid_result);
+
+    let flux = FluxLayeredEngine::text();
+    let flux_result = solve_canonical_proportional_layout(&flux, &diagram);
+    assert_compound_backward_feedback_edge("flux-layered", &flux_result);
+}
+
+#[test]
+fn compound_backward_disconnected_routed_mmds_marks_c_to_a_backward() {
+    for (label, engine) in [
+        ("mermaid-layered", EngineAlgorithmId::MERMAID_LAYERED),
+        ("flux-layered", EngineAlgorithmId::FLUX_LAYERED),
+    ] {
+        let json = render_compound_backward_routed_mmds(engine);
+        assert_eq!(
+            routed_mmds_edge_is_backward(&json, "e2"),
+            Some(true),
+            "{label}: e2/c2 -.-> a2 should be backward; MMDS={json:#}"
+        );
+        assert_eq!(
+            routed_mmds_edge_is_backward(&json, "e1"),
+            Some(false),
+            "{label}: e1/b1 --> c1 should remain forward; MMDS={json:#}"
+        );
+    }
+}
+
+#[test]
+fn compound_backward_disconnected_keeps_forward_compound_order() {
+    let diagram = compound_backward_disconnected_diagram();
+
+    let mermaid = MermaidLayeredEngine::new();
+    let mermaid_result = solve_visual_proportional(&mermaid, &diagram);
+    assert_compound_backward_geometry_order("mermaid-layered", &mermaid_result);
+
+    let flux = FluxLayeredEngine::text();
+    let flux_result = solve_visual_proportional(&flux, &diagram);
+    assert_compound_backward_geometry_order("flux-layered", &flux_result);
+}
+
 #[test]
 fn subgraph_direction_isolated_both_engines_respect_override() {
     let input = include_str!("../../../tests/fixtures/flowchart/subgraph_direction_isolated.mmd");

@@ -260,9 +260,15 @@ where
         }
     }
 
-    // Add subgraph compound nodes in reverse parse order (Mermaid parity).
+    // Add subgraph compound nodes in reverse parse order (Mermaid parity),
+    // but keep semantic order forward for deterministic feedback-edge
+    // selection in the acyclic phase.
+    //
     // subgraph_order is post-order (inner-first); reversing gives outer-first,
-    // matching Mermaid's getData() insertion order.
+    // matching Mermaid's getData() insertion order. The forward semantic order
+    // matches flat sibling declaration order, which is the contract needed by
+    // compound feedback selection. Nested subgraph semantic ordering remains
+    // post-order here and is intentionally not broadened by this fix.
     // Falls back to sorted keys for manually constructed Diagrams without subgraph_order.
     let subgraph_keys: Vec<&String> = if !diagram.subgraph_order.is_empty() {
         diagram.subgraph_order.iter().rev().collect()
@@ -271,6 +277,16 @@ where
         keys.sort();
         keys
     };
+    let semantic_subgraph_keys: Vec<&String> = if !diagram.subgraph_order.is_empty() {
+        diagram.subgraph_order.iter().collect()
+    } else {
+        let mut keys: Vec<&String> = diagram.subgraphs.keys().collect();
+        keys.sort();
+        keys
+    };
+    for (order, sg_id) in semantic_subgraph_keys.iter().enumerate() {
+        dgraph.set_compound_semantic_order(sg_id.as_str(), order);
+    }
     for sg_id in &subgraph_keys {
         let sg = &diagram.subgraphs[*sg_id];
         dgraph.add_node(sg_id.as_str(), (0.0, 0.0));

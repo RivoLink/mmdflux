@@ -19,6 +19,8 @@ pub struct DiGraph<N> {
     parents: HashMap<NodeId, NodeId>,
     /// Node IDs of compounds with non-empty titles.
     nodes_with_title: BTreeSet<NodeId>,
+    /// Source/semantic declaration order for compound nodes.
+    compound_semantic_order: HashMap<NodeId, usize>,
 }
 
 impl<N> Default for DiGraph<N> {
@@ -37,6 +39,7 @@ impl<N> DiGraph<N> {
             node_index: HashMap::new(),
             parents: HashMap::new(),
             nodes_with_title: BTreeSet::new(),
+            compound_semantic_order: HashMap::new(),
         }
     }
 
@@ -125,6 +128,10 @@ impl<N> DiGraph<N> {
 
     pub fn set_parent(&mut self, node: impl Into<NodeId>, parent: impl Into<NodeId>) {
         self.parents.insert(node.into(), parent.into());
+    }
+
+    pub fn set_compound_semantic_order(&mut self, node: impl Into<NodeId>, order: usize) {
+        self.compound_semantic_order.insert(node.into(), order);
     }
 
     pub fn parent(&self, node: &NodeId) -> Option<&NodeId> {
@@ -260,6 +267,11 @@ pub(crate) struct LayoutGraph {
     /// Compound node indices that have non-empty titles.
     pub compound_titles: BTreeSet<usize>,
 
+    /// Semantic declaration order for compound nodes.
+    /// `Some(i)` for compound nodes with source/semantic order,
+    /// `None` for non-compounds and synthetic nodes.
+    pub compound_semantic_order: Vec<Option<usize>>,
+
     /// Minimum rank span for each edge. Default 1 for all edges.
     pub edge_minlens: Vec<i32>,
 
@@ -347,6 +359,17 @@ impl LayoutGraph {
             }
         }
 
+        let model_order: Vec<Option<usize>> = (0..n).map(Some).collect();
+        let mut compound_semantic_order = vec![None; n];
+        for &compound_idx in &compound_nodes {
+            let node_id = &node_ids[compound_idx];
+            compound_semantic_order[compound_idx] = graph
+                .compound_semantic_order
+                .get(node_id)
+                .copied()
+                .or(model_order[compound_idx]);
+        }
+
         Self {
             node_ids,
             edges,
@@ -377,10 +400,11 @@ impl LayoutGraph {
             position_excluded_nodes: BTreeSet::new(),
             compound_nodes,
             compound_titles,
+            compound_semantic_order,
             edge_minlens,
             self_edges: Vec::new(),
             node_rank_factor: None,
-            model_order: (0..n).map(Some).collect(),
+            model_order,
         }
     }
 
@@ -435,6 +459,7 @@ impl LayoutGraph {
         self.original_has_predecessor.push(false);
         self.parents.push(None);
         self.model_order.push(None);
+        self.compound_semantic_order.push(None);
         idx
     }
 
@@ -918,6 +943,44 @@ mod tests {
         assert!(lg.model_order[a].is_some());
         assert!(lg.model_order[b].is_some());
         assert!(lg.model_order[sg1].is_some());
+    }
+
+    #[test]
+    fn test_compound_semantic_order_follows_explicit_metadata() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_node("sg_b", (10.0, 10.0));
+        graph.add_node("sg_a", (10.0, 10.0));
+        graph.set_parent("A", "sg_a");
+        graph.set_parent("B", "sg_b");
+        graph.set_compound_semantic_order("sg_a", 0);
+        graph.set_compound_semantic_order("sg_b", 1);
+
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let sg_a = lg.node_index[&NodeId::from("sg_a")];
+        let sg_b = lg.node_index[&NodeId::from("sg_b")];
+        assert_eq!(lg.compound_semantic_order[sg_a], Some(0));
+        assert_eq!(lg.compound_semantic_order[sg_b], Some(1));
+    }
+
+    #[test]
+    fn test_compound_semantic_order_falls_back_to_model_order() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_node("sg_b", (10.0, 10.0));
+        graph.add_node("sg_a", (10.0, 10.0));
+        graph.set_parent("A", "sg_a");
+        graph.set_parent("B", "sg_b");
+
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let sg_b = lg.node_index[&NodeId::from("sg_b")];
+        let sg_a = lg.node_index[&NodeId::from("sg_a")];
+        assert_eq!(lg.compound_semantic_order[sg_b], lg.model_order[sg_b]);
+        assert_eq!(lg.compound_semantic_order[sg_a], lg.model_order[sg_a]);
     }
 
     #[test]
