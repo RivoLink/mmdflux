@@ -973,6 +973,37 @@ fn q3_backward_labels_inline_on_horizontal_leg_corpus() {
     );
 }
 
+#[test]
+fn q3_backward_corner_grazing_labels_stay_attached_to_leg() {
+    for fixture_name in ["complex.mmd", "crossing_minimize.mmd"] {
+        let pipeline = verified_flowchart_pipeline(fixture_name);
+        let routed = pipeline
+            .routed_edges
+            .iter()
+            .find(|routed| {
+                routed.is_backward
+                    && routed.edge.from == "E"
+                    && routed.edge.to == "A"
+                    && routed.edge.label.as_deref() == Some("yes")
+            })
+            .unwrap_or_else(|| panic!("{fixture_name}: expected backward E -> A yes edge"));
+        let midpoint = midpoint_of_segments(&routed.segments)
+            .unwrap_or_else(|| panic!("{fixture_name}: expected routed midpoint"));
+        let placement = pipeline
+            .placements
+            .get(&routed.edge.index)
+            .unwrap_or_else(|| panic!("{fixture_name}: expected yes placement"));
+
+        assert!(
+            placement.center.0.abs_diff(midpoint.0) <= 1
+                && placement.center.1.abs_diff(midpoint.1) <= 1,
+            "{fixture_name}: yes label should stay attached to the backward leg near midpoint \
+             {midpoint:?}; got {:?}",
+            placement.center,
+        );
+    }
+}
+
 /// C9: drift-gate dissolution on `complex.mmd`. PR #B deletes both
 /// `AUTHORITATIVE_OVERRIDE_DRIFT = 5` (derive/mod.rs) and
 /// `PRECOMPUTED_LABEL_BASE_DRIFT` (edge.rs). The render-time placer must
