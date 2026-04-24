@@ -21,8 +21,9 @@ use super::label_util::{
 };
 use crate::graph::geometry::{EdgeLabelGeometry, EdgeLabelSide, RoutedGraphGeometry};
 use crate::graph::grid::label_placement::{
-    PathFootprint, choose_corridor_aware_anchor, claim_label_cells_into, extend_segments_into,
-    label_rect_overlaps_nodes, seed_node_cells_into, seed_subgraph_borders_into,
+    CellRole, PathFootprint, choose_corridor_aware_anchor, claim_label_cells_into,
+    extend_segments_into, label_rect_overlaps_nodes, seed_node_cells_into,
+    seed_subgraph_borders_into,
 };
 use crate::graph::grid::{GridLayout, RoutedEdge, Segment};
 use crate::graph::{Edge, Stroke};
@@ -153,6 +154,14 @@ pub(crate) fn compute_label_placements(
         }
 
         let midpoint = calc_label_position(&routed.segments).map(|p| (p.x, p.y));
+        // Backward U-brackets: routing's `align_backward_side_offset_labels`
+        // can shift `EdgeLabelGeometry.center` into the reserved gap beside
+        // the bracket leg. Prefer the Pass-3 midpoint only when the *whole*
+        // label block can safely sit there and no earlier label already
+        // claimed that block. Unsafe midpoint blocks stay on the projected
+        // lane so corner avoidance and sibling deconfliction do not turn a
+        // narrow fix into unrelated snapshot churn. See research 0068 Q3
+        // Option A and Plan 0154 finding 03.
         let projected = geometry.map(|g| layout.project_layout_point(g.center.x, g.center.y));
         // Some forward edges carry a projected `EdgeLabelGeometry.center`
         // shifted well away from the Pass-3 corridor. If that shifted cell is
@@ -163,12 +172,11 @@ pub(crate) fn compute_label_placements(
         // covering the singleton F2 cases and observed two-label forward
         // cases that share the same off-corridor projection shape. See
         // research 0069 Q3 addendum + Q4 F2.
-        let projected =
-            if should_prefer_midpoint_for_forward_edge(routed, geometry, projected, midpoint) {
-                None
-            } else {
-                projected
-            };
+        let prefer_midpoint =
+            should_prefer_midpoint_for_backward_edge(
+                routed, midpoint, label_dims, &footprint, &claimed,
+            ) || should_prefer_midpoint_for_forward_edge(routed, geometry, projected, midpoint);
+        let projected = if prefer_midpoint { None } else { projected };
         let Some(candidate_center) = projected.or(midpoint) else {
             continue;
         };
@@ -250,6 +258,23 @@ pub(crate) fn compute_label_placements(
     placements
 }
 
+fn should_prefer_midpoint_for_backward_edge(
+    routed: &RoutedEdge,
+    midpoint: Option<(usize, usize)>,
+    label_dims: (usize, usize),
+    footprint: &PathFootprint,
+    claimed: &[ClaimedLabel],
+) -> bool {
+    if !routed.is_backward {
+        return false;
+    }
+    let Some(midpoint) = midpoint else {
+        return false;
+    };
+    !label_block_hits_load_bearing_cell(midpoint, label_dims, footprint)
+        && !label_block_overlaps_claimed(midpoint, label_dims, claimed)
+}
+
 /// Resolve the `EdgeLabelGeometry` for a given edge from
 /// `RoutedGraphGeometry`. `RoutedEdgeGeometry.index` carries the canonical
 /// `Graph::edges` index, so match on that — `(from, to)` would alias same-
@@ -322,6 +347,36 @@ fn distance_to_segments(point: (usize, usize), segments: &[Segment]) -> f64 {
 
 fn label_center_from_top(top_y: usize, height: usize) -> usize {
     top_y + height / 2
+}
+
+fn label_block_hits_load_bearing_cell(
+    center: (usize, usize),
+    dims: (usize, usize),
+    footprint: &PathFootprint,
+) -> bool {
+    let base_x = center.0.saturating_sub(dims.0 / 2);
+    let base_y = center.1.saturating_sub(dims.1 / 2);
+    for row in base_y..base_y.saturating_add(dims.1.max(1)) {
+        for col in base_x..base_x.saturating_add(dims.0.max(1)) {
+            if matches!(
+                footprint.cells.get(&(col, row)),
+                Some(CellRole::Corner | CellRole::Terminal)
+            ) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn label_block_overlaps_claimed(
+    center: (usize, usize),
+    dims: (usize, usize),
+    claimed: &[ClaimedLabel],
+) -> bool {
+    let base_x = center.0.saturating_sub(dims.0 / 2);
+    let base_y = center.1.saturating_sub(dims.1 / 2);
+    claimed_overlaps(claimed, (base_x, base_y), dims)
 }
 
 fn shift_against_claimed_labels(

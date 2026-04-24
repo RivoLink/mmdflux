@@ -593,7 +593,7 @@ mod plan_0152_corridor_aware_placement {
     }
 
     #[test]
-    fn git_workflow_td_backward_label_honors_authoritative_center() {
+    fn git_workflow_td_backward_label_rejects_stale_authoritative_center() {
         let text = render_flowchart_fixture("git_workflow_td.mmd");
         assert_eq!(
             text.matches("git pull").count(),
@@ -611,8 +611,8 @@ mod plan_0152_corridor_aware_placement {
         if let Some(pipe_col) = pipe_col {
             let drift = (label_col as isize - pipe_col as isize).abs();
             assert!(
-                drift <= 3,
-                "git pull label should sit within 3 cells of the vertical corridor `│`; got {drift}. Output:\n{text}"
+                drift > 3,
+                "git pull should reject the stale authoritative center and use the safe Pass-3 midpoint; got drift {drift}. Output:\n{text}"
             );
         }
     }
