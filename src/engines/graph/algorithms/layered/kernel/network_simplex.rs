@@ -92,9 +92,24 @@ fn build_adjacency(graph: &LayoutGraph) -> Vec<Vec<(usize, usize)>> {
     adj
 }
 
+fn is_rank_node(graph: &LayoutGraph, node: usize, exclude_compounds: bool) -> bool {
+    !exclude_compounds || !graph.compound_nodes.contains(&node)
+}
+
+fn rank_node_count(graph: &LayoutGraph, exclude_compounds: bool) -> usize {
+    (0..graph.node_count())
+        .filter(|&node| is_rank_node(graph, node, exclude_compounds))
+        .count()
+}
+
 /// DFS from all tree nodes, greedily adding neighbors connected by tight edges.
 /// Returns the number of nodes in the tree after this pass.
-fn tight_tree(tree: &mut SpanningTree, graph: &LayoutGraph, adj: &[Vec<(usize, usize)>]) -> usize {
+fn tight_tree(
+    tree: &mut SpanningTree,
+    graph: &LayoutGraph,
+    adj: &[Vec<(usize, usize)>],
+    exclude_compounds: bool,
+) -> usize {
     // DFS from each current tree node to find tight edges to non-tree nodes.
     // We iterate tree nodes via a stack to avoid borrowing issues.
     let tree_nodes: Vec<usize> = (0..tree.node_count())
@@ -104,7 +119,10 @@ fn tight_tree(tree: &mut SpanningTree, graph: &LayoutGraph, adj: &[Vec<(usize, u
     let mut stack: Vec<usize> = tree_nodes;
     while let Some(v) = stack.pop() {
         for &(w, edge_idx) in &adj[v] {
-            if !tree.in_tree[w] && slack(graph, edge_idx) == 0 {
+            if is_rank_node(graph, w, exclude_compounds)
+                && !tree.in_tree[w]
+                && slack(graph, edge_idx) == 0
+            {
                 tree.add_edge(v, w, edge_idx);
                 stack.push(w);
             }
@@ -118,12 +136,21 @@ fn tight_tree(tree: &mut SpanningTree, graph: &LayoutGraph, adj: &[Vec<(usize, u
 /// (one endpoint in tree, one outside). Returns Some((edge_idx, delta)) where delta
 /// is the value to add to all tree node ranks to make this edge tight.
 /// Returns None if no crossing edge exists (disconnected graph).
-fn find_min_slack_crossing(tree: &SpanningTree, graph: &LayoutGraph) -> Option<(usize, i32)> {
+fn find_min_slack_crossing(
+    tree: &SpanningTree,
+    graph: &LayoutGraph,
+    exclude_compounds: bool,
+) -> Option<(usize, i32)> {
     let edges = graph.effective_edges();
     let mut best_edge = None;
     let mut best_slack = i32::MAX;
 
     for (edge_idx, &(from, to)) in edges.iter().enumerate() {
+        if !is_rank_node(graph, from, exclude_compounds)
+            || !is_rank_node(graph, to, exclude_compounds)
+        {
+            continue;
+        }
         let from_in = tree.in_tree[from];
         let to_in = tree.in_tree[to];
         if from_in == to_in {
@@ -314,28 +341,45 @@ fn calc_cut_value(
 
 /// Construct a feasible spanning tree of tight edges.
 /// Modifies graph ranks to ensure the tree spans all nodes.
+#[cfg(test)]
 pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
+    feasible_tree_with_mode(graph, false)
+}
+
+pub(crate) fn feasible_tree_with_mode(
+    graph: &mut LayoutGraph,
+    exclude_compounds: bool,
+) -> SpanningTree {
     let n = graph.node_count();
     let mut tree = SpanningTree::new(n);
     let adj = build_adjacency(graph);
+    let rank_nodes = rank_node_count(graph, exclude_compounds);
+    if rank_nodes == 0 {
+        return tree;
+    }
 
-    // Start from node 0
-    tree.add_node(0);
+    // Start from first non-compound rank node, matching dagre asNonCompoundGraph.
+    let start = (0..n)
+        .find(|&node| is_rank_node(graph, node, exclude_compounds))
+        .unwrap_or(0);
+    tree.add_node(start);
 
     let max_iters = n * 2; // Safety limit
     let mut iters = 0;
     loop {
-        let size = tight_tree(&mut tree, graph, &adj);
-        if size >= n {
+        let size = tight_tree(&mut tree, graph, &adj, exclude_compounds);
+        if size >= rank_nodes {
             break;
         }
         // Find min-slack edge crossing tree boundary and shift ranks
-        match find_min_slack_crossing(&tree, graph) {
+        match find_min_slack_crossing(&tree, graph, exclude_compounds) {
             Some((_edge_idx, delta)) => {
                 if delta == 0 {
                     // No progress possible — force-add remaining nodes
                     for node in 0..n {
-                        tree.add_node(node);
+                        if is_rank_node(graph, node, exclude_compounds) {
+                            tree.add_node(node);
+                        }
                     }
                     break;
                 }
@@ -344,7 +388,9 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
             None => {
                 // Disconnected graph — add remaining nodes directly
                 for node in 0..n {
-                    tree.add_node(node);
+                    if is_rank_node(graph, node, exclude_compounds) {
+                        tree.add_node(node);
+                    }
                 }
                 break;
             }
@@ -353,7 +399,9 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
         if iters >= max_iters {
             // Safety: force-add remaining nodes
             for node in 0..n {
-                tree.add_node(node);
+                if is_rank_node(graph, node, exclude_compounds) {
+                    tree.add_node(node);
+                }
             }
             break;
         }
@@ -364,8 +412,13 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
 
 /// Run network simplex ranking on the graph.
 /// Assigns optimal ranks minimizing total weighted edge length.
+#[cfg(test)]
 pub(crate) fn run(graph: &mut LayoutGraph) {
-    let n = graph.node_count();
+    run_with_policy(graph, false);
+}
+
+pub(crate) fn run_with_policy(graph: &mut LayoutGraph, exclude_compounds: bool) {
+    let n = rank_node_count(graph, exclude_compounds);
     let edge_count = graph.effective_edges().len();
     if n <= 1 || edge_count == 0 {
         // No optimization possible — just use longest-path
@@ -373,11 +426,15 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
         return;
     }
 
-    // Step 1: Get initial feasible ranking via longest-path
-    rank_core::longest_path(graph);
+    // Step 1: Get initial feasible ranking.
+    if exclude_compounds {
+        rank_core::dagre_longest_path(graph);
+    } else {
+        rank_core::longest_path(graph);
+    }
 
     // Step 2: Build feasible spanning tree of tight edges
-    let mut tree = feasible_tree(graph);
+    let mut tree = feasible_tree_with_mode(graph, exclude_compounds);
 
     // Step 3: Compute low/lim and cut values
     let root = tree.root();
@@ -389,19 +446,20 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
     let mut iters = 0;
 
     while let Some(leave_node) = leave_edge(&tree) {
-        let enter_idx = match enter_edge(&tree, graph, leave_node) {
+        let enter_idx = match enter_edge(&tree, graph, leave_node, exclude_compounds) {
             Some(idx) => idx,
             None => break, // No crossing edge found — tree may have disconnected components
         };
-        exchange_edges(&mut tree, graph, leave_node, enter_idx);
+        exchange_edges(&mut tree, graph, leave_node, enter_idx, exclude_compounds);
         iters += 1;
         if iters >= max_iters {
             break; // Safety limit
         }
     }
 
-    // Normalize ranks to start at 0
-    rank_core::normalize(graph);
+    if !exclude_compounds {
+        rank_core::normalize(graph);
+    }
 }
 
 /// Find a tree edge with negative cut value. Returns the child node of that edge.
@@ -413,7 +471,12 @@ fn leave_edge(tree: &SpanningTree) -> Option<usize> {
 ///
 /// The entering edge must cross the same cut as the leaving edge.
 /// Follows Dagre.js enterEdge (lines 156-192).
-fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> Option<usize> {
+fn enter_edge(
+    tree: &SpanningTree,
+    graph: &LayoutGraph,
+    leave_node: usize,
+    exclude_compounds: bool,
+) -> Option<usize> {
     let edges = graph.effective_edges();
     let leave_edge_idx = tree.parent_edge[leave_node].unwrap();
 
@@ -431,6 +494,11 @@ fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> Op
     let mut best_slack = i32::MAX;
 
     for (edge_idx, &(e_from, e_to)) in edges.iter().enumerate() {
+        if !is_rank_node(graph, e_from, exclude_compounds)
+            || !is_rank_node(graph, e_to, exclude_compounds)
+        {
+            continue;
+        }
         if tree.tree_edges.contains(&edge_idx) {
             continue; // skip tree edges
         }
@@ -460,6 +528,7 @@ fn exchange_edges(
     graph: &mut LayoutGraph,
     leave_node: usize,
     enter_edge_idx: usize,
+    exclude_compounds: bool,
 ) {
     let leave_edge_idx = tree.parent_edge[leave_node].unwrap();
 
@@ -472,7 +541,7 @@ fn exchange_edges(
     tree.tree_edges.insert(enter_edge_idx);
 
     // Rebuild parent pointers from tree edges via DFS
-    rebuild_parent_pointers(tree, graph);
+    rebuild_parent_pointers(tree, graph, exclude_compounds);
 
     // Recompute low/lim and cut values
     let root = tree.root();
@@ -484,7 +553,7 @@ fn exchange_edges(
 }
 
 /// Rebuild parent pointers from the set of tree edges using DFS.
-fn rebuild_parent_pointers(tree: &mut SpanningTree, graph: &LayoutGraph) {
+fn rebuild_parent_pointers(tree: &mut SpanningTree, graph: &LayoutGraph, exclude_compounds: bool) {
     let n = tree.parent.len();
     let edges = graph.effective_edges();
 
@@ -503,7 +572,9 @@ fn rebuild_parent_pointers(tree: &mut SpanningTree, graph: &LayoutGraph) {
     }
 
     // DFS from root (node 0 or first in-tree node)
-    let root = (0..n).find(|&i| tree.in_tree[i]).unwrap_or(0);
+    let root = (0..n)
+        .find(|&i| tree.in_tree[i] && is_rank_node(graph, i, exclude_compounds))
+        .unwrap_or(0);
     let mut visited = vec![false; n];
     let mut stack = vec![root];
     visited[root] = true;

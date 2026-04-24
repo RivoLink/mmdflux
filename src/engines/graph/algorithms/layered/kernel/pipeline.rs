@@ -87,7 +87,7 @@ where
     // Compound: add nesting structure (border top/bottom, nesting edges).
     // Multiplies all existing edge minlens by nodeSep = 2*height+1.
     if has_compound {
-        nesting::run(&mut lg);
+        nesting::run_with_policy(&mut lg, config.acyclic_policy);
     }
 
     // Phase 2: Assign ranks (layers)

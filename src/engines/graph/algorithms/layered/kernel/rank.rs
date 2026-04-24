@@ -6,12 +6,15 @@
 
 use super::graph::LayoutGraph;
 use super::rank_core;
-use super::types::{LayoutConfig, Ranker};
+use super::types::{AcyclicPolicy, LayoutConfig, Ranker};
 
 /// Assign ranks to nodes by dispatching to the configured ranker.
 pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
     match config.ranker {
-        Ranker::NetworkSimplex => super::network_simplex::run(graph),
+        Ranker::NetworkSimplex => super::network_simplex::run_with_policy(
+            graph,
+            matches!(config.acyclic_policy, AcyclicPolicy::DfsOnly),
+        ),
         Ranker::LongestPath => rank_core::longest_path(graph),
     }
 }

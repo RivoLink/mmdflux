@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::graph::LayoutGraph;
-use super::types::NodeId;
+use super::types::{AcyclicPolicy, NodeId};
 
 /// Compute the depth of each node in the compound parent hierarchy.
 /// Top-level nodes get depth 1, each nesting level adds 1.
@@ -76,7 +76,12 @@ fn compute_depth(lg: &LayoutGraph, node: usize, depth: i32, depths: &mut HashMap
 ///
 /// Also creates a nesting root node connected to all top-level nodes.
 /// Nesting edges use high weights to dominate ranking.
+#[cfg(test)]
 pub fn run(lg: &mut LayoutGraph) {
+    run_with_policy(lg, AcyclicPolicy::default());
+}
+
+pub fn run_with_policy(lg: &mut LayoutGraph, acyclic_policy: AcyclicPolicy) {
     if lg.compound_nodes.is_empty() {
         return;
     }
@@ -174,7 +179,7 @@ pub fn run(lg: &mut LayoutGraph) {
     // (border_bottom → target → … → internal_node → border_bottom) that
     // the ranker resolves by placing external nodes far above/below the
     // subgraph, producing layouts divergent from dagre.js.  See #173.
-    {
+    if matches!(acyclic_policy, AcyclicPolicy::SemanticCompoundFeedback) {
         // Build forward adjacency from original non-reversed edges.
         let mut fwd_adj: Vec<Vec<usize>> = vec![Vec::new(); lg.node_ids.len()];
         for ei in 0..orig_edge_count {

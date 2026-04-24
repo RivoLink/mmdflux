@@ -69,6 +69,53 @@ pub(crate) fn longest_path(graph: &mut LayoutGraph) {
     graph.ranks = ranks;
 }
 
+pub(crate) fn dagre_longest_path(graph: &mut LayoutGraph) {
+    let n = graph.node_ids.len();
+    if n == 0 {
+        return;
+    }
+
+    let edges = graph.effective_edges();
+    let mut out_edges: Vec<Vec<(usize, i32)>> = vec![Vec::new(); n];
+    let mut in_degree = vec![0usize; n];
+    for (edge_idx, &(from, to)) in edges.iter().enumerate() {
+        if graph.compound_nodes.contains(&from) || graph.compound_nodes.contains(&to) {
+            continue;
+        }
+        out_edges[from].push((to, graph.edge_minlens[edge_idx]));
+        in_degree[to] += 1;
+    }
+
+    let mut ranks: Vec<Option<i32>> = vec![None; n];
+
+    fn dfs(node: usize, out_edges: &[Vec<(usize, i32)>], ranks: &mut [Option<i32>]) -> i32 {
+        if let Some(rank) = ranks[node] {
+            return rank;
+        }
+
+        let rank = out_edges[node]
+            .iter()
+            .map(|&(to, minlen)| dfs(to, out_edges, ranks) - minlen)
+            .min()
+            .unwrap_or(0);
+        ranks[node] = Some(rank);
+        rank
+    }
+
+    for (node, degree) in in_degree.iter().enumerate() {
+        if !graph.compound_nodes.contains(&node) && *degree == 0 {
+            dfs(node, &out_edges, &mut ranks);
+        }
+    }
+    for node in 0..n {
+        if !graph.compound_nodes.contains(&node) && ranks[node].is_none() {
+            dfs(node, &out_edges, &mut ranks);
+        }
+    }
+
+    graph.ranks = ranks.into_iter().map(|rank| rank.unwrap_or(0)).collect();
+}
+
 /// Normalize ranks so minimum is 0.
 pub(crate) fn normalize(graph: &mut LayoutGraph) {
     // Prefer minimum rank among position nodes, fall back to all nodes

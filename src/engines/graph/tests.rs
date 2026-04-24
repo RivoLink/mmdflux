@@ -746,16 +746,16 @@ fn assert_mermaid_tall_top_right_geometry(label: &str, result: &GraphSolveResult
     let sibling_max = middle.height.max(bottom.height);
 
     assert!(
-        top.x + top.width / 2.0 > bottom.x + bottom.width / 2.0,
-        "{label}: Top/A should shift right of Bottom/C for the DFS-only strict contract; Top={top:?} Bottom={bottom:?}"
+        top.x > middle.x && top.x > bottom.x,
+        "{label}: Top/A should be right of Middle/B and Bottom/C for the DFS-only strict contract; Top={top:?} Middle={middle:?} Bottom={bottom:?}"
     );
     assert!(
         top.height > sibling_max * 1.8,
         "{label}: Top/A should be tall relative to sibling subgraphs; Top={top:?} Middle={middle:?} Bottom={bottom:?}"
     );
     assert!(
-        middle.y < bottom.y,
-        "{label}: Middle/B should begin above Bottom/C in the DFS-only strict contract; Middle={middle:?} Bottom={bottom:?}"
+        middle.y + middle.height <= bottom.y,
+        "{label}: Middle/B should stack above Bottom/C without overlap in the DFS-only strict contract; Middle={middle:?} Bottom={bottom:?}"
     );
 }
 

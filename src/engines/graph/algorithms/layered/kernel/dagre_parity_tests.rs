@@ -310,6 +310,86 @@ mod compound_backward_disconnected {
             result.reversed_edges
         );
     }
+
+    #[test]
+    fn compound_backward_disconnected_dfs_only_layout_matches_raw_dagre() {
+        let input: InputGraph = load_json(INPUT_PATH);
+        let expected: DagreLayout = load_json(EXPECTED_PATH);
+        let graph = build_digraph_from_input(&input);
+        let config = LayoutConfig {
+            node_sep: 50.0,
+            edge_sep: 20.0,
+            rank_sep: 75.0,
+            margin: 8.0,
+            acyclic_policy: AcyclicPolicy::DfsOnly,
+            ..Default::default()
+        };
+
+        let result = layout(&graph, &config, |_, dims| *dims);
+        let tolerance = 0.001;
+
+        for expected_node in &expected.nodes {
+            let actual = if expected_node.is_compound {
+                result
+                    .subgraph_bounds
+                    .get(&expected_node.id)
+                    .unwrap_or_else(|| panic!("missing subgraph bounds for {}", expected_node.id))
+            } else {
+                result
+                    .nodes
+                    .get(&NodeId::from(expected_node.id.as_str()))
+                    .unwrap_or_else(|| panic!("missing node {}", expected_node.id))
+            };
+
+            assert!(
+                (actual.x - expected_node.x).abs() < tolerance,
+                "{} x mismatch: actual={}, expected={}",
+                expected_node.id,
+                actual.x,
+                expected_node.x
+            );
+            assert!(
+                (actual.y - expected_node.y).abs() < tolerance,
+                "{} y mismatch: actual={}, expected={}",
+                expected_node.id,
+                actual.y,
+                expected_node.y
+            );
+            assert!(
+                (actual.width - expected_node.width).abs() < tolerance,
+                "{} width mismatch: actual={}, expected={}",
+                expected_node.id,
+                actual.width,
+                expected_node.width
+            );
+            assert!(
+                (actual.height - expected_node.height).abs() < tolerance,
+                "{} height mismatch: actual={}, expected={}",
+                expected_node.id,
+                actual.height,
+                expected_node.height
+            );
+        }
+
+        for expected_edge in &expected.edges {
+            let actual = result
+                .edges
+                .iter()
+                .find(|edge| edge.index == expected_edge.index)
+                .unwrap_or_else(|| panic!("missing edge {}", expected_edge.index));
+            let actual_points: Vec<(f64, f64)> = actual
+                .points
+                .iter()
+                .map(|point| (point.x, point.y))
+                .collect();
+            assert_points_close(
+                &actual_points,
+                &expected_edge.points,
+                tolerance,
+                &format!("edge {}", expected_edge.index),
+            );
+        }
+    }
 }
 
 mod subgraph_bounds {
