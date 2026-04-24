@@ -237,7 +237,7 @@ fn subgraph_direction_mixed_cross_boundary_edge_stays_off_borders() {
         );
     }
 
-    for pattern in ["│  │ A │─►│ B │───┼─┐", "│      │ C │◄─────┼───┘"]
+    for pattern in ["│  │ A │─►│ B │──┐│", "│      │ C │◄─────┼┘"]
     {
         assert!(
             rendered.contains(pattern),

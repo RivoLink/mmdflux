@@ -780,6 +780,37 @@ mod edge_rendering_regression {
         compile_to_graph(&parsed)
     }
 
+    #[test]
+    fn direction_override_subgraph_external_gaps_are_compact() {
+        let diagram = flowchart_fixture_diagram("direction_override.mmd");
+        let layout = compute_layout(&diagram, &GridLayoutConfig::default());
+
+        let start = layout
+            .node_bounds
+            .get("Start")
+            .expect("Start node should be laid out");
+        let end = layout
+            .node_bounds
+            .get("End")
+            .expect("End node should be laid out");
+        let subgraph = layout
+            .subgraph_bounds
+            .get("sg1")
+            .expect("direction override subgraph should be laid out");
+
+        let top_gap = subgraph.y.saturating_sub(start.y + start.height);
+        let bottom_gap = end.y.saturating_sub(subgraph.y + subgraph.height);
+
+        assert!(
+            top_gap <= 4,
+            "incoming corridor above subgraph should stay compact, got {top_gap} rows"
+        );
+        assert!(
+            bottom_gap <= 4,
+            "outgoing corridor below subgraph should stay compact, got {bottom_gap} rows"
+        );
+    }
+
     fn compute_layout_with_mode(
         diagram: &Graph,
         config: &GridLayoutConfig,

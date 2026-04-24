@@ -919,13 +919,42 @@ fn shift_subgraph_and_contents(
     }
 }
 
-/// Compact the vertical gap between external predecessor nodes and
-/// top-level override subgraphs in a TopDown diagram.
+fn shift_items_at_or_below(
+    threshold_y: usize,
+    dy: isize,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    for pos in draw_positions.values_mut() {
+        if pos.1 >= threshold_y {
+            pos.1 = (pos.1 as isize + dy).max(0) as usize;
+        }
+    }
+
+    for bounds in node_bounds.values_mut() {
+        if bounds.y >= threshold_y {
+            bounds.y = (bounds.y as isize + dy).max(0) as usize;
+            if let Some(center_y) = bounds.layout_center_y.as_mut() {
+                *center_y = (*center_y as isize + dy).max(0) as usize;
+            }
+        }
+    }
+
+    for bounds in subgraph_bounds.values_mut() {
+        if bounds.y >= threshold_y {
+            bounds.y = (bounds.y as isize + dy).max(0) as usize;
+        }
+    }
+}
+
+/// Compact vertical gaps around top-level override subgraphs in a TopDown diagram.
 ///
 /// The main grid derivation maps float-space compound-node spacing to grid
 /// coordinates, which can produce excessive vertical gaps above override
-/// subgraphs.  This pass pulls each override subgraph up so its top border
-/// is at most `target_gap` rows below the nearest predecessor's bottom.
+/// subgraphs.  Once the override sublayout is reconciled to its actual text
+/// size, those rank gaps can be collapsed without moving members relative to
+/// their border.
 pub(super) fn compact_override_subgraph_vertical_gaps(
     diagram: &Graph,
     draw_positions: &mut HashMap<String, (usize, usize)>,
@@ -939,16 +968,6 @@ pub(super) fn compact_override_subgraph_vertical_gaps(
     for (sg_id, sg) in &diagram.subgraphs {
         if sg.dir.is_none() || sg.parent.is_some() {
             // Only process top-level override subgraphs.
-            continue;
-        }
-        // Only compact subgraphs that contain nested override children.
-        // These are the ones whose grid bounds were inflated by compound
-        // node rank expansion in the main layout.
-        let has_child_override = diagram
-            .subgraphs
-            .values()
-            .any(|child| child.parent.as_deref() == Some(sg_id.as_str()) && child.dir.is_some());
-        if !has_child_override {
             continue;
         }
         let Some(sb) = subgraph_bounds.get(sg_id).cloned() else {
@@ -978,21 +997,46 @@ pub(super) fn compact_override_subgraph_vertical_gaps(
         // Target gap: 4 rows (edge routing room).
         let target_gap = 4usize;
         let current_gap = sb.y.saturating_sub(pred_bottom);
-        if current_gap <= target_gap {
-            continue;
+        if current_gap > target_gap {
+            let pull_up = current_gap - target_gap;
+            shift_items_at_or_below(
+                sb.y,
+                -(pull_up as isize),
+                draw_positions,
+                node_bounds,
+                subgraph_bounds,
+            );
         }
 
-        let pull_up = current_gap - target_gap;
+        let Some(sb) = subgraph_bounds.get(sg_id).cloned() else {
+            continue;
+        };
+        let sg_bottom = sb.y + sb.height;
+        let mut nearest_succ_top: Option<usize> = None;
+        for edge in &diagram.edges {
+            if sg_node_set.contains(edge.from.as_str())
+                && !sg_node_set.contains(edge.to.as_str())
+                && let Some(nb) = node_bounds.get(&edge.to)
+                && nb.y >= sg_bottom
+            {
+                nearest_succ_top =
+                    Some(nearest_succ_top.map_or(nb.y, |current: usize| current.min(nb.y)));
+            }
+        }
 
-        // Shift the subgraph and all its content up.
-        shift_subgraph_and_contents(
-            diagram,
-            sg_id,
-            0,
-            -(pull_up as isize),
-            draw_positions,
-            node_bounds,
-            subgraph_bounds,
-        );
+        let Some(succ_top) = nearest_succ_top else {
+            continue;
+        };
+        let current_gap = succ_top.saturating_sub(sg_bottom);
+        if current_gap > target_gap {
+            let pull_up = current_gap - target_gap;
+            shift_items_at_or_below(
+                succ_top,
+                -(pull_up as isize),
+                draw_positions,
+                node_bounds,
+                subgraph_bounds,
+            );
+        }
     }
 }
