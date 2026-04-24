@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `378b8cfa` — 170 fixtures_
+_Generated from commit `c16eb078` — 170 fixtures_
 
 - [Flowchart](#flowchart) (111)
 - [Class](#class) (17)
@@ -3863,11 +3863,11 @@ graph TD
    < Valid? >                       ┆
    └────────┘                       ┆
     └┐     └──┐                     ┆
-     │        │       no            ┆
      │        │                     ┆
      │        │                     ┆
      │        │                     ┆
      │        │                     ┆
+     │       no                     ┆
     yes       └────┐                ┆
      │             │                ┆
      ▼             ▼                ┆
