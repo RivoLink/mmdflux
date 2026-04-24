@@ -718,10 +718,20 @@ fn f2_no_success_retry_on_corridor() {
     assert_target_label_on_corridor("inline_label_flowchart.mmd", "success", "retry", "no");
 }
 
+/// The compact `Config -> Error` "no" label in `labeled_edges.mmd` lives in a
+/// four-label compartment, but its projected center is still materially
+/// off-corridor. Its safe midpoint should own placement so the label stays
+/// attached to the drawn edge.
+#[test]
+fn f3_no_labeled_edges_config_error_on_corridor() {
+    assert_target_label_on_corridor("labeled_edges.mmd", "Config", "Error", "no");
+}
+
 /// Corpus guard for Plan 0155's midpoint-owned forward labels: exact singleton
-/// non-authoritative edges plus the drift-gated two-label coordinated shape
-/// observed for `miss` and `Yes`. Every matched label must land within 3 cells
-/// of the Pass-3 segments.
+/// non-authoritative edges, the drift-gated two-label coordinated shape
+/// observed for `miss` and `Yes`, and tiny safe labels in larger
+/// compartments. Every matched label must land within 3 cells of the Pass-3
+/// segments.
 #[test]
 fn f2_forward_midpoint_owned_labels_on_corridor() {
     let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -773,7 +783,12 @@ fn f2_forward_midpoint_owned_labels_on_corridor() {
                 && geometry.track != 0
                 && projected_drift > CORRIDOR_DRIFT_THRESHOLD
                 && midpoint_drift <= CORRIDOR_DRIFT_THRESHOLD;
-            if !is_singleton && !is_drift_gated_two_label {
+            let is_drift_gated_compact_multi_label = geometry.compartment_size > 2
+                && geometry.track != 0
+                && label.len() <= 2
+                && projected_drift > CORRIDOR_DRIFT_THRESHOLD
+                && midpoint_drift <= CORRIDOR_DRIFT_THRESHOLD;
+            if !is_singleton && !is_drift_gated_two_label && !is_drift_gated_compact_multi_label {
                 continue;
             }
             let Some(placement) = pipeline.placements.get(&routed.edge.index) else {

@@ -185,12 +185,20 @@ pub(crate) fn compute_label_placements(
         // covering the singleton F2 cases and observed two-label forward
         // cases that share the same off-corridor projection shape. See
         // research 0069 Q3 addendum + Q4 F2.
-        let projected =
-            if should_prefer_midpoint_for_forward_edge(routed, geometry, projected, midpoint) {
-                None
-            } else {
-                projected
-            };
+        let projected = if should_prefer_midpoint_for_forward_edge(
+            routed,
+            geometry,
+            projected,
+            midpoint,
+            label_dims,
+            &footprint,
+            &claimed,
+            &layout.node_bounds,
+        ) {
+            None
+        } else {
+            projected
+        };
         let Some(candidate_center) = backward_midpoint.or(projected).or(midpoint) else {
             continue;
         };
@@ -339,11 +347,16 @@ fn is_authoritative_geometry(geometry: &EdgeLabelGeometry) -> bool {
     geometry.track != 0 || geometry.compartment_size > 1
 }
 
+#[allow(clippy::too_many_arguments)]
 fn should_prefer_midpoint_for_forward_edge(
     routed: &RoutedEdge,
     geometry: Option<&EdgeLabelGeometry>,
     projected: Option<(usize, usize)>,
     midpoint: Option<(usize, usize)>,
+    label_dims: (usize, usize),
+    footprint: &PathFootprint,
+    claimed: &[ClaimedLabel],
+    node_bounds: &HashMap<String, NodeBounds>,
 ) -> bool {
     if routed.is_backward {
         return false;
@@ -364,7 +377,23 @@ fn should_prefer_midpoint_for_forward_edge(
         return false;
     }
 
-    !is_authoritative_geometry(geometry) || (geometry.compartment_size == 2 && geometry.track != 0)
+    if !is_authoritative_geometry(geometry)
+        || (geometry.compartment_size == 2 && geometry.track != 0)
+    {
+        return true;
+    }
+
+    // Dense compartments can still produce a stale projected center for tiny
+    // edge-choice labels. Let those labels use the Pass-3 midpoint only when
+    // the full block is already safe and unclaimed; wide labels keep the
+    // existing coordinated projection/deconfliction contract.
+    geometry.compartment_size > 2
+        && geometry.track != 0
+        && label_dims.0 <= 2
+        && label_dims.1 == 1
+        && !label_block_hits_load_bearing_cell(midpoint, label_dims, footprint)
+        && !label_block_overlaps_claimed(midpoint, label_dims, claimed)
+        && !label_rect_overlaps_nodes(midpoint, label_dims, node_bounds)
 }
 
 fn distance_to_segments(point: (usize, usize), segments: &[Segment]) -> f64 {
