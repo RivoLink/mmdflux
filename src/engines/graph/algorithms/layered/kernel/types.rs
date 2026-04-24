@@ -44,6 +44,17 @@ pub enum Direction {
     RightLeft, // RL
 }
 
+/// Strategy for selecting feedback edges during acyclic preprocessing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AcyclicPolicy {
+    /// Mermaid dagre-wrapper default: Dagre DFS feedback-arc detection,
+    /// without the greedy `acyclicer` mode.
+    DfsOnly,
+    /// Preserve semantic compound feedback selection for native Flux layouts.
+    #[default]
+    SemanticCompoundFeedback,
+}
+
 impl Direction {
     /// Is this a vertical (TB/BT) layout?
     pub fn is_vertical(self) -> bool {
@@ -328,6 +339,9 @@ pub struct LayoutConfig {
     /// Whether to apply layout optimization for acyclic graphs.
     pub acyclic: bool,
 
+    /// Strategy to use when selecting feedback edges.
+    pub acyclic_policy: AcyclicPolicy,
+
     /// Ranking algorithm to use.
     pub ranker: Ranker,
 
@@ -406,6 +420,7 @@ impl Default for LayoutConfig {
             rank_sep_overrides: HashMap::new(),
             margin: 8.0,
             acyclic: true,
+            acyclic_policy: AcyclicPolicy::default(),
             ranker: Ranker::default(),
             greedy_switch: false,
             model_order_tiebreak: false,

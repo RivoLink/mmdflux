@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::engines::graph::algorithms::layered::{
-    LabelDummyPlacement, LabelDummyRouting, LabelSideStrategy, LayoutConfig,
+    AcyclicPolicy, LabelDummyPlacement, LabelDummyRouting, LabelSideStrategy, LayoutConfig,
     build_float_layout_with_flags, layout_config_from_layered,
 };
 use crate::engines::graph::contracts::MeasurementMode;
@@ -102,6 +102,30 @@ fn apply_mermaid_subgraph_direction_policy(diagram: &Graph) -> Option<Graph> {
 /// Mermaid-layered engine: shared layered layout with Mermaid-compatible policy.
 pub struct MermaidLayeredEngine;
 
+fn mermaid_layout_flags() -> LayoutConfig {
+    LayoutConfig {
+        acyclic_policy: AcyclicPolicy::DfsOnly,
+        always_compound_ordering: true,
+        label_side_selection: true,
+        label_side_strategy: LabelSideStrategy::DirectionDown,
+        // Plan 0147 Task 2.3 / 2.6: mermaid profile pins placement +
+        // routing explicitly at the dagre-parity defaults so later
+        // `..Default::default()` changes never drift the profile off parity.
+        label_dummy_placement: LabelDummyPlacement::Midpoint,
+        label_dummy_routing: LabelDummyRouting::Center,
+        // Plan 0147 Task 1.7: mermaid profile enables wrap at 200 px;
+        // dagre parity is preserved because `LabelDummyRouting` stays on
+        // `Center` here.
+        edge_label_max_width: Some(200.0),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn mermaid_layout_flags_for_test() -> LayoutConfig {
+    mermaid_layout_flags()
+}
+
 impl Default for MermaidLayeredEngine {
     fn default() -> Self {
         Self::new()
@@ -153,22 +177,7 @@ impl GraphEngine for MermaidLayeredEngine {
         let EngineConfig::Layered(ref layered_cfg) = *config;
         let mut layout_config = layout_config_from_layered(layered_cfg, diagram);
         layout_config.cluster_rank_sep = 0.0;
-        let mermaid_flags = LayoutConfig {
-            always_compound_ordering: true,
-            label_side_selection: true,
-            label_side_strategy: LabelSideStrategy::DirectionDown,
-            // Plan 0147 Task 2.3 / 2.6: mermaid profile pins placement +
-            // routing explicitly at the dagre-parity defaults so later
-            // `..Default::default()` changes never drift the profile off
-            // parity.
-            label_dummy_placement: LabelDummyPlacement::Midpoint,
-            label_dummy_routing: LabelDummyRouting::Center,
-            // Plan 0147 Task 1.7: mermaid profile enables wrap at 200 px;
-            // dagre parity is preserved because `LabelDummyRouting` stays on
-            // `Center` here.
-            edge_label_max_width: Some(200.0),
-            ..Default::default()
-        };
+        let mermaid_flags = mermaid_layout_flags();
         let geometry = build_float_layout_with_flags(
             diagram,
             &layout_config,

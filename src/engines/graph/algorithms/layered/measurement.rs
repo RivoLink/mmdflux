@@ -130,6 +130,7 @@ pub fn run_layered_layout(
     let override_subgraphs = override_subgraph_projections(diagram, layered_cfg);
     let grid_config = layout_config_from_layered(layered_cfg, diagram);
     let mut lc = layered_config_for_layout(diagram, &grid_config);
+    lc.acyclic_policy = layered_cfg.acyclic_policy;
     lc.greedy_switch = layered_cfg.greedy_switch;
     lc.model_order_tiebreak = layered_cfg.model_order_tiebreak;
     lc.variable_rank_spacing = layered_cfg.variable_rank_spacing;

@@ -99,6 +99,7 @@ pub(crate) fn build_float_layout_with_flags(
     let direction = diagram.direction;
     let mut layered_config = layered_config_for_layout(diagram, config);
     if let Some(flags) = engine_flags {
+        layered_config.acyclic_policy = flags.acyclic_policy;
         layered_config.greedy_switch = flags.greedy_switch;
         layered_config.model_order_tiebreak = flags.model_order_tiebreak;
         layered_config.variable_rank_spacing = flags.variable_rank_spacing;

@@ -252,6 +252,7 @@ impl From<LayoutConfig> for crate::engines::graph::algorithms::layered::LayoutCo
             rank_sep_overrides: value.rank_sep_overrides,
             margin: value.margin,
             acyclic: value.acyclic,
+            acyclic_policy: Default::default(),
             ranker: value.ranker.into(),
             greedy_switch: value.greedy_switch,
             model_order_tiebreak: value.model_order_tiebreak,

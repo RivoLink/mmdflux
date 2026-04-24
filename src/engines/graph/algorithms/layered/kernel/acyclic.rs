@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 
 use super::graph::LayoutGraph;
+use super::types::AcyclicPolicy;
 
 #[derive(Clone, Copy)]
 struct CompoundEdge {
@@ -23,7 +24,12 @@ struct CompoundEdge {
 /// Uses DFS to find back-edges (edges pointing to ancestors in the DFS tree).
 /// This preserves the natural forward flow of the graph better than
 /// greedy_feedback_arc_set which may reverse arbitrary edges.
+#[cfg(test)]
 pub fn run(graph: &mut LayoutGraph) {
+    run_with_policy(graph, AcyclicPolicy::default());
+}
+
+pub(super) fn run_with_policy(graph: &mut LayoutGraph, policy: AcyclicPolicy) {
     let n = graph.node_ids.len();
     if n == 0 {
         return;
@@ -51,7 +57,8 @@ pub fn run(graph: &mut LayoutGraph) {
     // missed. An edge from compound X to compound Y participates in a
     // compound-level cycle if there is already a path from Y back to X through
     // other compounds. See issue #155.
-    if !graph.compound_nodes.is_empty() {
+    if matches!(policy, AcyclicPolicy::SemanticCompoundFeedback) && !graph.compound_nodes.is_empty()
+    {
         detect_compound_back_edges(graph, &mut back_edges);
     }
 
@@ -338,6 +345,30 @@ mod tests {
                 lg.reversed_edges
             );
         }
+    }
+
+    #[test]
+    fn test_acyclic_policy_dfs_only_skips_compound_feedback_edge() {
+        let mut lg = compound_cycle_graph_with_order(&["sg_c", "sg_b", "sg_a"]);
+        run_with_policy(&mut lg, AcyclicPolicy::DfsOnly);
+
+        assert!(
+            !lg.reversed_edges.contains(&2),
+            "DfsOnly should skip semantic compound feedback detection; got {:?}",
+            lg.reversed_edges
+        );
+    }
+
+    #[test]
+    fn test_acyclic_policy_semantic_compound_feedback_reverses_c_to_a() {
+        let mut lg = compound_cycle_graph_with_order(&["sg_c", "sg_b", "sg_a"]);
+        run_with_policy(&mut lg, AcyclicPolicy::SemanticCompoundFeedback);
+
+        assert!(
+            lg.reversed_edges.contains(&2),
+            "SemanticCompoundFeedback should preserve compound feedback detection; got {:?}",
+            lg.reversed_edges
+        );
     }
 
     #[test]

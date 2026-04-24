@@ -11,6 +11,7 @@ use super::{
     EngineAlgorithmId, EngineConfig, GraphEngine, GraphEngineRegistry, GraphGeometryContract,
     GraphSolveRequest, GraphSolveResult,
 };
+use crate::engines::graph::algorithms::layered::kernel::types::AcyclicPolicy;
 use crate::format::RoutingStyle;
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::graph::routing::EdgeRouting;
@@ -256,6 +257,12 @@ fn mermaid_layered_solve_routed_level_has_routed_geometry() {
         result.routed.is_some(),
         "routed level should produce routed geometry"
     );
+}
+
+#[test]
+fn mermaid_profile_uses_dfs_only_acyclic_policy() {
+    let flags = crate::engines::graph::mermaid::mermaid_layout_flags_for_test();
+    assert_eq!(flags.acyclic_policy, AcyclicPolicy::DfsOnly);
 }
 
 #[test]
@@ -528,6 +535,15 @@ fn flux_profile_sets_edge_label_max_width_200() {
     assert_eq!(profile.edge_label_max_width, Some(200.0));
 }
 
+#[test]
+fn flux_profile_uses_semantic_compound_feedback_policy() {
+    let profile = flux_layout_profile(&LayoutConfig::default(), EdgeRouting::PolylineRoute);
+    assert_eq!(
+        profile.acyclic_policy,
+        AcyclicPolicy::SemanticCompoundFeedback
+    );
+}
+
 // Plan 0147 Task 2.6: profile wiring — flux on WidestLayer + Bend,
 // mermaid on explicit Midpoint + Center (not via `..Default::default()`).
 #[test]
@@ -656,10 +672,23 @@ fn compound_backward_disconnected_diagram() -> Graph {
     crate::diagrams::flowchart::compile_to_graph(&flowchart)
 }
 
-fn assert_compound_backward_feedback_edge(label: &str, result: &GraphSolveResult) {
+fn assert_flux_compound_backward_feedback_edge(label: &str, result: &GraphSolveResult) {
     assert!(
         result.geometry.reversed_edges.contains(&2),
         "{label}: c2 -.-> a2 (edge index 2) should be the compound feedback edge; got {:?}",
+        result.geometry.reversed_edges
+    );
+    assert!(
+        !result.geometry.reversed_edges.contains(&1),
+        "{label}: b1 --> c1 (edge index 1) should remain forward; got {:?}",
+        result.geometry.reversed_edges
+    );
+}
+
+fn assert_mermaid_compound_backward_edges_forward(label: &str, result: &GraphSolveResult) {
+    assert!(
+        !result.geometry.reversed_edges.contains(&2),
+        "{label}: c2 -.-> a2 (edge index 2) should remain forward for strict parity; got {:?}",
         result.geometry.reversed_edges
     );
     assert!(
@@ -710,50 +739,80 @@ fn assert_compound_backward_geometry_order(label: &str, result: &GraphSolveResul
     );
 }
 
-#[test]
-fn compound_backward_disconnected_reverses_c_to_a_in_full_pipeline() {
-    let diagram = compound_backward_disconnected_diagram();
+fn assert_mermaid_tall_top_right_geometry(label: &str, result: &GraphSolveResult) {
+    let top = result.geometry.subgraphs["A"].rect;
+    let middle = result.geometry.subgraphs["B"].rect;
+    let bottom = result.geometry.subgraphs["C"].rect;
+    let sibling_max = middle.height.max(bottom.height);
 
-    let mermaid = MermaidLayeredEngine::new();
-    let mermaid_result = solve_canonical_proportional_layout(&mermaid, &diagram);
-    assert_compound_backward_feedback_edge("mermaid-layered", &mermaid_result);
+    assert!(
+        top.x + top.width / 2.0 > bottom.x + bottom.width / 2.0,
+        "{label}: Top/A should shift right of Bottom/C for the DFS-only strict contract; Top={top:?} Bottom={bottom:?}"
+    );
+    assert!(
+        top.height > sibling_max * 1.8,
+        "{label}: Top/A should be tall relative to sibling subgraphs; Top={top:?} Middle={middle:?} Bottom={bottom:?}"
+    );
+    assert!(
+        middle.y < bottom.y,
+        "{label}: Middle/B should begin above Bottom/C in the DFS-only strict contract; Middle={middle:?} Bottom={bottom:?}"
+    );
+}
+
+#[test]
+fn compound_backward_disconnected_splits_feedback_edge_contracts() {
+    let diagram = compound_backward_disconnected_diagram();
 
     let flux = FluxLayeredEngine::text();
     let flux_result = solve_canonical_proportional_layout(&flux, &diagram);
-    assert_compound_backward_feedback_edge("flux-layered", &flux_result);
-}
-
-#[test]
-fn compound_backward_disconnected_routed_mmds_marks_c_to_a_backward() {
-    for (label, engine) in [
-        ("mermaid-layered", EngineAlgorithmId::MERMAID_LAYERED),
-        ("flux-layered", EngineAlgorithmId::FLUX_LAYERED),
-    ] {
-        let json = render_compound_backward_routed_mmds(engine);
-        assert_eq!(
-            routed_mmds_edge_is_backward(&json, "e2"),
-            Some(true),
-            "{label}: e2/c2 -.-> a2 should be backward; MMDS={json:#}"
-        );
-        assert_eq!(
-            routed_mmds_edge_is_backward(&json, "e1"),
-            Some(false),
-            "{label}: e1/b1 --> c1 should remain forward; MMDS={json:#}"
-        );
-    }
-}
-
-#[test]
-fn compound_backward_disconnected_keeps_forward_compound_order() {
-    let diagram = compound_backward_disconnected_diagram();
+    assert_flux_compound_backward_feedback_edge("flux-layered", &flux_result);
 
     let mermaid = MermaidLayeredEngine::new();
-    let mermaid_result = solve_visual_proportional(&mermaid, &diagram);
-    assert_compound_backward_geometry_order("mermaid-layered", &mermaid_result);
+    let mermaid_result = solve_canonical_proportional_layout(&mermaid, &diagram);
+    assert_mermaid_compound_backward_edges_forward("mermaid-layered", &mermaid_result);
+}
+
+fn assert_compound_backward_routed_mmds(
+    label: &str,
+    json: &serde_json::Value,
+    expected_e1_backward: bool,
+    expected_e2_backward: bool,
+) {
+    assert_eq!(
+        routed_mmds_edge_is_backward(json, "e1"),
+        Some(expected_e1_backward),
+        "{label}: e1/b1 --> c1 backward contract mismatch; MMDS={json:#}"
+    );
+    assert_eq!(
+        routed_mmds_edge_is_backward(json, "e2"),
+        Some(expected_e2_backward),
+        "{label}: e2/c2 -.-> a2 backward contract mismatch; MMDS={json:#}"
+    );
+}
+
+#[test]
+fn compound_backward_disconnected_flux_routed_mmds_marks_c_to_a_backward() {
+    let json = render_compound_backward_routed_mmds(EngineAlgorithmId::FLUX_LAYERED);
+    assert_compound_backward_routed_mmds("flux-layered", &json, false, true);
+}
+
+#[test]
+fn compound_backward_disconnected_mermaid_routed_mmds_keeps_c_to_a_forward() {
+    let json = render_compound_backward_routed_mmds(EngineAlgorithmId::MERMAID_LAYERED);
+    assert_compound_backward_routed_mmds("mermaid-layered", &json, false, false);
+}
+
+#[test]
+fn compound_backward_disconnected_splits_compound_geometry_contracts() {
+    let diagram = compound_backward_disconnected_diagram();
 
     let flux = FluxLayeredEngine::text();
     let flux_result = solve_visual_proportional(&flux, &diagram);
     assert_compound_backward_geometry_order("flux-layered", &flux_result);
+
+    let mermaid = MermaidLayeredEngine::new();
+    let mermaid_result = solve_visual_proportional(&mermaid, &diagram);
+    assert_mermaid_tall_top_right_geometry("mermaid-layered", &mermaid_result);
 }
 
 #[test]

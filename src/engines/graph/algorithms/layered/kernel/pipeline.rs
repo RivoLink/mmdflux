@@ -64,7 +64,7 @@ where
 
     // Phase 1: Make graph acyclic
     if config.acyclic {
-        acyclic::run(&mut lg);
+        acyclic::run_with_policy(&mut lg, config.acyclic_policy);
     }
 
     // Phase 1.5: Create space for edge label dummies.

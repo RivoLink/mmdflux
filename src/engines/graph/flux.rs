@@ -5,7 +5,7 @@
 //! routing behavior.
 
 use crate::engines::graph::algorithms::layered::{
-    LabelDummyPlacement, LabelDummyRouting, LabelSideStrategy, LayoutConfig,
+    AcyclicPolicy, LabelDummyPlacement, LabelDummyRouting, LabelSideStrategy, LayoutConfig,
     build_float_layout_with_flags, layout_config_from_layered, run_layered_layout,
 };
 use crate::engines::graph::contracts::MeasurementMode;
@@ -32,6 +32,7 @@ pub(crate) fn flux_layout_profile(
     _edge_routing: EdgeRouting,
 ) -> LayoutConfig {
     LayoutConfig {
+        acyclic_policy: AcyclicPolicy::SemanticCompoundFeedback,
         greedy_switch: true,
         model_order_tiebreak: input_cfg.model_order_tiebreak,
         variable_rank_spacing: true,

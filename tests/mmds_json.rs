@@ -449,6 +449,26 @@ fn mmds_lossless_path_simplification_sits_between_none_and_lossy() {
 }
 
 #[test]
+fn compound_backward_disconnected_routed_mmds_engine_contracts() {
+    let input = flowchart_fixture("compound_backward_disconnected.mmd");
+    let edge_is_backward = |engine: &str, edge_id: &str| {
+        let json = render_routed_mmds_with_engine(&input, engine);
+        let output: Output = serde_json::from_str(&json).unwrap();
+        output
+            .edges
+            .iter()
+            .find(|edge| edge.id == edge_id)
+            .unwrap_or_else(|| panic!("{engine} missing edge {edge_id}"))
+            .is_backward
+    };
+
+    assert_eq!(edge_is_backward("flux-layered", "e1"), Some(false));
+    assert_eq!(edge_is_backward("flux-layered", "e2"), Some(true));
+    assert_eq!(edge_is_backward("mermaid-layered", "e1"), Some(false));
+    assert_eq!(edge_is_backward("mermaid-layered", "e2"), Some(false));
+}
+
+#[test]
 fn routed_mmds_defaults_to_lossless_path_simplification() {
     let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
     let render_for = |path_simplification: Option<PathSimplification>| {

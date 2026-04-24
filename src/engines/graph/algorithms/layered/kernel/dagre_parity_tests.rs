@@ -8,6 +8,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use super::types::AcyclicPolicy;
 use super::{DiGraph, LayoutConfig, NodeId, layout};
 
 #[test]
@@ -113,6 +114,14 @@ fn build_digraph_from_input(input: &InputGraph) -> DiGraph<(f64, f64)> {
     }
 
     graph
+}
+
+fn dagre_node<'a>(layout: &'a DagreLayout, id: &str) -> &'a DagreNode {
+    layout
+        .nodes
+        .iter()
+        .find(|node| node.id == id)
+        .unwrap_or_else(|| panic!("missing dagre node {id}"))
 }
 
 /// Border node info parsed from debug dump files.
@@ -228,6 +237,80 @@ fn assert_points_close(actual: &[(f64, f64)], expected: &[[f64; 2]], tolerance: 
 // =============================================================================
 // Parity Tests
 // =============================================================================
+
+mod compound_backward_disconnected {
+    use super::*;
+
+    const INPUT_PATH: &str =
+        "tests/parity-fixtures/compound_backward_disconnected/mmdflux-dagre-input.json";
+    const EXPECTED_PATH: &str =
+        "tests/parity-fixtures/compound_backward_disconnected/dagre-layout.json";
+
+    #[test]
+    fn compound_backward_disconnected_input_records_mermaid_order() {
+        let input: InputGraph = load_json(INPUT_PATH);
+        let ids: Vec<&str> = input.nodes.iter().map(|node| node.id.as_str()).collect();
+
+        assert_eq!(
+            ids,
+            vec!["C", "B", "A", "a1", "a2", "b1", "b2", "c1", "c2"],
+            "raw Dagre fixture should preserve Mermaid FlowDB node order"
+        );
+    }
+
+    #[test]
+    fn compound_backward_disconnected_raw_dagre_fixture_is_tall_top_right() {
+        let expected: DagreLayout = load_json(EXPECTED_PATH);
+        let top = dagre_node(&expected, "A");
+        let middle = dagre_node(&expected, "B");
+        let bottom = dagre_node(&expected, "C");
+        let sibling_max = middle.height.max(bottom.height);
+
+        assert!(top.is_compound && middle.is_compound && bottom.is_compound);
+        assert!(
+            top.x > middle.x && top.x > bottom.x,
+            "raw Dagre should place A/Top to the right; A={top:?} B={middle:?} C={bottom:?}"
+        );
+        assert!(
+            top.height > sibling_max * 1.8,
+            "raw Dagre should stretch A/Top vertically; A={top:?} B={middle:?} C={bottom:?}"
+        );
+        assert!(
+            middle.y + middle.height <= bottom.y,
+            "raw Dagre should stack B/Middle above C/Bottom; B={middle:?} C={bottom:?}"
+        );
+
+        let edge2 = expected
+            .edges
+            .iter()
+            .find(|edge| edge.index == 2)
+            .expect("raw Dagre fixture should include edge 2");
+        assert_eq!(edge2._from, "c2");
+        assert_eq!(edge2._to, "a2");
+    }
+
+    #[test]
+    fn compound_backward_disconnected_dfs_only_keeps_edge_2_forward() {
+        let input: InputGraph = load_json(INPUT_PATH);
+        let graph = build_digraph_from_input(&input);
+        let config = LayoutConfig {
+            node_sep: 50.0,
+            edge_sep: 20.0,
+            rank_sep: 75.0,
+            margin: 8.0,
+            acyclic_policy: AcyclicPolicy::DfsOnly,
+            ..Default::default()
+        };
+
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        assert!(
+            !result.reversed_edges.contains(&2),
+            "DFS-only strict parity should not reverse c2 -> a2; got {:?}",
+            result.reversed_edges
+        );
+    }
+}
 
 mod subgraph_bounds {
     use super::*;
