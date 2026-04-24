@@ -25,7 +25,7 @@ use crate::graph::grid::label_placement::{
     extend_segments_into, label_rect_overlaps_nodes, seed_node_cells_into,
     seed_subgraph_borders_into,
 };
-use crate::graph::grid::{GridLayout, RoutedEdge, Segment};
+use crate::graph::grid::{GridLayout, NodeBounds, RoutedEdge, Segment};
 use crate::graph::{Edge, Stroke};
 
 const OFF_CORRIDOR_DRIFT_THRESHOLD: f64 = 3.0;
@@ -154,15 +154,28 @@ pub(crate) fn compute_label_placements(
         }
 
         let midpoint = calc_label_position(&routed.segments).map(|p| (p.x, p.y));
+        let projected = geometry.map(|g| layout.project_layout_point(g.center.x, g.center.y));
+        let side = geometry.map(|g| g.side).unwrap_or(EdgeLabelSide::Center);
         // Backward U-brackets: routing's `align_backward_side_offset_labels`
         // can shift `EdgeLabelGeometry.center` into the reserved gap beside
-        // the bracket leg. Prefer the Pass-3 midpoint only when the *whole*
-        // label block can safely sit there and no earlier label already
-        // claimed that block. Unsafe midpoint blocks stay on the projected
-        // lane so corner avoidance and sibling deconfliction do not turn a
-        // narrow fix into unrelated snapshot churn. See research 0068 Q3
-        // Option A and Plan 0154 finding 03.
-        let projected = geometry.map(|g| layout.project_layout_point(g.center.x, g.center.y));
+        // the bracket leg. Prefer the Pass-3 midpoint when its label block is
+        // safe and unclaimed. If that block only grazes a load-bearing corner,
+        // let the corridor-aware search move it one nearby cell so the label
+        // remains visually attached to the leg instead of falling back to the
+        // stale projected x-position. Prior label claims still keep projected
+        // placement; dense reciprocal compartments need the existing sibling
+        // deconfliction behavior. See research 0068 Q3 and Plan 0154 finding 03.
+        let backward_midpoint = backward_midpoint_candidate(
+            routed,
+            midpoint,
+            side,
+            label_dims,
+            &footprint,
+            &claimed,
+            &layout.node_bounds,
+            canvas_width,
+            canvas_height,
+        );
         // Some forward edges carry a projected `EdgeLabelGeometry.center`
         // shifted well away from the Pass-3 corridor. If that shifted cell is
         // safe, `choose_corridor_aware_anchor` returns it unchanged and never
@@ -172,16 +185,15 @@ pub(crate) fn compute_label_placements(
         // covering the singleton F2 cases and observed two-label forward
         // cases that share the same off-corridor projection shape. See
         // research 0069 Q3 addendum + Q4 F2.
-        let prefer_midpoint =
-            should_prefer_midpoint_for_backward_edge(
-                routed, midpoint, label_dims, &footprint, &claimed,
-            ) || should_prefer_midpoint_for_forward_edge(routed, geometry, projected, midpoint);
-        let projected = if prefer_midpoint { None } else { projected };
-        let Some(candidate_center) = projected.or(midpoint) else {
+        let projected =
+            if should_prefer_midpoint_for_forward_edge(routed, geometry, projected, midpoint) {
+                None
+            } else {
+                projected
+            };
+        let Some(candidate_center) = backward_midpoint.or(projected).or(midpoint) else {
             continue;
         };
-
-        let side = geometry.map(|g| g.side).unwrap_or(EdgeLabelSide::Center);
 
         let corridor_anchor = choose_corridor_aware_anchor(
             candidate_center,
@@ -258,21 +270,50 @@ pub(crate) fn compute_label_placements(
     placements
 }
 
-fn should_prefer_midpoint_for_backward_edge(
+#[allow(clippy::too_many_arguments)]
+fn backward_midpoint_candidate(
     routed: &RoutedEdge,
     midpoint: Option<(usize, usize)>,
+    side: EdgeLabelSide,
     label_dims: (usize, usize),
     footprint: &PathFootprint,
     claimed: &[ClaimedLabel],
-) -> bool {
+    node_bounds: &HashMap<String, NodeBounds>,
+    canvas_width: usize,
+    canvas_height: usize,
+) -> Option<(usize, usize)> {
     if !routed.is_backward {
-        return false;
+        return None;
     }
-    let Some(midpoint) = midpoint else {
-        return false;
-    };
-    !label_block_hits_load_bearing_cell(midpoint, label_dims, footprint)
-        && !label_block_overlaps_claimed(midpoint, label_dims, claimed)
+    let midpoint = midpoint?;
+    if label_block_overlaps_claimed(midpoint, label_dims, claimed) {
+        return None;
+    }
+    if !label_block_hits_load_bearing_cell(midpoint, label_dims, footprint) {
+        return Some(midpoint);
+    }
+    if label_dims.1 > 1 {
+        return None;
+    }
+
+    let shifted = choose_corridor_aware_anchor(
+        midpoint,
+        side,
+        footprint,
+        canvas_width,
+        canvas_height,
+        label_dims.0,
+        label_dims.1,
+    );
+    if shifted == midpoint
+        || shifted.0.abs_diff(midpoint.0) > 1
+        || shifted.1.abs_diff(midpoint.1) > 1
+        || label_block_overlaps_claimed(shifted, label_dims, claimed)
+        || label_rect_overlaps_nodes(shifted, label_dims, node_bounds)
+    {
+        return None;
+    }
+    Some(shifted)
 }
 
 /// Resolve the `EdgeLabelGeometry` for a given edge from
