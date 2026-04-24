@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `ae05bc70` — 170 fixtures_
+_Generated from commit `378b8cfa` — 170 fixtures_
 
 - [Flowchart](#flowchart) (111)
 - [Class](#class) (17)
@@ -253,49 +253,6 @@ graph LR
 
 </details>
 
-## backward_corridor_overlap_lr
-
-`tests/fixtures/flowchart/backward_corridor_overlap_lr.mmd`
-
-**Text**
-
-```text
-         ┌───┐
-         │ B │
-      ┌─►└───┘◄┬───┐
-      │        └─►┌───┐
-      │        ┌─►│ D │
-      │        │  └───┘
-┌───┐─┘  ┌───┐─┘   │ │
-│ A │───►│ C │     │ │
-└───┘    └───┘     │ │
-  ▲                  │
-  └──────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![backward_corridor_overlap_lr svg](../tests/svg-snapshots/flowchart/backward_corridor_overlap_lr.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph LR
-    A --> B
-    A --> C
-    B --> D
-    C --> D
-    D --> A
-    D --> B
-
-```
-
-</details>
-
 ## backward_corridor_overlap
 
 `tests/fixtures/flowchart/backward_corridor_overlap.mmd`
@@ -343,24 +300,30 @@ graph TD
 
 </details>
 
-## backward_in_subgraph_lr
+## backward_corridor_overlap_lr
 
-`tests/fixtures/flowchart/backward_in_subgraph_lr.mmd`
+`tests/fixtures/flowchart/backward_corridor_overlap_lr.mmd`
 
 **Text**
 
 ```text
-┌─────── Group ───────┐
-│ ┌──────┐  ┌───────┐ │
-│ │ Node │─►│ Node2 │ │
-│ └──────┘◄─└───────┘ │
-└─────────────────────┘
+         ┌───┐
+         │ B │
+      ┌─►└───┘◄┬───┐
+      │        └─►┌───┐
+      │        ┌─►│ D │
+      │        │  └───┘
+┌───┐─┘  ┌───┐─┘   │ │
+│ A │───►│ C │     │ │
+└───┘    └───┘     │ │
+  ▲                  │
+  └──────────────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![backward_in_subgraph_lr svg](../tests/svg-snapshots/flowchart/backward_in_subgraph_lr.svg)
+![backward_corridor_overlap_lr svg](../tests/svg-snapshots/flowchart/backward_corridor_overlap_lr.svg)
 
 </details>
 
@@ -368,12 +331,13 @@ graph TD
 <summary>Mermaid source</summary>
 
 ```
-graph TD
-    subgraph sg1[Group]
-        direction LR
-        A[Node] --> B[Node2]
-        B --> A
-    end
+graph LR
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    D --> A
+    D --> B
 
 ```
 
@@ -415,6 +379,42 @@ subgraph sg1[Group]
 A[Node] --> B[Node2]
 B --> A
 end
+
+```
+
+</details>
+
+## backward_in_subgraph_lr
+
+`tests/fixtures/flowchart/backward_in_subgraph_lr.mmd`
+
+**Text**
+
+```text
+┌─────── Group ───────┐
+│ ┌──────┐  ┌───────┐ │
+│ │ Node │─►│ Node2 │ │
+│ └──────┘◄─└───────┘ │
+└─────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![backward_in_subgraph_lr svg](../tests/svg-snapshots/flowchart/backward_in_subgraph_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph sg1[Group]
+        direction LR
+        A[Node] --> B[Node2]
+        B --> A
+    end
 
 ```
 
@@ -614,56 +614,6 @@ graph TD
 
 </details>
 
-## bidirectional_arrows
-
-`tests/fixtures/flowchart/bidirectional_arrows.mmd`
-
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  ▲
-  │
-  ▼
-┌───┐
-│ B │
-└───┘
-  ▲
-  ┆
-  ▼
-┌───┐
-│ C │
-└───┘
-  ▲
-  ┃
-  ▼
-┌───┐
-│ D │
-└───┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A <--> B
-    B <-.-> C
-    C <==> D
-
-```
-
-</details>
-
 ## bidirectional
 
 `tests/fixtures/flowchart/bidirectional.mmd`
@@ -698,6 +648,56 @@ graph TD
 <summary>SVG output</summary>
 
 ![bidirectional svg](../tests/svg-snapshots/flowchart/bidirectional.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A <--> B
+    B <-.-> C
+    C <==> D
+
+```
+
+</details>
+
+## bidirectional_arrows
+
+`tests/fixtures/flowchart/bidirectional_arrows.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  ▲
+  │
+  ▼
+┌───┐
+│ B │
+└───┘
+  ▲
+  ┆
+  ▼
+┌───┐
+│ C │
+└───┘
+  ▲
+  ┃
+  ▼
+┌───┐
+│ D │
+└───┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
 
 </details>
 
@@ -778,9 +778,9 @@ graph BT
 └────────┘
      │
      │
-     │
     yes
     no
+     │
      │
      │
      ▼
@@ -1009,13 +1009,13 @@ graph TD
 
 ```text
                                                                                                                                                           ┌─────────────┐
-                                                                                                                                      staging             │ Staging Env │
+                                                                                                                                  staging                 │ Staging Env │
                                                                                                                            ┌─────────────────────────────►└─────────────┘
 ┌──────────┐                 ┌───────┐                ┌───────────┐              ┌────────────┐                ┌─────────┐─┘
 │ Git Push │────────────────►│ Build │───────────────►│ Run Tests │─────────────►│ Lint Check │───────────────►< Deploy? >
 └──────────┘                 └───────┘                └───────────┘              └────────────┘                └─────────┘─┐
                                                                                                                            └────────────────────────────►┌────────────┐
-                                                                                                                                    production           │ Production │
+                                                                                                                               production                │ Production │
                                                                                                                                                          └────────────┘
 ```
 
@@ -1144,9 +1144,9 @@ graph TD
    └──────────┘
   ┌─┘        └──┐
   │             │
-  │             │
-  │             │
  Yes           No
+  │             │
+  │             │
   │             │
   │             │
   │             │
@@ -1199,9 +1199,9 @@ graph TD
        └──────────┘
      ┌──┘        └───┐
      │               │
-     │               │
-     │               │
     Yes             No
+     │               │
+     │               │
      │               │
      │               │
      │               │
@@ -1301,9 +1301,9 @@ graph TD
   < Check >
   └───────┘
       │
-      │
-      │
      ok
+      │
+      │
       │
       ▼
   ┌──────┐
@@ -1395,9 +1395,9 @@ graph TD
           └─────────────┘
       ┌────┘           └────┐
       │                     │
-      │                     │
-      │                     │
     valid                invalid
+      │                     │
+      │                     │
       │                     │
       │                     │
       │                     │
@@ -1520,8 +1520,8 @@ graph LR
 
 ```text
                            ┌───────┐
-                           │ Input │◄────────────────────────────yes
-                           └───────┘                               │
+                           │ Input │◄──────────────────────────────┐
+                           └───────┘                             yes
                             │                                      │
                             └──┐                                   │
                                │                                   │
@@ -1531,8 +1531,8 @@ graph LR
                          < Validate >                              │
                          └──────────┘                              │
                   ┌───────┘        └───────────────────┐           │
+               invalid                             valid           │
                   │                                    │           │
-               invalid                               valid         │
                   │                                    │           │
                   ▼                                    ▼           │
           ╭───────────────╮                       ┌─────────┐      │
@@ -1551,10 +1551,10 @@ graph LR
               │       │                                │
               │       │                                │
               ▼       ▼                                │
-             ┌─────────┐                              no
+             ┌─────────┐                               │
              │ Cleanup │                               │
              └─────────┘───┐                           │
-                           │      ┌────────────────────┘
+                           │      ┌───────────no───────┘
                            │      │
                            │      │
                            │      │
@@ -1614,11 +1614,11 @@ graph TD
                     │                          │
                     │                          │
                     │                          │
-                    │                          │
-                 request                    health
-                    │                          │
+                 request                       │
                     │                          │
                     │                          │
+                    │                          │
+                    │                       health
                     │                          │
                     │                          │
                     │                          │
@@ -1631,12 +1631,12 @@ graph TD
 │                                 < Route? >◄┐                      │
 │                                 └────────┘ ┆                      │
 │               ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘  │   └──┼──────┐               │
-│               ┆                     │      ┆      │               │
-│             write               ┌───┘      ┆  fast path           │
+│               ┆                     │      ┆  fast path           │
+│             write               ┌───┘      ┆      │               │
 │               ┆                 │          ┆      │               │
 │               ▼                 │          ┆      ▼               │
-│         ┌───────────┐         read         ┆┌───────────┐         │
-│         │ Transform │           │          ┆│ Cache Hit │         │
+│         ┌───────────┐           │          ┆┌───────────┐         │
+│         │ Transform │          read        ┆│ Cache Hit │         │
 │         └───────────┘           │          ┆└───────────┘         │
 │                  │              └──┐       ┆      │               │
 │                  └────────┐        │       ┆      │               │
@@ -1652,15 +1652,15 @@ graph TD
                                  │           ┆      │
                                  │           ┆      │
                                  │           ┆      │
-                              result         ┆     hit
                                  │           ┆      │
                                  │           ┆      │
                                  │           ┆      │
                                  │           ┆      │
                                  │           ┆      │
+                              result         ┆      │
                                  │           ┆      │
                                  │         retry    │
-                                 │           ┆      │
+                                 │           ┆     hit
                                  │           ┆      │
                                  │           ┆      │
                                  │           ┆      │
@@ -1675,10 +1675,10 @@ graph TD
                 │          ║ Formatter ║     ┆    │
                 │          └───────────┘     ┆    │
                 │                │           ┆    │
-                │                │           ┆    │
-                │                │           ┆    │
-                │                │           ┆    │
                 │            response        ┆    │
+                │                │           ┆    │
+                │                │           ┆    │
+                │                │           ┆    │
                 │                │           ┆    │
                 │                │           ┆    │
                 │                │           ┆    │
@@ -1846,8 +1846,8 @@ graph TD
 
 ```text
                            ┌───────┐
-                           │ Input │◄────────────────────────────yes
-                           └───────┘                               │
+                           │ Input │◄──────────────────────────────┐
+                           └───────┘                             yes
                             │                                      │
                             └──┐                                   │
                                │                                   │
@@ -1857,8 +1857,8 @@ graph TD
                          < Validate >                              │
                          └──────────┘                              │
                   ┌───────┘        └───────────────────┐           │
+               invalid                             valid           │
                   │                                    │           │
-               invalid                               valid         │
                   │                                    │           │
                   ▼                                    ▼           │
           ╭───────────────╮                       ┌─────────┐      │
@@ -1877,10 +1877,10 @@ graph TD
               │       │                                │
               │       │                                │
               ▼       ▼                                │
-             ┌─────────┐                              no
+             ┌─────────┐                               │
              │ Cleanup │                               │
              └─────────┘───┐                           │
-                           │      ┌────────────────────┘
+                           │      ┌───────────no───────┘
                            │      │
                            │      │
                            │      │
@@ -1938,9 +1938,9 @@ flowchart TB
 └────────────────┘            │
  └─────┐        │             │
        │        │             │
-       │        │             │
-       │        │             │
       Yes      No             │
+       │        │             │
+       │        │             │
        │        │             │
        │        └────┐        │
        │             │        │
@@ -2015,44 +2015,6 @@ graph TD
 
 </details>
 
-## diamond_fan_out
-
-`tests/fixtures/flowchart/diamond_fan_out.mmd`
-
-**Text**
-
-```text
-           ┌──────────┐
-           < Decision >
-           └──────────┘
-            │   │    │
-       ┌────┘   └┐   └──────┐
-       ▼         ▼          ▼
-┌──────┐    ┌────────┐     ┌───────┐
-│ Left │    │ Center │     │ Right │
-└──────┘    └────────┘     └───────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![diamond_fan_out svg](../tests/svg-snapshots/flowchart/diamond_fan_out.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A{Decision} --> B[Left]
-    A --> C[Center]
-    A --> D[Right]
-
-```
-
-</details>
-
 ## diamond_fan
 
 `tests/fixtures/flowchart/diamond_fan.mmd`
@@ -2093,6 +2055,44 @@ graph TD
     A --> C[Right]
     B --> D[End]
     C --> D
+
+```
+
+</details>
+
+## diamond_fan_out
+
+`tests/fixtures/flowchart/diamond_fan_out.mmd`
+
+**Text**
+
+```text
+           ┌──────────┐
+           < Decision >
+           └──────────┘
+            │   │    │
+       ┌────┘   └┐   └──────┐
+       ▼         ▼          ▼
+┌──────┐    ┌────────┐     ┌───────┐
+│ Left │    │ Center │     │ Right │
+└──────┘    └────────┘     └───────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![diamond_fan_out svg](../tests/svg-snapshots/flowchart/diamond_fan_out.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A{Decision} --> B[Left]
+    A --> C[Center]
+    A --> D[Right]
 
 ```
 
@@ -2313,6 +2313,44 @@ graph TD
 
 </details>
 
+## fan_in
+
+`tests/fixtures/flowchart/fan_in.mmd`
+
+**Text**
+
+```text
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Source A │    │ Source B │    │ Source C │
+└──────────┘    └──────────┘    └──────────┘
+          │          │           │
+          └──────┐  ┌┘  ┌────────┘
+                 ▼  ▼   ▼
+                ┌────────┐
+                │ Target │
+                └────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Source A] --> D[Target]
+    B[Source B] --> D
+    C[Source C] --> D
+
+```
+
+</details>
+
 ## fan_in_backward_channel_conflict
 
 `tests/fixtures/flowchart/fan_in_backward_channel_conflict.mmd`
@@ -2405,44 +2443,6 @@ graph LR
 
 </details>
 
-## fan_in
-
-`tests/fixtures/flowchart/fan_in.mmd`
-
-**Text**
-
-```text
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Source A │    │ Source B │    │ Source C │
-└──────────┘    └──────────┘    └──────────┘
-          │          │           │
-          └──────┐  ┌┘  ┌────────┘
-                 ▼  ▼   ▼
-                ┌────────┐
-                │ Target │
-                └────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Source A] --> D[Target]
-    B[Source B] --> D
-    C[Source C] --> D
-
-```
-
-</details>
-
 ## fan_out
 
 `tests/fixtures/flowchart/fan_out.mmd`
@@ -2476,6 +2476,46 @@ graph TD
     A[Source] --> B[Target A]
     A --> C[Target B]
     A --> D[Target C]
+
+```
+
+</details>
+
+## five_fan_in
+
+`tests/fixtures/flowchart/five_fan_in.mmd`
+
+**Text**
+
+```text
+┌───┐     ┌───┐     ┌───┐    ┌───┐     ┌───┐
+│ A │     │ B │     │ C │    │ D │     │ E │
+└───┘     └───┘     └───┘    └───┘     └───┘
+    │         │       │      │         │
+    └─────────┴──┬─┐ ┌┘┌─┬───┴─────────┘
+                 ▼ ▼ ▼ ▼ ▼
+                 ┌────────┐
+                 │ Target │
+                 └────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_in svg](../tests/svg-snapshots/flowchart/five_fan_in.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[A] --> F[Target]
+    B[B] --> F
+    C[C] --> F
+    D[D] --> F
+    E[E] --> F
 
 ```
 
@@ -2579,28 +2619,28 @@ graph LR
 
 </details>
 
-## five_fan_in
+## five_fan_out
 
-`tests/fixtures/flowchart/five_fan_in.mmd`
+`tests/fixtures/flowchart/five_fan_out.mmd`
 
 **Text**
 
 ```text
-┌───┐     ┌───┐     ┌───┐    ┌───┐     ┌───┐
-│ A │     │ B │     │ C │    │ D │     │ E │
-└───┘     └───┘     └───┘    └───┘     └───┘
-    │         │       │      │         │
-    └─────────┴──┬─┐ ┌┘┌─┬───┴─────────┘
-                 ▼ ▼ ▼ ▼ ▼
-                 ┌────────┐
-                 │ Target │
-                 └────────┘
+                                ┌────────┐
+                                │ Source │
+                                └────────┘
+                                │ │ │ │ │
+           ┌─────────────┬──────┴─┘ └┐└─┴────────┬──────────────┐
+           ▼             ▼           ▼           ▼              ▼
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Target A │    │ Target B │    │ Target C │    │ Target D │    │ Target E │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![five_fan_in svg](../tests/svg-snapshots/flowchart/five_fan_in.svg)
+![five_fan_out svg](../tests/svg-snapshots/flowchart/five_fan_out.svg)
 
 </details>
 
@@ -2609,12 +2649,11 @@ graph LR
 
 ```
 graph TD
-    A[A] --> F[Target]
-    B[B] --> F
-    C[C] --> F
-    D[D] --> F
-    E[E] --> F
-
+      A[Source] --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
 ```
 
 </details>
@@ -2716,45 +2755,6 @@ graph LR
 
 </details>
 
-## five_fan_out
-
-`tests/fixtures/flowchart/five_fan_out.mmd`
-
-**Text**
-
-```text
-                                ┌────────┐
-                                │ Source │
-                                └────────┘
-                                │ │ │ │ │
-           ┌─────────────┬──────┴─┘ └┐└─┴────────┬──────────────┐
-           ▼             ▼           ▼           ▼              ▼
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Target A │    │ Target B │    │ Target C │    │ Target D │    │ Target E │
-└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![five_fan_out svg](../tests/svg-snapshots/flowchart/five_fan_out.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-      A[Source] --> B[Target A]
-      A --> C[Target B]
-      A --> D[Target C]
-      A --> E[Target D]
-      A --> F[Target E]
-```
-
-</details>
-
 ## flowchart_code_flow
 
 `tests/fixtures/flowchart/flowchart_code_flow.mmd`
@@ -2785,27 +2785,27 @@ graph TD
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 │ detector(txt, config) │    │ detector(txt, config) │    │ detector(txt, config) │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 └───────────────────────┘    └───────────────────────┘    └───────────────────────┘
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                           │                            │
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                Checks /^\s*flowchart/                  │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                         Checks
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   Checks /^\s*graph/        Checks /^\s*flowchart/         /^\s*flowchart-elk/
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                           │                   /^\s*flowchart-elk/
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                           │                            │
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   Checks /^\s*graph/                   │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ▼                           ▼                            ▼
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ┌───────────────────┐        ┌────────────────┐             ┌─────────────┐
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   < Legacy Flowchart? >        < New Flowchart? >             < ELK Layout? >
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   └───────────────────┘        └────────────────┘             └─────────────┘
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                        Yes│                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                          Yes                           │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │                           │                            │
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Yes                         Yes                          Yes
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            │                           │                            │
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            └──────────────────┐        │        ┌───────────────────┘
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            └──────────────────┐        │        ┌──────────Yes──────┘
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                │        │        │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                │        │        │
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ▼        ▼        ▼
@@ -2870,9 +2870,9 @@ graph TD
                                                     │                          │                         │                          │                         │                          │                                                                                                                                                                                                                                                              │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │                                                                              │                              │                               │                         │                         │                        │
                                                     │                          │                         │                          │                         │                          │                                                                                                                                                                                                                                                              │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │                                                                              │                              │                               │                         │                         │                        │
                                                     │                          │                         │                          │                         │                          │                                                                                                                                                                                                                                                              ▼                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │                                                                              ▼                              ▼                               │                         │                         │                        │
-                                            Preprocesses src                   │                         │                          │                         │                          ▼                                                                                                                                                                                                                                              ┌───────────────────────┐                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   │                                                                 ┌────────────────────────┐    ┌───────────────────────────┐                 │                         │                         │                        │
+                                                    │                          │                         │                          │                         │                          ▼                                                                                                                                                                                                                                              ┌───────────────────────┐                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   │                                                                 ┌────────────────────────┐    ┌───────────────────────────┐                 │                         │                         │                        │
                                                     │                          ▼                         ▼                          ▼                         ▼                 ┌─────────────────────┐                                                                                                                                                                                                                                 │     constructor()     │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   │                                                                 │  Initialize rendering  │    │   FlowChartStyleOptions   │                 ▼                         ▼                         ▼                        ▼
-                                                    │         ┌──────────────────────┐     ┌────────────────────┐      ┌─────────────────────┐    ┌────────────────────────┐    │ FlowVertexTypeParam │                                                                                                                                                                                                                                 │ - Initialize counters │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ┌────────────┐                                                    │     - getConfig()      │    │ - arrowheadColor, border2 │    ┌──────────────────────┐    ┌─────────────────────┐      ┌───────────────┐        ┌───────────────────┐
+                                            Preprocesses src  ┌──────────────────────┐     ┌────────────────────┐      ┌─────────────────────┐    ┌────────────────────────┐    │ FlowVertexTypeParam │                                                                                                                                                                                                                                 │ - Initialize counters │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ┌────────────┐                                                    │     - getConfig()      │    │ - arrowheadColor, border2 │    ┌──────────────────────┐    ┌─────────────────────┐      ┌───────────────┐        ┌───────────────────┐
                                                     │         │ FlowVertex interface │     │ FlowEdge interface │      │ FlowClass interface │    │ FlowSubGraph interface │    │     Shape types     │                                                                                                                                                                                                                                 │    - Bind methods     │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   │ Test Files │                                                    │ - handle securityLevel │    │   - clusterBkg, mainBkg   │    │ cnf.flowchart config │    │ arrowMarkerAbsolute │      │ layout config │        │ setConfig() calls │
                                                     │         └──────────────────────┘     └────────────────────┘      └─────────────────────┘    └────────────────────────┘    └─────────────────────┘                                                                                                                                                                                                                                 │   - Setup toolTips    │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   └────────────┘                                                    │ - getDiagramElement()  │    │  - fontFamily, textColor  │    └──────────────────────┘    └─────────────────────┘      └───────────────┘        └───────────────────┘
                                                     │                                                                                                                                                                                                                                                                                                                                                                                   │    - Call clear()     │                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    │    │     │                                                     └────────────────────────┘    └───────────────────────────┘
@@ -3238,6 +3238,43 @@ flowchart TD
 
 </details>
 
+## git_workflow
+
+`tests/fixtures/flowchart/git_workflow.mmd`
+
+**Text**
+
+```text
+                                                                                            git commit
+┌─────────────┐─┐                            ┌──────────────┐                               ┌────────────┐                      ┌───────►┌─────────────┐
+│ Working Dir │ └──────────git add──────────►│ Staging Area │──────────────────────────────►│ Local Repo │──────────git push────┘        │ Remote Repo │
+└─────────────┘                              └──────────────┘                               └────────────┘                               └─────────────┘
+       ▲                                                                                                                                        │
+       └────────────────────────────────────────────────────────────────git pull────────────────────────────────────────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![git_workflow svg](../tests/svg-snapshots/flowchart/git_workflow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+    %% A typical git workflow
+    Working[Working Dir] -->|git add| Staging[Staging Area]
+    Staging -->|git commit| Local[Local Repo]
+    Local -->|git push| Remote[Remote Repo]
+    Remote -->|git pull| Working
+
+```
+
+</details>
+
 ## git_workflow_td
 
 `tests/fixtures/flowchart/git_workflow_td.mmd`
@@ -3259,9 +3296,9 @@ flowchart TD
 └──────────────┘  │
         │         │
         │         │
+        │         │
         │     git pull
    git commit     │
-        │         │
         ▼         │
  ┌────────────┐   │
  │ Local Repo │   │
@@ -3289,42 +3326,6 @@ flowchart TD
 
 ```
 graph TD
-    %% A typical git workflow
-    Working[Working Dir] -->|git add| Staging[Staging Area]
-    Staging -->|git commit| Local[Local Repo]
-    Local -->|git push| Remote[Remote Repo]
-    Remote -->|git pull| Working
-
-```
-
-</details>
-
-## git_workflow
-
-`tests/fixtures/flowchart/git_workflow.mmd`
-
-**Text**
-
-```text
-┌─────────────┐─┐                            ┌──────────────┐                               ┌────────────┐                      ┌───────►┌─────────────┐
-│ Working Dir │ └──────────git add──────────►│ Staging Area │──────────git commit──────────►│ Local Repo │───────────git push───┘        │ Remote Repo │
-└─────────────┘                              └──────────────┘                               └────────────┘                               └─────────────┘
-       ▲                                                                                                                                        │
-       └────────────────────────────────────────────────────────────────git pull────────────────────────────────────────────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![git_workflow svg](../tests/svg-snapshots/flowchart/git_workflow.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph LR
     %% A typical git workflow
     Working[Working Dir] -->|git add| Staging[Staging Area]
     Staging -->|git commit| Local[Local Repo]
@@ -3410,8 +3411,8 @@ graph TD
                      < Authenticated? >         │
                      └────────────────┘         │
          ┌────────────┘          ┌───┘          │
-         │                       │              │
-        Yes                     No              │
+         Yes                     │              │
+         │                     No│              │
          │                       │              │
          ▼                       ▼              │
 ┌─────────────────┐       ┌──────────────────┐  │
@@ -3481,8 +3482,8 @@ graph TD
  └───────┘
      ┃
      ┃
-final step
      ┃
+final step
      ┃
      ▼
  ┌──────┐
@@ -3559,7 +3560,7 @@ graph TD
          │     │               │                                                                                                             │
          │     │               │                                                                                                             │
          │     │               │                                                                                                             │
-        hit    └──────────────miss                                                                                                           │
+       hit     └───────miss────┼┐                                                                                                            │
          │                     ││                                                                                                            │
          │                  ┌──┼┘                                                                                                            │
          │                  │  │                                                                                                             │
@@ -3567,13 +3568,13 @@ graph TD
          ▼                  ▼  ▼                                                                                                             │
  ┌──────────────┐          ┌────────┐                                                                                                        │
  │ Serve Cached │          < Valid? >                                                                                                        │
- └──────────────┘          └────────┘                                                                                                        │
+ └──────────────┘          └────────┘                         yes                                                                            │
          │                  └───┐  └───────────────────────────┐                                                                             │
          │                      │                              │                                                                             │
          │                      │                              │                                                                             │
+         │                     no                              │                                                                             │
          │                      │                              │                                                                             │
          │                      │                              │                                                                             │
-         │                     no                             yes                                                                            │
          │                      │                              │                                                                             │
          │                      │                              │                                                                             │
          │                      │                              │                                                                             │
@@ -3587,7 +3588,7 @@ graph TD
          │                      ┆                              │                      │                                                 │    │
          │                      ┆                              │                      │                                                 │    │
          │                      ▼                              │                      │                                                 │    │
-         │               ┌─────────────┐                     sync                   async                                               │    │
+         │               ┌─────────────┐                    sync                    async                                               │    │
          │               │ Notify User │                       │                      │                                                 │    │
          │               └─────────────┘                       │                      │                                                 │    │
          │                                                     │                      │                                                 │    │
@@ -3615,12 +3616,12 @@ graph TD
          │                                                     │           │   │ Process Job │                                          │ ┃
          │                                                     │           │   └─────────────┘                                          │ ┃
          │                                                     │           │    │           └─────────────────────────────────┐         │ ┃
-         │                                                     │           │    └─────┐                                       │         │ ┃
+         │                                                     │           │    └─────┐                                 warn  │         │ ┃
          │                                                     │           │          │                                       │         │ ┃
          │                                                     │           │          │                                       │         │ ┃
          │                                                     │           │          │                                       │         │ ┃
          │                                                     │           │          ▼                                       │         │ ┃
-         │                                                     │           │    ┌──────────┐                                warn        │ ┃
+         │                                                     │           │    ┌──────────┐                                  │         │ ┃
          │                                                     │           │    < Success? >                                  │         │ ┃
          │                                                     │           │    └──────────┘                                  │         │ ┃
          │                                                     │           │     └────┐   │                                   │         │ ┃
@@ -3630,11 +3631,11 @@ graph TD
          │                                                     │           │          │   │                                   │         │ ┃
          │                                                     │           │          │   │                                   │         │ ┃
          │                                                     │           │          │   │                                   ▼         │ ┃
-         │                                                     │           └─────────no───┴───┬─────────────yes       ┌──────────────┐  │ ┃
-         │                                                     │                      │       │              │        │ Page On-call │  │ ┃
+         │                                                     │           └──────────┼───┴───┬──────────────┐        ┌──────────────┐  │ ┃
+         │                                                     │                      │       │            yes        │ Page On-call │  │ ┃
          │                                                     │                      │       │              │        └──────────────┘  │ ┃
          │                                                     │                      │       │              │                ┆         │ ┃
-         │                                                ┌────┼──────────────────────┘    ┌──┼──────────────┘                ┆         │ ┃
+         │                                                ┌────┼─────────────no───────┘    ┌──┼──────────────┘                ┆         │ ┃
          │                                                │    │                           │  │                               ┆         │ ┃
          │                                                │    └──────────────────┐        │  │                               ┆         │ ┃
          │                                                │                       │        │  │                               ┆         │ ┃
@@ -3724,11 +3725,11 @@ flowchart TD
 │ Two │┐
 └─────┘│
  ▲     │
- └─┐   │
+ └─┐ yes
+   │ no│
    │   │
    x   │
-   │  yes
- ┌─┘  no
+ ┌─┘   │
 ┌─────┐│
 │ One ││
 └─────┘│
@@ -3762,10 +3763,9 @@ graph BT
 **Text**
 
 ```text
-┌─────┐◄─────────────┌─────┐
-│ Two │       x      │ One │
-└─────┘◄─────yes─────└─────┘
-             no
+┌─────┐◄─yes─────────┌─────┐
+│ Two │  no       x  │ One │
+└─────┘◄─────────────└─────┘
 ```
 
 <details>
@@ -3799,9 +3799,9 @@ graph RL
         └───┘
   ┌──────┘ └──────┐
   │               │
-  │               │
-  │               │
 valid          invalid
+  │               │
+  │               │
   │               │
   │               │
   │               │
@@ -3863,12 +3863,12 @@ graph TD
    < Valid? >                       ┆
    └────────┘                       ┆
     └┐     └──┐                     ┆
+     │        │       no            ┆
      │        │                     ┆
      │        │                     ┆
      │        │                     ┆
-    yes      no                     ┆
      │        │                     ┆
-     │        └────┐                ┆
+    yes       └────┐                ┆
      │             │                ┆
      ▼             ▼                ┆
 ┌─────────┐       ┌──────────────┐  ┆
@@ -3984,11 +3984,11 @@ linkStyle 1 stroke:#ff0000,stroke-width:4px
  ┌───┐
  │ A │◄┐
  └───┘ │
-  │    │
-this is a deliberately long
-  │    │   label
 another deliberately long
   │    reply label
+this is a deliberately long
+  │    │   label
+  │    │
   ▼    │
  ┌───┐ │
  │ B │─┘
@@ -4064,58 +4064,6 @@ graph TD
 
 </details>
 
-## multi_edge_labeled
-
-`tests/fixtures/flowchart/multi_edge_labeled.mmd`
-
-**Text**
-
-```text
-  ┌───┐
-  │ A │
-  └───┘
-   │ └──┐
-   │    │
-   │    │
-   │ path 2
-path 1  │
-   │    │
-   │ ┌──┘
-   │ │
-   ▼ ▼
-  ┌───┐
-  │ B │
-  └───┘
-    │
-    │
-    │
-    │
-    ▼
-  ┌───┐
-  │ C │
-  └───┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![multi_edge_labeled svg](../tests/svg-snapshots/flowchart/multi_edge_labeled.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A -->|path 1| B
-    A -->|path 2| B
-    B --> C
-
-```
-
-</details>
-
 ## multi_edge
 
 `tests/fixtures/flowchart/multi_edge.mmd`
@@ -4148,6 +4096,96 @@ graph TD
 graph TD
     A --> B
     A --> B
+
+```
+
+</details>
+
+## multi_edge_labeled
+
+`tests/fixtures/flowchart/multi_edge_labeled.mmd`
+
+**Text**
+
+```text
+ ┌───┐
+ │ A │
+ └───┘
+  │ └──┐
+  │    │
+path 1 │
+  │    │
+  │    │
+path 2 │
+  │ ┌──┘
+  │ │
+  ▼ ▼
+ ┌───┐
+ │ B │
+ └───┘
+   │
+   │
+   │
+   │
+   ▼
+ ┌───┐
+ │ C │
+ └───┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![multi_edge_labeled svg](../tests/svg-snapshots/flowchart/multi_edge_labeled.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A -->|path 1| B
+    A -->|path 2| B
+    B --> C
+
+```
+
+</details>
+
+## multi_subgraph
+
+`tests/fixtures/flowchart/multi_subgraph.mmd`
+
+**Text**
+
+```text
+┌───────────── Frontend ─────────────┐             ┌───────────── Backend ─────────────┐
+│        ┌────┐       ┌─────┐        │             │       ┌────────┐     ┌────┐       │
+│        │ UI │──────►│ API │────────┼─────────────┼──────►│ Server │────►│ DB │       │
+│        └────┘       └─────┘        │             │       └────────┘     └────┘       │
+└────────────────────────────────────┘             └───────────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![multi_subgraph svg](../tests/svg-snapshots/flowchart/multi_subgraph.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+subgraph sg1[Frontend]
+A[UI] --> B[API]
+end
+subgraph sg2[Backend]
+C[Server] --> D[DB]
+end
+B --> C
 
 ```
 
@@ -4254,44 +4292,6 @@ class Ab,Au,Ac,Bmid,Cmid,D,E,F,Gb,Ga node
 
 </details>
 
-## multi_subgraph
-
-`tests/fixtures/flowchart/multi_subgraph.mmd`
-
-**Text**
-
-```text
-┌───────────── Frontend ─────────────┐             ┌───────────── Backend ─────────────┐
-│        ┌────┐       ┌─────┐        │             │       ┌────────┐     ┌────┐       │
-│        │ UI │──────►│ API │────────┼─────────────┼──────►│ Server │────►│ DB │       │
-│        └────┘       └─────┘        │             │       └────────┘     └────┘       │
-└────────────────────────────────────┘             └───────────────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![multi_subgraph svg](../tests/svg-snapshots/flowchart/multi_subgraph.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph LR
-subgraph sg1[Frontend]
-A[UI] --> B[API]
-end
-subgraph sg2[Backend]
-C[Server] --> D[DB]
-end
-B --> C
-
-```
-
-</details>
-
 ## multiple_cycles
 
 `tests/fixtures/flowchart/multiple_cycles.mmd`
@@ -4370,6 +4370,63 @@ graph TD
     A[A] --> D[X]
     B[B] --> D
     C[C] --> D
+
+```
+
+</details>
+
+## nested_subgraph
+
+`tests/fixtures/flowchart/nested_subgraph.mmd`
+
+**Text**
+
+```text
+┌───────── Outer ─────────┐
+│        ┌───────┐        │
+│        │ Start │        │
+│        └───────┘        │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│    ┌──── Inner ────┐    │
+│    │       ▼       │    │
+│    │  ┌─────────┐  │    │
+│    │  │ Process │  │    │
+│    │  └─────────┘  │    │
+│    │       │       │    │
+│    │       │       │    │
+│    │       ▼       │    │
+│    │    ┌─────┐    │    │
+│    │    │ End │    │    │
+│    │    └─────┘    │    │
+│    └───────────────┘    │
+└─────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+subgraph outer[Outer]
+A[Start]
+subgraph inner[Inner]
+B[Process] --> C[End]
+end
+end
+A --> B
 
 ```
 
@@ -4511,13 +4568,13 @@ end
 │      │  │   └────┘   │  │
 │      │  │      │     │  │
 │      └──┼──────┼─────┘  │
+│  cross edge one│        │
+│         │      │        │
 │         │      │        │
 │         │      │        │
 │         │      │        │
 │         │      │        │
 │         cross edge two  │
-│  cross edge one│        │
-│         │      │        │
 │ ┌──── B region ┼───┐    │
 │ │       ▼      │   │    │
 │ │    ┌────┐    │   │    │
@@ -4555,63 +4612,6 @@ graph TD
     end
     A1 -->|cross edge one| B1
     A2 -->|cross edge two| B2
-
-```
-
-</details>
-
-## nested_subgraph
-
-`tests/fixtures/flowchart/nested_subgraph.mmd`
-
-**Text**
-
-```text
-┌───────── Outer ─────────┐
-│        ┌───────┐        │
-│        │ Start │        │
-│        └───────┘        │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│    ┌──── Inner ────┐    │
-│    │       ▼       │    │
-│    │  ┌─────────┐  │    │
-│    │  │ Process │  │    │
-│    │  └─────────┘  │    │
-│    │       │       │    │
-│    │       │       │    │
-│    │       ▼       │    │
-│    │    ┌─────┐    │    │
-│    │    │ End │    │    │
-│    │    └─────┘    │    │
-│    └───────────────┘    │
-└─────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-subgraph outer[Outer]
-A[Start]
-subgraph inner[Inner]
-B[Process] --> C[End]
-end
-end
-A --> B
 
 ```
 
@@ -4690,6 +4690,36 @@ graph RL
 
 </details>
 
+## self_loop
+
+`tests/fixtures/flowchart/self_loop.mmd`
+
+**Text**
+
+```text
+┌─────────┐───┐
+│ Process │   │
+└─────────┘◄──┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Process] --> A
+
+```
+
+</details>
+
 ## self_loop_labeled
 
 `tests/fixtures/flowchart/self_loop_labeled.mmd`
@@ -4710,9 +4740,9 @@ graph RL
 └────────┘◄──┘
      │
      │
-     │
-     │
    done
+     │
+     │
      │
      │
      │
@@ -4786,22 +4816,34 @@ graph TD
 
 </details>
 
-## self_loop
+## shapes
 
-`tests/fixtures/flowchart/self_loop.mmd`
+`tests/fixtures/flowchart/shapes.mmd`
 
 **Text**
 
 ```text
-┌─────────┐───┐
-│ Process │   │
-└─────────┘◄──┘
+┌────────────────┐
+│ Rectangle Node │
+└────────────────┘
+         │
+         │
+         ▼
+ ╭──────────────╮
+ │ Rounded Node │
+ ╰──────────────╯
+         │
+         │
+         ▼
+ ┌──────────────┐
+ < Diamond Node >
+ └──────────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
 
 </details>
 
@@ -4810,7 +4852,10 @@ graph TD
 
 ```
 graph TD
-    A[Process] --> A
+    rect[Rectangle Node]
+    round(Rounded Node)
+    diamond{Diamond Node}
+    rect --> round --> diamond
 
 ```
 
@@ -5092,34 +5137,28 @@ graph LR
 
 </details>
 
-## shapes
+## simple
 
-`tests/fixtures/flowchart/shapes.mmd`
+`tests/fixtures/flowchart/simple.mmd`
 
 **Text**
 
 ```text
-┌────────────────┐
-│ Rectangle Node │
-└────────────────┘
-         │
-         │
-         ▼
- ╭──────────────╮
- │ Rounded Node │
- ╰──────────────╯
-         │
-         │
-         ▼
- ┌──────────────┐
- < Diamond Node >
- └──────────────┘
+┌───────┐
+│ Start │
+└───────┘
+    │
+    │
+    ▼
+ ┌─────┐
+ │ End │
+ └─────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
+![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
 
 </details>
 
@@ -5128,10 +5167,7 @@ graph LR
 
 ```
 graph TD
-    rect[Rectangle Node]
-    round(Rounded Node)
-    diamond{Diamond Node}
-    rect --> round --> diamond
+    A[Start] --> B[End]
 
 ```
 
@@ -5228,42 +5264,6 @@ subgraph sg1[Process]
 A[Start] --> B[Middle]
 end
 B --> C[End]
-
-```
-
-</details>
-
-## simple
-
-`tests/fixtures/flowchart/simple.mmd`
-
-**Text**
-
-```text
-┌───────┐
-│ Start │
-└───────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ End │
- └─────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Start] --> B[End]
 
 ```
 
@@ -5734,6 +5734,57 @@ graph TD
 
 </details>
 
+## subgraph_direction_nested
+
+`tests/fixtures/flowchart/subgraph_direction_nested.mmd`
+
+**Text**
+
+```text
+┌──── Vertical Outer ─────┐
+│  ┌───┐                  │
+│  │ D │                  │
+│  └───┘                  │
+│    │                    │
+│    │                    │
+│    │                    │
+│    │                    │
+│    │                    │
+│    │                    │
+│    │                    │
+│┌── Horizontal Inner ───┐│
+││   ▼                   ││
+││ ┌───┐  ┌───┐    ┌───┐ ││
+││ │ A │─►│ B │───►│ C │ ││
+││ └───┘  └───┘    └───┘ ││
+│└───────────────────────┘│
+└─────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph outer[Vertical Outer]
+        subgraph inner[Horizontal Inner]
+            direction LR
+            A --> B --> C
+        end
+        D --> A
+    end
+
+```
+
+</details>
+
 ## subgraph_direction_nested_both
 
 `tests/fixtures/flowchart/subgraph_direction_nested_both.mmd`
@@ -5845,37 +5896,41 @@ graph TD
 
 </details>
 
-## subgraph_direction_nested
+## subgraph_edges
 
-`tests/fixtures/flowchart/subgraph_direction_nested.mmd`
+`tests/fixtures/flowchart/subgraph_edges.mmd`
 
 **Text**
 
 ```text
-┌──── Vertical Outer ─────┐
-│  ┌───┐                  │
-│  │ D │                  │
-│  └───┘                  │
-│    │                    │
-│    │                    │
-│    │                    │
-│    │                    │
-│    │                    │
-│    │                    │
-│    │                    │
-│┌── Horizontal Inner ───┐│
-││   ▼                   ││
-││ ┌───┐  ┌───┐    ┌───┐ ││
-││ │ A │─►│ B │───►│ C │ ││
-││ └───┘  └───┘    └───┘ ││
-│└───────────────────────┘│
-└─────────────────────────┘
+  ┌───────── Input ──────────┐
+  │  ┌──────┐    ┌────────┐  │
+  │  │ Data │    │ Config │  │
+  │  └──────┘    └────────┘  │
+  │      │           │       │
+  └──────┼───────────┼───────┘
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+┌────────┼ Output ───┼──────┐
+│        ▼           ▼      │
+│   ┌────────┐    ┌─────┐   │
+│   │ Result │    │ Log │   │
+│   └────────┘    └─────┘   │
+└───────────────────────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
+![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
 
 </details>
 
@@ -5884,13 +5939,16 @@ graph TD
 
 ```
 graph TD
-    subgraph outer[Vertical Outer]
-        subgraph inner[Horizontal Inner]
-            direction LR
-            A --> B --> C
-        end
-        D --> A
-    end
+subgraph sg1[Input]
+A[Data]
+B[Config]
+end
+subgraph sg2[Output]
+C[Result]
+D[Log]
+end
+A --> C
+B --> D
 
 ```
 
@@ -5939,64 +5997,6 @@ graph TD
 
 ```
 graph BT
-subgraph sg1[Input]
-A[Data]
-B[Config]
-end
-subgraph sg2[Output]
-C[Result]
-D[Log]
-end
-A --> C
-B --> D
-
-```
-
-</details>
-
-## subgraph_edges
-
-`tests/fixtures/flowchart/subgraph_edges.mmd`
-
-**Text**
-
-```text
-  ┌───────── Input ──────────┐
-  │  ┌──────┐    ┌────────┐  │
-  │  │ Data │    │ Config │  │
-  │  └──────┘    └────────┘  │
-  │      │           │       │
-  └──────┼───────────┼───────┘
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-┌────────┼ Output ───┼──────┐
-│        ▼           ▼      │
-│   ┌────────┐    ┌─────┐   │
-│   │ Result │    │ Log │   │
-│   └────────┘    └─────┘   │
-└───────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
 subgraph sg1[Input]
 A[Data]
 B[Config]
@@ -6298,9 +6298,9 @@ graph LR
    ││   │
   three │
    ││   │
-   two  │
+   ││   │
   one   └─┐
-   ││     │
+   two    │
 ┌──┘│   ┌─┘
 │   │   │
 │   ▼   │
@@ -6413,16 +6413,16 @@ graph TD
  │ A │    │ C │    │ E │    │ G │    │ I │    │ K │    │ M │
  └───┘    └───┘    └───┘    └───┘    └───┘    └───┘    └───┘
    │        │        △        ◆        ◇        ┆        ┆
+   │        │        │        │        │        ┆  directed dep
+   │        │   inheritance   │   aggregation   ┆        ┆
    │        │        │        │        │        ┆        ┆
    │        │        │        │        │        ┆        ┆
    │        │        │        │        │        ┆        ┆
-   │        │        │        │        │    directed dep ┆
-   │    directed     │   composition   │   dependency    ┆
-association │   inheritance   │   aggregation   ┆        ┆
+association │        │        │        │        ┆        ┆
    │        │        │        │        │        ┆        ┆
    │        │        │        │        │        ┆        ┆
-   │        │        │        │        │        ┆        ┆
-   │        │        │        │        │        ┆        ┆
+   │    directed     │        │        │        ┆        ┆
+   │        │        │   composition   │   dependency    ┆
    │        ▼        │        │        │        ┆        ▼
  ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐
  │ B │    │ D │    │ F │    │ H │    │ J │    │ L │    │ N │
@@ -6530,10 +6530,10 @@ classDiagram
  │ User │     │ Order │
  └──────┘     └───────┘
    1 │        0..1│
-     │            │
-     │   contains │
    owns           │
      │            │
+     │            │
+     │        contains
    * ▼          * ▼
 ┌─────────┐    ┌──────┐
 │ Session │    │ Item │
@@ -6571,9 +6571,9 @@ Order "0..1" --> "*" Item:contains
 │ Application User │
 └──────────────────┘
           │
-          │
-          │
         reads
+          │
+          │
           │
           ▼
  ┌─────────────────┐
@@ -6911,10 +6911,10 @@ Client --() InterfaceA
 │ +logout()     │
 └───────────────┘
         │
-        │
-        │
-        │
      creates
+        │
+        │
+        │
         │
         │
         │
@@ -7041,8 +7041,8 @@ Painter --> Triangle
  └─────────┘
       ┆
       ┆
-authenticates
       ┆
+authenticates
       ┆
       ▼
   ┌──────┐
@@ -7059,8 +7059,8 @@ authenticates
   └───────┘
       ◆
       │
-contains
       │
+  contains
       │
       │
  ┌─────────┐
@@ -7495,6 +7495,48 @@ sequenceDiagram
 
 </details>
 
+## autonumber
+
+`tests/fixtures/sequence/autonumber.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─1. First─────────>│
+  │                   │
+  │<2. Second─────────│
+  │                   │
+  │─3. Third─────────>│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![autonumber svg](../tests/svg-snapshots/sequence/autonumber.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    autonumber
+    participant A
+    participant B
+    A->>B: First
+    B->>A: Second
+    A->>B: Third
+
+```
+
+</details>
+
 ## autonumber_controls
 
 `tests/fixtures/sequence/autonumber_controls.mmd`
@@ -7537,48 +7579,6 @@ sequenceDiagram
     Client->>API: Background ping
     autonumber
     API-->>Client: Session ready
-
-```
-
-</details>
-
-## autonumber
-
-`tests/fixtures/sequence/autonumber.mmd`
-
-**Text**
-
-```text
-┌───┐               ┌───┐
-│ A │               │ B │
-└─┬─┘               └─┬─┘
-  │                   │
-  │─1. First─────────>│
-  │                   │
-  │<2. Second─────────│
-  │                   │
-  │─3. Third─────────>│
-  │                   │
-```
-
-<details>
-<summary>SVG output</summary>
-
-![autonumber svg](../tests/svg-snapshots/sequence/autonumber.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-sequenceDiagram
-    autonumber
-    participant A
-    participant B
-    A->>B: First
-    B->>A: Second
-    A->>B: Third
 
 ```
 
@@ -7929,6 +7929,49 @@ sequenceDiagram
 
 </details>
 
+## note
+
+`tests/fixtures/sequence/note.mmd`
+
+**Text**
+
+```text
+┌───┐               ┌───┐
+│ A │               │ B │
+└─┬─┘               └─┬─┘
+  │                   │
+  │─Hello────────────>│
+  │                   │
+  │             ┌──────────┐
+  │             │ Thinking │
+  │             └──────────┘
+  │                   │
+  │<Reply─────────────│
+  │                   │
+```
+
+<details>
+<summary>SVG output</summary>
+
+![note svg](../tests/svg-snapshots/sequence/note.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: Hello
+    Note over B: Thinking
+    B->>A: Reply
+
+```
+
+</details>
+
 ## note_left
 
 `tests/fixtures/sequence/note_left.mmd`
@@ -8052,49 +8095,6 @@ sequenceDiagram
     participant B
     A->>B: Hello
     Note over A,B: Both thinking
-    B->>A: Reply
-
-```
-
-</details>
-
-## note
-
-`tests/fixtures/sequence/note.mmd`
-
-**Text**
-
-```text
-┌───┐               ┌───┐
-│ A │               │ B │
-└─┬─┘               └─┬─┘
-  │                   │
-  │─Hello────────────>│
-  │                   │
-  │             ┌──────────┐
-  │             │ Thinking │
-  │             └──────────┘
-  │                   │
-  │<Reply─────────────│
-  │                   │
-```
-
-<details>
-<summary>SVG output</summary>
-
-![note svg](../tests/svg-snapshots/sequence/note.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-sequenceDiagram
-    participant A
-    participant B
-    A->>B: Hello
-    Note over B: Thinking
     B->>A: Reply
 
 ```
@@ -8573,8 +8573,8 @@ stateDiagram-v2
 │ ╰─────────╯       │
 │  │   └───▲────┐   │
 │  └───┐   └──┐ │   │
-│      ▼      │ │   │
-│           pause   │
+│      ▼    pause   │
+│             │ │   │
 │      ◉   resume   │
 │         ┌───┼─┘   │
 │         │   │     │
@@ -8616,170 +8616,6 @@ stateDiagram-v2
         Running --> [*]
     }
     Active --> [*]
-
-```
-
-</details>
-
-## concurrent_nested
-
-`tests/fixtures/state/concurrent_nested.mmd`
-
-**Text**
-
-```text
-                  ●
-
-                  │
-                  │
-                  │
-                  │
-                  │
-                  │
-                  │
-                  │
-                  │
-                  │
-                  ▼
-┌──────────────────────────── Active ─────────────────────────────┐
-│                                 ┆                               │
-│                                 ┆                               │
-│                                 ┆                               │
-│                                 ┆                               │
-│                 ●               ┆                               │
-│                                 ┆                               │
-│                 │               ┆                               │
-│                 │               ┆          ┌── Inner ───┐       │
-│                 │               ┆          │            │       │
-│                 ▼               ┆          │            │       │
-│          ╭────────────╮◄───┐    ┆          │      ●     │       │
-│          │ NumLockOff │    │    ┆          │            │       │
-│          ╰────────────╯    │    ┆          │      │     │       │
-│                 │          │    ┆          │      │     │       │
-│                 └─┐        │    ┆          │      │     │       │
-│            EvNumLockPressed│    ┆          │      ▼   ┌┐│       │
-│                   │        │    ┆          │   ╭────╮◄┘││       │
-│            EvNumLockPressed│    ┆          │   │ I1 │  ││       │
-│                   │        │    ┆          │   ╰────╯  ││       │
-│                   │        │    ┆          │      │    ││       │
-│                   │        │    ┆          │      │    ││       │
-│                   ▼        │    ┆          │      │    ││       │
-│             ╭───────────╮──┘    ┆          │      │    ││       │
-│             │ NumLockOn │       ┆          │      │    ││       │
-│             ╰───────────╯       ┆          │      │    ││       │
-│                                 ┆          │      │    ││       │
-│                                 ┆          │      │    ││       │
-│                                 ┆          │      ▼    ││       │
-│                                 ┆          │   ╭────╮──┘│       │
-│                                 ┆          │   │ I2 │   │       │
-│                                 ┆          └───╰────╯───┘       │
-│                                 ┆                               │
-└─────────────────────────────────┴───────────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![concurrent_nested svg](../tests/svg-snapshots/state/concurrent_nested.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-stateDiagram-v2
-    [*] --> Active
-    state Active {
-        [*] --> NumLockOff
-        NumLockOff --> NumLockOn : EvNumLockPressed
-        NumLockOn --> NumLockOff : EvNumLockPressed
-        --
-        state Inner {
-            [*] --> I1
-            I1 --> I2
-            I2 --> I1
-        }
-    }
-
-```
-
-</details>
-
-## concurrent_three
-
-`tests/fixtures/state/concurrent_three.mmd`
-
-**Text**
-
-```text
-               ●
-
-               │
-               │
-               │
-               │
-               │
-               │
-               │
-               │
-               │
-               │
-               ▼
-┌─────────────────────────────────────────────── Active ───────────────────────────────────────────────┐
-│                                 ┆                                    ┆                               │
-│                                 ┆                                    ┆                               │
-│                                 ┆                                    ┆                               │
-│                                 ┆                                    ┆                               │
-│               ●                 ┆                 ●                  ┆                  ●            │
-│                                 ┆                                    ┆                               │
-│               │                 ┆                 │                  ┆                  │            │
-│               │                 ┆                 │                  ┆                  │            │
-│               ▼                 ┆                 ▼                  ┆                  ▼            │
-│        ╭────────────╮           ┆          ╭─────────────╮           ┆          ╭───────────────╮    │
-│        │ NumLockOff │◄─┐        ┆          │ CapsLockOff │◄─┐        ┆          │ ScrollLockOff │◄─┐ │
-│        ╰────────────╯  │        ┆          ╰─────────────╯  │        ┆          ╰───────────────╯  │ │
-│               │        │        ┆                 │         │        ┆                  │          │ │
-│               │        │        ┆                 │         │        ┆                  │          │ │
-│     EvNumLockPressed   │        ┆       EvCapsLockPressed   │        ┆       EvScrollLockPressed   │ │
-│         EvNumLockPressed        ┆           EvCapsLockPressed        ┆           EvScrollLockPressed │
-│               │        │        ┆                 │         │        ┆                  │          │ │
-│               ▼        │        ┆                 ▼         │        ┆                  ▼          │ │
-│         ╭───────────╮  │        ┆          ╭────────────╮   │        ┆          ╭──────────────╮   │ │
-│         │ NumLockOn │──┘        ┆          │ CapsLockOn │───┘        ┆          │ ScrollLockOn │───┘ │
-│         ╰───────────╯           ┆          ╰────────────╯            ┆          ╰──────────────╯     │
-│                                 ┆                                    ┆                               │
-│                                 ┆                                    ┆                               │
-└─────────────────────────────────┴────────────────────────────────────┴───────────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![concurrent_three svg](../tests/svg-snapshots/state/concurrent_three.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-stateDiagram-v2
-    [*] --> Active
-
-    state Active {
-        [*] --> NumLockOff
-        NumLockOff --> NumLockOn : EvNumLockPressed
-        NumLockOn --> NumLockOff : EvNumLockPressed
-        --
-        [*] --> CapsLockOff
-        CapsLockOff --> CapsLockOn : EvCapsLockPressed
-        CapsLockOn --> CapsLockOff : EvCapsLockPressed
-        --
-        [*] --> ScrollLockOff
-        ScrollLockOff --> ScrollLockOn : EvScrollLockPressed
-        ScrollLockOn --> ScrollLockOff : EvScrollLockPressed
-    }
 
 ```
 
@@ -8878,6 +8714,170 @@ stateDiagram-v2
 
 </details>
 
+## concurrent_nested
+
+`tests/fixtures/state/concurrent_nested.mmd`
+
+**Text**
+
+```text
+                  ●
+
+                  │
+                  │
+                  │
+                  │
+                  │
+                  │
+                  │
+                  │
+                  │
+                  │
+                  ▼
+┌──────────────────────────── Active ─────────────────────────────┐
+│                                 ┆                               │
+│                                 ┆                               │
+│                                 ┆                               │
+│                                 ┆                               │
+│                 ●               ┆                               │
+│                                 ┆                               │
+│                 │               ┆                               │
+│                 │               ┆          ┌── Inner ───┐       │
+│                 │               ┆          │            │       │
+│                 ▼               ┆          │            │       │
+│          ╭────────────╮◄───┐    ┆          │      ●     │       │
+│          │ NumLockOff │    │    ┆          │            │       │
+│          ╰────────────╯    │    ┆          │      │     │       │
+│                 │          │    ┆          │      │     │       │
+│                 └─┐        │    ┆          │      │     │       │
+│         EvNumLockPressed   │    ┆          │      ▼   ┌┐│       │
+│            EvNumLockPressed│    ┆          │   ╭────╮◄┘││       │
+│                   │        │    ┆          │   │ I1 │  ││       │
+│                   │        │    ┆          │   ╰────╯  ││       │
+│                   │        │    ┆          │      │    ││       │
+│                   │        │    ┆          │      │    ││       │
+│                   ▼        │    ┆          │      │    ││       │
+│             ╭───────────╮──┘    ┆          │      │    ││       │
+│             │ NumLockOn │       ┆          │      │    ││       │
+│             ╰───────────╯       ┆          │      │    ││       │
+│                                 ┆          │      │    ││       │
+│                                 ┆          │      │    ││       │
+│                                 ┆          │      ▼    ││       │
+│                                 ┆          │   ╭────╮──┘│       │
+│                                 ┆          │   │ I2 │   │       │
+│                                 ┆          └───╰────╯───┘       │
+│                                 ┆                               │
+└─────────────────────────────────┴───────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![concurrent_nested svg](../tests/svg-snapshots/state/concurrent_nested.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Active
+    state Active {
+        [*] --> NumLockOff
+        NumLockOff --> NumLockOn : EvNumLockPressed
+        NumLockOn --> NumLockOff : EvNumLockPressed
+        --
+        state Inner {
+            [*] --> I1
+            I1 --> I2
+            I2 --> I1
+        }
+    }
+
+```
+
+</details>
+
+## concurrent_three
+
+`tests/fixtures/state/concurrent_three.mmd`
+
+**Text**
+
+```text
+               ●
+
+               │
+               │
+               │
+               │
+               │
+               │
+               │
+               │
+               │
+               │
+               ▼
+┌─────────────────────────────────────────────── Active ───────────────────────────────────────────────┐
+│                                 ┆                                    ┆                               │
+│                                 ┆                                    ┆                               │
+│                                 ┆                                    ┆                               │
+│                                 ┆                                    ┆                               │
+│               ●                 ┆                 ●                  ┆                  ●            │
+│                                 ┆                                    ┆                               │
+│               │                 ┆                 │                  ┆                  │            │
+│               │                 ┆                 │                  ┆                  │            │
+│               ▼                 ┆                 ▼                  ┆                  ▼            │
+│        ╭────────────╮           ┆          ╭─────────────╮           ┆          ╭───────────────╮    │
+│        │ NumLockOff │◄─┐        ┆          │ CapsLockOff │◄─┐        ┆          │ ScrollLockOff │◄─┐ │
+│        ╰────────────╯  │        ┆          ╰─────────────╯  │        ┆          ╰───────────────╯  │ │
+│               │        │        ┆                 │         │        ┆                  │          │ │
+│         EvNumLockPressed        ┆          EvCapsLockPressed│        ┆       EvScrollLockPressed   │ │
+│               │        │        ┆                 │         │        ┆                  │          │ │
+│      EvNumLockPressed  │        ┆       EvCapsLockPressed   │        ┆       EvScrollLockPressed   │ │
+│               │        │        ┆                 │         │        ┆                  │          │ │
+│               ▼        │        ┆                 ▼         │        ┆                  ▼          │ │
+│         ╭───────────╮  │        ┆          ╭────────────╮   │        ┆          ╭──────────────╮   │ │
+│         │ NumLockOn │──┘        ┆          │ CapsLockOn │───┘        ┆          │ ScrollLockOn │───┘ │
+│         ╰───────────╯           ┆          ╰────────────╯            ┆          ╰──────────────╯     │
+│                                 ┆                                    ┆                               │
+│                                 ┆                                    ┆                               │
+└─────────────────────────────────┴────────────────────────────────────┴───────────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![concurrent_three svg](../tests/svg-snapshots/state/concurrent_three.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+stateDiagram-v2
+    [*] --> Active
+
+    state Active {
+        [*] --> NumLockOff
+        NumLockOff --> NumLockOn : EvNumLockPressed
+        NumLockOn --> NumLockOff : EvNumLockPressed
+        --
+        [*] --> CapsLockOff
+        CapsLockOff --> CapsLockOn : EvCapsLockPressed
+        CapsLockOn --> CapsLockOff : EvCapsLockPressed
+        --
+        [*] --> ScrollLockOff
+        ScrollLockOff --> ScrollLockOn : EvScrollLockPressed
+        ScrollLockOn --> ScrollLockOff : EvScrollLockPressed
+    }
+
+```
+
+</details>
+
 ## descriptions
 
 `tests/fixtures/state/descriptions.mmd`
@@ -8894,9 +8894,9 @@ stateDiagram-v2
 │ The system is active │
 ╰──────────────────────╯
             │
-            │
-            │
          timeout
+            │
+            │
             │
             ▼
   ╭───────────────────╮
@@ -9100,9 +9100,9 @@ stateDiagram-v2
      ┌────└──┘
      │      └───────┐
      │              │
-     │              │
-     │              │
     yes            no
+     │              │
+     │              │
      │              │
      │              │
      │              │
@@ -9271,19 +9271,19 @@ stateDiagram-v2
      ╰──────╯                 │
       └──┐                  retry
          │                    │
-      submit                  │
          │                    │
+      submit                  │
          ▼                    │
   ╭────────────╮              │
   │ Processing │              │
   ╰────────────╯              │
    └┐         └┐              │
+    │          │      fail    │
     │          │              │
     │          │              │
     │          │              │
-complete     fail             │
     │          │              │
-    │          └─────┐        │
+complete       └─────┐        │
     │                │        │
     ▼                ▼        │
 ╭──────╮            ╭───────╮ │
