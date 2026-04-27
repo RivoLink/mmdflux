@@ -17,8 +17,9 @@ mod waypoints;
 use std::collections::{HashMap, HashSet};
 
 use override_sublayouts::{
-    align_cross_boundary_siblings_draw, compact_override_subgraph_vertical_gaps,
-    layout_compound_parent_members, reconcile_sublayouts_draw, resolve_sibling_overlaps_draw,
+    align_cross_boundary_siblings_draw, align_external_nodes_to_override_subgraph_centers,
+    compact_override_subgraph_vertical_gaps, layout_compound_parent_members,
+    reconcile_sublayouts_draw, resolve_sibling_overlaps_draw,
 };
 use quantize::{
     collision_repair, compute_grid_positions, compute_grid_scale_factors, compute_layer_starts,
@@ -39,7 +40,7 @@ use waypoints::{
 use super::GridLayoutConfig;
 use super::layout::{
     CoordTransform, GridLayout, GridProjection, NodeBounds, RawCenter, SelfEdgeDrawData,
-    TransformContext,
+    SubgraphBounds, TransformContext,
 };
 use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::grid_node_dimensions;
@@ -79,6 +80,37 @@ fn is_backward_edge(
         Direction::BottomTop => to_bounds.y > from_bounds.y,
         Direction::LeftRight => to_bounds.x < from_bounds.x,
         Direction::RightLeft => to_bounds.x > from_bounds.x,
+    }
+}
+
+fn expand_canvas_bounds(
+    width: &mut usize,
+    height: &mut usize,
+    config: &GridLayoutConfig,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &HashMap<String, SubgraphBounds>,
+    self_edges: &[SelfEdgeDrawData],
+    routed_edge_paths: &HashMap<usize, DrawPath>,
+) {
+    for nb in node_bounds.values() {
+        *width = (*width).max(nb.x + nb.width + config.padding);
+        *height = (*height).max(nb.y + nb.height + config.padding);
+    }
+    for sb in subgraph_bounds.values() {
+        *width = (*width).max(sb.x + sb.width + config.padding);
+        *height = (*height).max(sb.y + sb.height + config.padding);
+    }
+    for se in self_edges {
+        for &(x, y) in &se.points {
+            *width = (*width).max(x + config.padding + 1);
+            *height = (*height).max(y + config.padding + 1);
+        }
+    }
+    for points in routed_edge_paths.values() {
+        for &(x, y) in points {
+            *width = (*width).max(x + config.padding + 1);
+            *height = (*height).max(y + config.padding + 1);
+        }
     }
 }
 
@@ -578,25 +610,18 @@ pub fn geometry_to_grid_layout_with_routed(
         })
         .collect();
 
-    // Expand canvas to fit subgraph borders and self-edge loops
+    // Expand canvas to fit final node, subgraph, self-edge, and route bounds.
     let mut width = width;
     let mut height = height;
-    for sb in subgraph_bounds.values() {
-        width = width.max(sb.x + sb.width + config.padding);
-        height = height.max(sb.y + sb.height + config.padding);
-    }
-    for se in &self_edges {
-        for &(x, y) in &se.points {
-            width = width.max(x + config.padding + 1);
-            height = height.max(y + config.padding + 1);
-        }
-    }
-    for points in routed_edge_paths.values() {
-        for &(x, y) in points {
-            width = width.max(x + config.padding + 1);
-            height = height.max(y + config.padding + 1);
-        }
-    }
+    expand_canvas_bounds(
+        &mut width,
+        &mut height,
+        config,
+        &node_bounds,
+        &subgraph_bounds,
+        &self_edges,
+        &routed_edge_paths,
+    );
 
     // --- Phase M: Direction-override sub-layout reconciliation ---
     if let Some(projection) = grid_projection
@@ -733,20 +758,15 @@ pub fn geometry_to_grid_layout_with_routed(
         }
 
         // Re-expand canvas after Phase N shifts.
-        for sb in subgraph_bounds.values() {
-            width = width.max(sb.x + sb.width + config.padding);
-            height = height.max(sb.y + sb.height + config.padding);
-        }
-        for nb in node_bounds.values() {
-            width = width.max(nb.x + nb.width + config.padding);
-            height = height.max(nb.y + nb.height + config.padding);
-        }
-        for points in routed_edge_paths.values() {
-            for &(x, y) in points {
-                width = width.max(x + config.padding + 1);
-                height = height.max(y + config.padding + 1);
-            }
-        }
+        expand_canvas_bounds(
+            &mut width,
+            &mut height,
+            config,
+            &node_bounds,
+            &subgraph_bounds,
+            &self_edges,
+            &routed_edge_paths,
+        );
     }
 
     // Final pass: clip override subgraphs to actual member content, constrain
@@ -754,6 +774,32 @@ pub fn geometry_to_grid_layout_with_routed(
     // Must run after ALL override-subgraph phases are done repositioning.
     clip_and_repair_override_subgraph_bounds(diagram, &node_bounds, &mut subgraph_bounds);
     expand_subgraphs_for_node_collisions(&diagram.subgraphs, &node_bounds, &mut subgraph_bounds);
+
+    let shifted_edges = align_external_nodes_to_override_subgraph_centers(
+        diagram,
+        &grid_positions,
+        &mut draw_positions,
+        &mut node_bounds,
+        &subgraph_bounds,
+    );
+    if !shifted_edges.is_empty() {
+        // External node centering happens after routed float paths were
+        // transformed, so affected edges must reroute from final grid bounds.
+        for edge_index in shifted_edges {
+            edge_waypoints.remove(&edge_index);
+            routed_edge_paths.remove(&edge_index);
+            preserve_routed_path_topology.remove(&edge_index);
+        }
+        expand_canvas_bounds(
+            &mut width,
+            &mut height,
+            config,
+            &node_bounds,
+            &subgraph_bounds,
+            &self_edges,
+            &routed_edge_paths,
+        );
+    }
 
     let node_directions = geometry.node_directions.clone();
 

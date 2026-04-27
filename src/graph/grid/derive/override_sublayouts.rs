@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::super::layout::{NodeBounds, SubgraphBounds};
+use super::super::layout::{GridPos, NodeBounds, SubgraphBounds};
 use super::super::{GridLayoutConfig, OverrideSubgraphProjection};
 use super::quantize::compute_grid_scale_factors;
 use super::subgraph_bounds::{
@@ -585,6 +585,415 @@ pub(super) fn align_cross_boundary_siblings_draw(
             sb.height = new_bottom.saturating_sub(new_top);
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct ExternalCenterCandidate {
+    node_id: String,
+}
+
+/// Align eligible root-level external nodes to final direction-override bounds.
+///
+/// This mirrors the float visual path's final external-node centering at the
+/// grid replay layer, after text subgraph bounds have been clipped and repaired.
+/// It deliberately excludes subgraph-as-node-only edges and never shifts nodes
+/// that are members of any subgraph.
+pub(super) fn align_external_nodes_to_override_subgraph_centers(
+    diagram: &Graph,
+    grid_positions: &HashMap<String, GridPos>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &HashMap<String, SubgraphBounds>,
+) -> HashSet<usize> {
+    let all_sg_members: HashSet<&str> = diagram
+        .subgraphs
+        .values()
+        .flat_map(|sg| sg.nodes.iter().map(|id| id.as_str()))
+        .collect();
+    let mut affected_edges = HashSet::new();
+
+    let ordered_sg_ids: Vec<&String> = if diagram.subgraph_order.is_empty() {
+        let mut ids: Vec<&String> = diagram.subgraphs.keys().collect();
+        ids.sort_by(|a, b| {
+            diagram
+                .subgraph_depth(a)
+                .cmp(&diagram.subgraph_depth(b))
+                .then_with(|| a.cmp(b))
+        });
+        ids
+    } else {
+        diagram.subgraph_order.iter().collect()
+    };
+
+    for sg_id in ordered_sg_ids {
+        let Some(sg) = diagram.subgraphs.get(sg_id) else {
+            continue;
+        };
+        if sg.dir.is_none() {
+            continue;
+        }
+        let Some(bounds) = subgraph_bounds.get(sg_id) else {
+            continue;
+        };
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|id| id.as_str()).collect();
+        let Some(member_primary_span) = member_primary_span(
+            diagram.direction,
+            &sg_node_set,
+            node_bounds,
+            subgraph_bounds,
+        ) else {
+            continue;
+        };
+
+        let incoming = collect_external_candidates(
+            diagram,
+            &sg_node_set,
+            &all_sg_members,
+            grid_positions,
+            node_bounds,
+            true,
+        );
+        align_external_candidate_group(
+            diagram,
+            bounds,
+            member_primary_span,
+            grid_positions,
+            draw_positions,
+            node_bounds,
+            &all_sg_members,
+            incoming,
+            true,
+            &mut affected_edges,
+        );
+
+        let outgoing = collect_external_candidates(
+            diagram,
+            &sg_node_set,
+            &all_sg_members,
+            grid_positions,
+            node_bounds,
+            false,
+        );
+        align_external_candidate_group(
+            diagram,
+            bounds,
+            member_primary_span,
+            grid_positions,
+            draw_positions,
+            node_bounds,
+            &all_sg_members,
+            outgoing,
+            false,
+            &mut affected_edges,
+        );
+    }
+
+    affected_edges
+}
+
+fn collect_external_candidates(
+    diagram: &Graph,
+    sg_node_set: &HashSet<&str>,
+    all_sg_members: &HashSet<&str>,
+    grid_positions: &HashMap<String, GridPos>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    incoming: bool,
+) -> Vec<ExternalCenterCandidate> {
+    let mut node_ids = HashSet::new();
+
+    for edge in &diagram.edges {
+        let (external, internal) = if incoming {
+            (edge.from.as_str(), edge.to.as_str())
+        } else {
+            (edge.to.as_str(), edge.from.as_str())
+        };
+        if !sg_node_set.contains(internal)
+            || sg_node_set.contains(external)
+            || all_sg_members.contains(external)
+            || diagram.is_subgraph(external)
+            || !diagram.nodes.contains_key(external)
+            || !grid_positions.contains_key(external)
+            || !node_bounds.contains_key(external)
+        {
+            continue;
+        }
+        node_ids.insert(external.to_string());
+    }
+
+    let mut candidates: Vec<ExternalCenterCandidate> = node_ids
+        .into_iter()
+        .map(|node_id| ExternalCenterCandidate { node_id })
+        .collect();
+    candidates.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+    candidates
+}
+
+#[allow(clippy::too_many_arguments)]
+fn align_external_candidate_group(
+    diagram: &Graph,
+    bounds: &SubgraphBounds,
+    member_primary_span: (usize, usize),
+    grid_positions: &HashMap<String, GridPos>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    all_sg_members: &HashSet<&str>,
+    candidates: Vec<ExternalCenterCandidate>,
+    incoming: bool,
+    affected_edges: &mut HashSet<usize>,
+) {
+    let mut candidates = filter_external_candidates_by_rank(candidates, grid_positions, incoming);
+    candidates.retain(|candidate| {
+        node_bounds.get(&candidate.node_id).is_some_and(|bounds| {
+            !primary_center_overlaps_span(diagram.direction, bounds, member_primary_span)
+        })
+    });
+
+    loop {
+        if candidates.is_empty() {
+            return;
+        }
+
+        let target = cross_axis_center(diagram.direction, bounds) as isize;
+        let centroid = candidates
+            .iter()
+            .filter_map(|candidate| node_bounds.get(&candidate.node_id))
+            .map(|bounds| cross_axis_center_for_node(diagram.direction, bounds) as isize)
+            .sum::<isize>()
+            / candidates.len() as isize;
+        let delta = target - centroid;
+        if delta == 0 {
+            return;
+        }
+
+        let before = candidates.len();
+        candidates.retain(|candidate| {
+            let Some(bounds) = node_bounds.get(&candidate.node_id) else {
+                return false;
+            };
+            let proposed = shifted_cross_axis_bounds(diagram.direction, bounds, delta);
+            !overlaps_same_rank_root_node(
+                diagram,
+                &candidate.node_id,
+                &proposed,
+                grid_positions,
+                node_bounds,
+                all_sg_members,
+            )
+        });
+
+        if candidates.len() == before {
+            for candidate in candidates {
+                if shift_node_cross_axis(
+                    diagram.direction,
+                    &candidate.node_id,
+                    delta,
+                    draw_positions,
+                    node_bounds,
+                ) {
+                    affected_edges.extend(
+                        diagram
+                            .edges
+                            .iter()
+                            .filter(|edge| {
+                                edge.from == candidate.node_id || edge.to == candidate.node_id
+                            })
+                            .map(|edge| edge.index),
+                    );
+                }
+            }
+            return;
+        }
+    }
+}
+
+fn filter_external_candidates_by_rank(
+    candidates: Vec<ExternalCenterCandidate>,
+    grid_positions: &HashMap<String, GridPos>,
+    incoming: bool,
+) -> Vec<ExternalCenterCandidate> {
+    let Some(target_layer) = candidates
+        .iter()
+        .filter_map(|candidate| grid_positions.get(&candidate.node_id).map(|pos| pos.layer))
+        .reduce(|current, layer| {
+            if incoming {
+                current.min(layer)
+            } else {
+                current.max(layer)
+            }
+        })
+    else {
+        return Vec::new();
+    };
+
+    candidates
+        .into_iter()
+        .filter(|candidate| {
+            grid_positions
+                .get(&candidate.node_id)
+                .is_some_and(|pos| pos.layer == target_layer)
+        })
+        .collect()
+}
+
+fn member_primary_span(
+    direction: Direction,
+    sg_node_set: &HashSet<&str>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &HashMap<String, SubgraphBounds>,
+) -> Option<(usize, usize)> {
+    let mut min_primary = usize::MAX;
+    let mut max_primary = 0usize;
+    let mut found = false;
+
+    for member_id in sg_node_set {
+        if let Some(bounds) = node_bounds.get(*member_id) {
+            let (min, max) =
+                primary_range(direction, bounds.x, bounds.y, bounds.width, bounds.height);
+            min_primary = min_primary.min(min);
+            max_primary = max_primary.max(max);
+            found = true;
+        } else if let Some(bounds) = subgraph_bounds.get(*member_id) {
+            let (min, max) =
+                primary_range(direction, bounds.x, bounds.y, bounds.width, bounds.height);
+            min_primary = min_primary.min(min);
+            max_primary = max_primary.max(max);
+            found = true;
+        }
+    }
+
+    found.then_some((min_primary, max_primary))
+}
+
+fn primary_range(
+    direction: Direction,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+) -> (usize, usize) {
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        (y, y + height.saturating_sub(1))
+    } else {
+        (x, x + width.saturating_sub(1))
+    }
+}
+
+fn primary_center_overlaps_span(
+    direction: Direction,
+    bounds: &NodeBounds,
+    span: (usize, usize),
+) -> bool {
+    let center = if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        bounds.center_y()
+    } else {
+        bounds.center_x()
+    };
+    center >= span.0 && center <= span.1
+}
+
+fn cross_axis_center(direction: Direction, bounds: &SubgraphBounds) -> usize {
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        bounds.x + bounds.width / 2
+    } else {
+        bounds.y + bounds.height / 2
+    }
+}
+
+fn cross_axis_center_for_node(direction: Direction, bounds: &NodeBounds) -> usize {
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        bounds.center_x()
+    } else {
+        bounds.center_y()
+    }
+}
+
+fn shifted_cross_axis_bounds(
+    direction: Direction,
+    bounds: &NodeBounds,
+    delta: isize,
+) -> NodeBounds {
+    let mut shifted = *bounds;
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        shifted.x = (shifted.x as isize + delta).max(0) as usize;
+        if let Some(center_x) = shifted.layout_center_x.as_mut() {
+            *center_x = (*center_x as isize + delta).max(0) as usize;
+        }
+    } else {
+        shifted.y = (shifted.y as isize + delta).max(0) as usize;
+        if let Some(center_y) = shifted.layout_center_y.as_mut() {
+            *center_y = (*center_y as isize + delta).max(0) as usize;
+        }
+    }
+    shifted
+}
+
+fn overlaps_same_rank_root_node(
+    diagram: &Graph,
+    node_id: &str,
+    proposed: &NodeBounds,
+    grid_positions: &HashMap<String, GridPos>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    all_sg_members: &HashSet<&str>,
+) -> bool {
+    let Some(layer) = grid_positions.get(node_id).map(|pos| pos.layer) else {
+        return true;
+    };
+
+    node_bounds.iter().any(|(other_id, other_bounds)| {
+        other_id != node_id
+            && !all_sg_members.contains(other_id.as_str())
+            && !diagram.is_subgraph(other_id)
+            && grid_positions
+                .get(other_id)
+                .is_some_and(|other_pos| other_pos.layer == layer)
+            && rects_overlap(proposed, other_bounds)
+    })
+}
+
+fn rects_overlap(a: &NodeBounds, b: &NodeBounds) -> bool {
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+}
+
+fn shift_node_cross_axis(
+    direction: Direction,
+    node_id: &str,
+    delta: isize,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+) -> bool {
+    let Some(bounds) = node_bounds.get_mut(node_id) else {
+        return false;
+    };
+
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        let new_x = (bounds.x as isize + delta).max(0) as usize;
+        let applied_delta = new_x as isize - bounds.x as isize;
+        if applied_delta == 0 {
+            return false;
+        }
+        bounds.x = new_x;
+        if let Some(center_x) = bounds.layout_center_x.as_mut() {
+            *center_x = (*center_x as isize + applied_delta).max(0) as usize;
+        }
+        if let Some(pos) = draw_positions.get_mut(node_id) {
+            pos.0 = new_x;
+        }
+    } else {
+        let new_y = (bounds.y as isize + delta).max(0) as usize;
+        let applied_delta = new_y as isize - bounds.y as isize;
+        if applied_delta == 0 {
+            return false;
+        }
+        bounds.y = new_y;
+        if let Some(center_y) = bounds.layout_center_y.as_mut() {
+            *center_y = (*center_y as isize + applied_delta).max(0) as usize;
+        }
+        if let Some(pos) = draw_positions.get_mut(node_id) {
+            pos.1 = new_y;
+        }
+    }
+
+    true
 }
 
 /// After sublayout reconciliation, re-layout direct children of override

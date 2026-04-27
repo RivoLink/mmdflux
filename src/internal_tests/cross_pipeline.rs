@@ -1987,19 +1987,14 @@ fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
     // C-->A crosses into the LR subgraph; B-->D crosses out.
     // After reconciliation, these edges should have their waypoints invalidated
     // (empty or absent) so the router recomputes from reconciled positions.
-    let ca_idx = diagram
-        .edges
-        .iter()
-        .find(|e| e.from == "C" && e.to == "A")
-        .expect("C->A edge should exist")
-        .index;
-    let bd_idx = diagram
-        .edges
-        .iter()
-        .find(|e| e.from == "B" && e.to == "D")
-        .expect("B->D edge should exist")
-        .index;
-
+    let edge_index = |from: &str, to: &str| {
+        diagram
+            .edges
+            .iter()
+            .find(|e| e.from == from && e.to == to)
+            .unwrap_or_else(|| panic!("{from}->{to} edge should exist"))
+            .index
+    };
     // Ensure the fixture makes these long edges (rank span > 1), so waypoints
     // would exist without invalidation.
     let ca_layer_diff = layout
@@ -2023,18 +2018,19 @@ fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
         "fixture should make B->D a long edge (layer diff > 1)"
     );
 
-    // Cross-boundary waypoints are clipped to the subgraph border.
-    // However, if the clipped waypoints end up on the wrong subgraph face
-    // (e.g. side border when the source is above), the face-mismatch
-    // detector removes them so the router can recompute a fresh path.
-    // Either outcome (clipped waypoints or absent) produces correct
-    // rendering; verify at least one cross-boundary edge retains waypoints.
-    let ca_wps = layout.edge_waypoints.get(&ca_idx);
-    let bd_wps = layout.edge_waypoints.get(&bd_idx);
-    assert!(
-        ca_wps.is_some() || bd_wps.is_some(),
-        "at least one cross-boundary edge should have clipped waypoints"
-    );
+    // Final external-node centering can shift C and D after routed float paths
+    // have already been transformed. Edges touching those shifted endpoints
+    // must drop every cached route shape so render-time routing recomputes from
+    // the final grid bounds.
+    for (from, to) in [("C", "A"), ("C", "E"), ("B", "D"), ("F", "D")] {
+        let edge_idx = edge_index(from, to);
+        assert!(
+            !layout.edge_waypoints.contains_key(&edge_idx)
+                && !layout.routed_edge_paths.contains_key(&edge_idx)
+                && !layout.preserve_routed_path_topology.contains(&edge_idx),
+            "{from}->{to} should not retain stale route data after external centering"
+        );
+    }
 }
 
 #[test]

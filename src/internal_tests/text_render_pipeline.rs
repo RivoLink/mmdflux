@@ -681,8 +681,8 @@ mod edge_rendering_regression {
     };
     use crate::engines::graph::flux::FluxLayeredEngine;
     use crate::graph::grid::{
-        AttachDirection, GridLayout, GridLayoutConfig, geometry_to_grid_layout_with_routed,
-        route_all_edges, route_edge, route_edge_with_probe,
+        AttachDirection, GridLayout, GridLayoutConfig, NodeBounds, SubgraphBounds,
+        geometry_to_grid_layout_with_routed, route_all_edges, route_edge, route_edge_with_probe,
     };
     use crate::graph::measure::default_proportional_text_metrics;
     use crate::graph::routing::{EdgeRouting, route_graph_geometry};
@@ -778,6 +778,102 @@ mod edge_rendering_regression {
         let input = flowchart_fixture_input(name);
         let parsed = parse_flowchart(&input).expect("flowchart fixture should parse");
         compile_to_graph(&parsed)
+    }
+
+    #[test]
+    fn direction_override_subgraph_external_nodes_align_to_final_center() {
+        let diagram = flowchart_fixture_diagram("subgraph_direction_lr.mmd");
+        let layout = compute_layout(&diagram, &GridLayoutConfig::default());
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        let sg_center_x = sg.x + sg.width / 2;
+
+        for node_id in ["Start", "End"] {
+            let center_x = layout.node_bounds[node_id].center_x();
+            assert!(
+                center_x.abs_diff(sg_center_x) <= 1,
+                "{node_id} center_x ({center_x}) should align with sg1 center_x ({sg_center_x})"
+            );
+        }
+    }
+
+    #[test]
+    fn subgraph_direction_lr_text_edges_remain_connected_after_external_centering() {
+        let diagram = flowchart_fixture_diagram("subgraph_direction_lr.mmd");
+        let layout = compute_layout(&diagram, &GridLayoutConfig::default());
+
+        for (from, to) in [("Start", "A"), ("C", "End")] {
+            let edge = diagram
+                .edges
+                .iter()
+                .find(|edge| edge.from == from && edge.to == to)
+                .unwrap_or_else(|| panic!("{from} -> {to} edge should exist"));
+            assert!(
+                !layout.edge_waypoints.contains_key(&edge.index),
+                "{from} -> {to} should not keep stale edge waypoints after external centering"
+            );
+            assert!(
+                !layout.routed_edge_paths.contains_key(&edge.index),
+                "{from} -> {to} should not keep a stale routed draw path after external centering"
+            );
+            assert!(
+                !layout.preserve_routed_path_topology.contains(&edge.index),
+                "{from} -> {to} should not preserve stale route topology after external centering"
+            );
+        }
+
+        let output = render_flowchart_fixture("subgraph_direction_lr.mmd");
+        assert!(
+            output.contains("│ Start │")
+                && output.contains("Horizontal Flow")
+                && output.contains("│ End │")
+                && output.matches('▼').count() >= 2,
+            "shifted external nodes should still render connected incoming and outgoing arrows. Output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn subgraph_direction_nested_both_preserves_nested_containment_after_external_centering() {
+        let layout = compute_layout(
+            &flowchart_fixture_diagram("subgraph_direction_nested_both.mmd"),
+            &GridLayoutConfig::default(),
+        );
+
+        fn subgraph_contains_node(subgraph: &SubgraphBounds, node: &NodeBounds) -> bool {
+            node.x >= subgraph.x
+                && node.y >= subgraph.y
+                && node.x + node.width <= subgraph.x + subgraph.width
+                && node.y + node.height <= subgraph.y + subgraph.height
+        }
+
+        fn subgraph_contains_subgraph(parent: &SubgraphBounds, child: &SubgraphBounds) -> bool {
+            child.x >= parent.x
+                && child.y >= parent.y
+                && child.x + child.width <= parent.x + parent.width
+                && child.y + child.height <= parent.y + parent.height
+        }
+
+        fn node_overlaps_subgraph(node: &NodeBounds, subgraph: &SubgraphBounds) -> bool {
+            node.x < subgraph.x + subgraph.width
+                && subgraph.x < node.x + node.width
+                && node.y < subgraph.y + subgraph.height
+                && subgraph.y < node.y + node.height
+        }
+
+        let outer = &layout.subgraph_bounds["outer"];
+        let inner = &layout.subgraph_bounds["inner"];
+        let a = &layout.node_bounds["A"];
+        let b = &layout.node_bounds["B"];
+        let c = &layout.node_bounds["C"];
+        let d = &layout.node_bounds["D"];
+
+        assert!(subgraph_contains_subgraph(outer, inner));
+        assert!(subgraph_contains_node(outer, c));
+        assert!(subgraph_contains_node(inner, a));
+        assert!(subgraph_contains_node(inner, b));
+        assert!(!subgraph_contains_node(outer, d));
+        assert!(!node_overlaps_subgraph(d, outer));
+        assert!(!node_overlaps_subgraph(c, inner));
     }
 
     #[test]
