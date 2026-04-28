@@ -13,8 +13,6 @@ pub(crate) mod hints;
 pub(crate) mod overlap;
 pub(crate) mod path_utils;
 
-use std::collections::HashMap;
-
 use self::endpoints::{
     anchor_path_endpoints_to_endpoint_faces, endpoint_is_on_policy_face,
     enforce_terminal_support_normal_to_face, ensure_endpoint_segments_axis_aligned,
@@ -29,9 +27,7 @@ use self::path_utils::{
 use super::float_core::normalize_orthogonal_route_contracts;
 use super::labels::compute_end_labels_for_edge;
 use crate::graph::attachment::Face;
-use crate::graph::direction_policy::{
-    build_override_node_map, cross_boundary_edge_direction, effective_edge_direction,
-};
+use crate::graph::direction_policy::{build_override_node_map, node_to_node_route_direction};
 use crate::graph::geometry::{GraphGeometry, RoutedEdgeGeometry};
 use crate::graph::space::FPoint;
 use crate::graph::{Direction, Graph};
@@ -76,7 +72,7 @@ pub fn route_edges_orthogonal(
         .iter()
         .map(|edge| {
             let is_backward = geometry.reversed_edges.contains(&edge.index);
-            let edge_direction = orthogonal_edge_direction(
+            let edge_direction = node_to_node_route_direction(
                 diagram,
                 &geometry.node_directions,
                 &override_nodes,
@@ -202,36 +198,6 @@ pub fn route_edges_orthogonal(
     fan::spread_colocated_backward_source_ports(&mut routed, geometry);
     fan::spread_colocated_backward_target_ports(&mut routed, geometry);
     routed
-}
-
-fn orthogonal_edge_direction(
-    diagram: &Graph,
-    node_directions: &HashMap<String, Direction>,
-    override_nodes: &HashMap<String, String>,
-    from: &str,
-    to: &str,
-    fallback: Direction,
-) -> Direction {
-    let from_sg = override_nodes.get(from);
-    let to_sg = override_nodes.get(to);
-
-    match (from_sg, to_sg) {
-        (None, None) => effective_edge_direction(node_directions, from, to, fallback),
-        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => diagram
-            .subgraphs
-            .get(sg_a.as_str())
-            .and_then(|sg| sg.dir)
-            .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
-        _ => cross_boundary_edge_direction(
-            diagram,
-            node_directions,
-            from_sg,
-            to_sg,
-            from,
-            to,
-            fallback,
-        ),
-    }
 }
 
 // Primary knob for TD/BT fan lane compaction near shared faces.

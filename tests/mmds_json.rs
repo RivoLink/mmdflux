@@ -8,8 +8,8 @@ use std::path::Path;
 
 use mmdflux::graph::GeometryLevel;
 use mmdflux::mmds::{
-    Edge as MmdsEdge, Output, Position as MmdsPosition, Rect as MmdsRect, SUPPORTED_PROFILES,
-    evaluate_profiles, hydrate_routed_geometry_from_output, parse_input,
+    Edge as MmdsEdge, Output, Port as MmdsPort, Position as MmdsPosition, Rect as MmdsRect,
+    SUPPORTED_PROFILES, evaluate_profiles, hydrate_routed_geometry_from_output, parse_input,
 };
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig, TextColorMode};
@@ -1220,6 +1220,54 @@ fn mmds_routed_port_fractions_fan_in() {
 }
 
 #[test]
+fn mmds_routed_port_roundtrip_preserves_direction_override_boundary_ports_and_path() {
+    let input = flowchart_fixture("subgraph_direction_lr.mmd");
+    let direct_json = render_json_with_level(&input, GeometryLevel::Routed);
+    let direct: Output = serde_json::from_str(&direct_json).unwrap();
+    let roundtrip_json = render_mmds_input(
+        &direct_json,
+        OutputFormat::Mmds,
+        RenderConfig {
+            geometry_level: GeometryLevel::Routed,
+            ..RenderConfig::default()
+        },
+    );
+    let roundtrip: Output = serde_json::from_str(&roundtrip_json).unwrap();
+
+    let direct_edge = find_mmds_edge(&direct, "C", "End");
+    let roundtrip_edge = find_mmds_edge(&roundtrip, "C", "End");
+
+    assert_mmds_ports_equal(
+        direct_edge.source_port.as_ref(),
+        roundtrip_edge.source_port.as_ref(),
+        "C -> End source_port",
+    );
+    assert_mmds_ports_equal(
+        direct_edge.target_port.as_ref(),
+        roundtrip_edge.target_port.as_ref(),
+        "C -> End target_port",
+    );
+    assert_eq!(
+        direct_edge.path, roundtrip_edge.path,
+        "C -> End routed path should round-trip unchanged"
+    );
+}
+
+#[test]
+fn mmds_docs_and_schema_define_ports_as_logical_anchors() {
+    let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert_contract_terms_near(&docs, "edge.path", &["visible", "geometry"]);
+    assert_contract_terms_near(&docs, "source_port", &["logical", "anchor"]);
+    assert_contract_terms_near(&docs, "target_port", &["logical", "anchor"]);
+    assert_contract_terms_near(&docs, "position", &["logical", "not guaranteed"]);
+
+    let schema = std::fs::read_to_string("docs/mmds.schema.json").unwrap();
+    assert_contract_terms_near(&schema, "\"path\"", &["visible", "path"]);
+    assert_contract_terms_near(&schema, "\"source_port\"", &["logical", "anchor"]);
+    assert_contract_terms_near(&schema, "\"target_port\"", &["logical", "anchor"]);
+}
+
+#[test]
 fn mmds_layout_excludes_port_metadata() {
     let json = render_json("graph TD\nA-->B");
     assert!(
@@ -1229,6 +1277,53 @@ fn mmds_layout_excludes_port_metadata() {
     assert!(
         !json.contains("target_port"),
         "layout JSON must not contain target_port"
+    );
+}
+
+fn assert_contract_terms_near(document: &str, needle: &str, terms: &[&str]) {
+    let document = document.to_lowercase();
+    let needle = needle.to_lowercase();
+    let terms: Vec<String> = terms.iter().map(|term| term.to_lowercase()).collect();
+
+    for (index, _) in document.match_indices(&needle) {
+        let end = (index + 1_000).min(document.len());
+        let window = &document[index..end];
+        if terms.iter().all(|term| window.contains(term)) {
+            return;
+        }
+    }
+
+    panic!("expected {needle:?} to appear near contract terms {terms:?}");
+}
+
+fn find_mmds_edge<'a>(output: &'a Output, source: &str, target: &str) -> &'a MmdsEdge {
+    output
+        .edges
+        .iter()
+        .find(|edge| edge.source == source && edge.target == target)
+        .unwrap_or_else(|| panic!("missing MMDS edge {source} -> {target}"))
+}
+
+fn assert_mmds_ports_equal(left: Option<&MmdsPort>, right: Option<&MmdsPort>, label: &str) {
+    let left = left.unwrap_or_else(|| panic!("{label} missing from direct output"));
+    let right = right.unwrap_or_else(|| panic!("{label} missing from roundtrip output"));
+
+    assert_eq!(left.face, right.face, "{label} face should round-trip");
+    assert_eq!(
+        left.fraction, right.fraction,
+        "{label} fraction should round-trip"
+    );
+    assert_eq!(
+        left.group_size, right.group_size,
+        "{label} group_size should round-trip"
+    );
+    assert_eq!(
+        left.position.x, right.position.x,
+        "{label} position.x should round-trip"
+    );
+    assert_eq!(
+        left.position.y, right.position.y,
+        "{label} position.y should round-trip"
     );
 }
 

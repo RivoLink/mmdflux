@@ -306,7 +306,7 @@
             "minItems": 2,
             "maxItems": 2
           },
-          "description": "Routed edge path as [x, y] coordinate pairs in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Routed level only."
+          "description": "Authoritative visible routed edge path as [x, y] coordinate pairs in unitless MMDS coordinate space. Consumers should use this path for visible edge shape and endpoints. In current mmdflux output, values are SVG-pixel-aligned. Routed level only."
         },
         "label_position": {
           "$ref": "#/$defs/Position",
@@ -318,11 +318,11 @@
         },
         "source_port": {
           "$ref": "#/$defs/Port",
-          "description": "Source endpoint attachment metadata. Routed level only."
+          "description": "Logical source port anchor metadata describing route intent. This may differ from the visible path endpoint. Routed level only."
         },
         "target_port": {
           "$ref": "#/$defs/Port",
-          "description": "Target endpoint attachment metadata. Routed level only."
+          "description": "Logical target port anchor metadata describing route intent. This may differ from the visible path endpoint. Routed level only."
         },
         "label_side": {
           "enum": ["above", "below", "center"],
@@ -373,7 +373,7 @@
       "properties": {
         "face": {
           "enum": ["top", "bottom", "left", "right"],
-          "description": "Node boundary face where the edge attaches."
+          "description": "Logical node boundary face for route intent."
         },
         "fraction": {
           "type": "number",
@@ -383,7 +383,7 @@
         },
         "position": {
           "$ref": "#/$defs/Position",
-          "description": "Computed position on the node boundary in MMDS coordinate space."
+          "description": "Logical anchor coordinate derived from face, fraction, and node bounds in MMDS coordinate space. Not guaranteed to equal the visible path endpoint."
         },
         "group_size": {
           "type": "integer",

@@ -38,8 +38,7 @@ pub fn route_graph_geometry(
     edge_routing: EdgeRouting,
     metrics: &ProportionalTextMetrics,
 ) -> RoutedGraphGeometry {
-    let port_attachments =
-        compute_port_attachments_from_geometry(&diagram.edges, geometry, diagram.direction);
+    let port_attachments = compute_port_attachments_from_geometry(diagram, geometry);
 
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::OrthogonalRoute => {

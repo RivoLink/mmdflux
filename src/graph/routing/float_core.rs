@@ -6,22 +6,23 @@ use crate::graph::attachment::{
     AttachmentCandidate, AttachmentSide, EdgePort, Face, LARGE_HORIZONTAL_OFFSET_THRESHOLD,
     edge_faces, plan_attachment_candidates, point_on_face_float,
 };
+use crate::graph::direction_policy::{build_override_node_map, node_to_node_route_direction};
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::space::{FPoint, FRect};
-use crate::graph::{Direction, Edge, Shape, Stroke};
+use crate::graph::{Direction, Graph, Shape, Stroke};
 
 /// Compute port attachments for all edges using float-coordinate `GraphGeometry`.
 ///
 /// Called from the routing stage to make port data available in
 /// `RoutedEdgeGeometry` for MMDS serialization.
 pub(crate) fn compute_port_attachments_from_geometry(
-    edges: &[Edge],
+    diagram: &Graph,
     geometry: &GraphGeometry,
-    fallback_direction: Direction,
 ) -> HashMap<usize, (Option<EdgePort>, Option<EdgePort>)> {
-    let mut candidates: Vec<AttachmentCandidate> = Vec::with_capacity(edges.len() * 2);
+    let override_nodes = build_override_node_map(diagram);
+    let mut candidates: Vec<AttachmentCandidate> = Vec::with_capacity(diagram.edges.len() * 2);
 
-    for (idx, edge) in edges.iter().enumerate() {
+    for (idx, edge) in diagram.edges.iter().enumerate() {
         if edge.from == edge.to || edge.stroke == Stroke::Invisible {
             continue;
         }
@@ -49,11 +50,14 @@ pub(crate) fn compute_port_attachments_from_geometry(
             .and_then(|wps| wps.last().copied())
             .unwrap_or(src_center);
 
-        let edge_dir = geometry
-            .node_directions
-            .get(&edge.from)
-            .copied()
-            .unwrap_or(fallback_direction);
+        let edge_dir = node_to_node_route_direction(
+            diagram,
+            &geometry.node_directions,
+            &override_nodes,
+            &edge.from,
+            &edge.to,
+            diagram.direction,
+        );
 
         let is_backward = geometry.reversed_edges.contains(&idx);
 
@@ -91,7 +95,7 @@ pub(crate) fn compute_port_attachments_from_geometry(
 
     let mut result: HashMap<usize, (Option<EdgePort>, Option<EdgePort>)> = HashMap::new();
     for (edge_index, attachments) in plan.attachments() {
-        let edge = &edges[*edge_index];
+        let edge = &diagram.edges[*edge_index];
 
         let source_port = attachments.source.map(|att| {
             let src_id = edge.from_subgraph.as_deref().unwrap_or(edge.from.as_str());

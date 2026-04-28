@@ -82,6 +82,41 @@ pub fn cross_boundary_edge_direction(
         .unwrap_or(fallback)
 }
 
+/// Resolve the route direction for a concrete node-to-node edge.
+///
+/// This wraps ordinary same-direction behavior, same-override internal edges,
+/// and true override-boundary edges in one policy helper so routing and MMDS
+/// port planning choose faces from the same route intent.
+pub fn node_to_node_route_direction(
+    diagram: &Graph,
+    node_directions: &HashMap<String, Direction>,
+    override_nodes: &HashMap<String, String>,
+    from: &str,
+    to: &str,
+    fallback: Direction,
+) -> Direction {
+    let from_sg = override_nodes.get(from);
+    let to_sg = override_nodes.get(to);
+
+    match (from_sg, to_sg) {
+        (None, None) => effective_edge_direction(node_directions, from, to, fallback),
+        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => diagram
+            .subgraphs
+            .get(sg_a.as_str())
+            .and_then(|sg| sg.dir)
+            .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
+        _ => cross_boundary_edge_direction(
+            diagram,
+            node_directions,
+            from_sg,
+            to_sg,
+            from,
+            to,
+            fallback,
+        ),
+    }
+}
+
 /// Build the override node map: node_id -> subgraph_id.
 pub fn build_override_node_map(diagram: &Graph) -> HashMap<String, String> {
     let mut override_nodes = HashMap::new();
