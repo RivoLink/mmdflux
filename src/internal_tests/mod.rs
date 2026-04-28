@@ -8,6 +8,7 @@ mod layered_adapter_pipeline;
 mod mmds_output_serialization;
 mod mmds_roundtrip;
 mod port_attachment_observation;
+mod singleton_centering_observation;
 mod svg_render_pipeline;
 mod text_render_pipeline;
 
