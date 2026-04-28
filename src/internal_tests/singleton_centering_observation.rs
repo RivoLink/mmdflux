@@ -21,8 +21,8 @@ use crate::engines::graph::flux::FluxLayeredEngine;
 use crate::graph::attachment::{EdgePort, PortFace};
 use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::grid::{
-    AttachDirection, GridLayout, GridLayoutConfig, TextPathFamily,
-    geometry_to_grid_layout_with_routed, route_edge_with_probe,
+    AttachDirection, AttachmentOverride, GridLayout, GridLayoutConfig, TextPathFamily,
+    compute_attachment_plan, geometry_to_grid_layout_with_routed, route_edge_with_probe,
 };
 use crate::graph::{Arrow, Edge, GeometryLevel, Graph};
 use crate::mermaid::parse_flowchart;
@@ -124,6 +124,7 @@ struct RoutedHarnessContext {
     geometry: GraphGeometry,
     routed: RoutedGraphGeometry,
     layout: GridLayout,
+    attachment_plan: std::collections::HashMap<usize, AttachmentOverride>,
 }
 
 struct TextEndpointSummary {
@@ -177,11 +178,13 @@ fn build_routed_harness_context(fixture: &str) -> RoutedHarnessContext {
         Some(&routed),
         &grid_config,
     );
+    let attachment_plan = compute_attachment_plan(&diagram.edges, &layout, diagram.direction);
     RoutedHarnessContext {
         diagram,
         geometry: result.geometry,
         routed,
         layout,
+        attachment_plan,
     }
 }
 
@@ -207,7 +210,23 @@ fn probe_text_edge(ctx: &RoutedHarnessContext, edge: &Edge) -> TextProbeResult {
     let edge_dir = ctx
         .layout
         .effective_edge_direction(&edge.from, &edge.to, ctx.diagram.direction);
-    let Some(result) = route_edge_with_probe(edge, &ctx.layout, edge_dir, None, None, false) else {
+    // Mirror the production `route_all_edges` flow: pull the per-edge
+    // override from the attachment plan and pass it through. Without this
+    // the probe takes a no-override fallback path and observes uncentered
+    // cells for cross-direction-override-boundary edges, even though
+    // production text rendering centers them correctly.
+    let plan_entry = ctx.attachment_plan.get(&edge.index);
+    let (src_override, tgt_override, src_first_vertical) = plan_entry
+        .map(|ov| (ov.source, ov.target, ov.source_first_vertical))
+        .unwrap_or((None, None, false));
+    let Some(result) = route_edge_with_probe(
+        edge,
+        &ctx.layout,
+        edge_dir,
+        src_override,
+        tgt_override,
+        src_first_vertical,
+    ) else {
         return TextProbeResult {
             source: None,
             target: None,
@@ -363,16 +382,18 @@ fn classify_edge(ctx: &RoutedHarnessContext, edge: &Edge) -> ClassifyOutcome {
 }
 
 /// Cross-axis drift in integer grid cells between the actual text endpoint
-/// and the cell a `fraction == 0.5` port projects to. Face-perpendicular
-/// axis is dropped — `offset_for_face` only affects that axis, so the
-/// router's one-cell offset cancels out.
+/// and the rect's geometric center. Face-perpendicular axis is dropped —
+/// `offset_for_face` only affects that axis, so the router's one-cell
+/// offset cancels out.
 ///
-/// Reads expected centers from the final text-grid `NodeBounds`
-/// (`GridLayout::get_bounds`), not from `GraphGeometry.nodes[].rect`
-/// projected via `project_layout_point`. Direction-override reconciliation
-/// mutates `node_bounds` after the initial float-to-grid transform, so the
-/// float projection would be stale exactly for override-boundary fixtures —
-/// where any nonzero deltas are most interesting.
+/// Expected center is `NodeBounds::center_x()` / `center_y()` (the rect's
+/// geometric midpoint). Note that production's `point_on_face_grid` lays
+/// out singleton overrides at the midpoint of `face_extent` (which excludes
+/// the corner cells); for even-width / even-height rects that midpoint is
+/// 1 cell off `bounds.center_x()` / `center_y()`. So a fully-fixed
+/// even-width override-boundary edge can show `delta_cross == 1`, and that
+/// is visually correct — the residual is the fundamental representation
+/// gap between a 10-wide rect's geometric center (5.0) and integer cells.
 fn cross_axis_delta(
     ctx: &RoutedHarnessContext,
     node_id: &str,
@@ -384,14 +405,8 @@ fn cross_axis_delta(
         .get_bounds(node_id)
         .unwrap_or_else(|| panic!("routed node {node_id} should be present in grid layout"));
     match port.face {
-        PortFace::Top | PortFace::Bottom => {
-            // Cross-axis is X.
-            bounds.center_x() as i64 - actual_cell.0 as i64
-        }
-        PortFace::Left | PortFace::Right => {
-            // Cross-axis is Y.
-            bounds.center_y() as i64 - actual_cell.1 as i64
-        }
+        PortFace::Top | PortFace::Bottom => bounds.center_x() as i64 - actual_cell.0 as i64,
+        PortFace::Left | PortFace::Right => bounds.center_y() as i64 - actual_cell.1 as i64,
     }
 }
 
@@ -607,4 +622,48 @@ fn singleton_centering_fan_canaries_fully_rejected_by_group_size() {
             s.total, g
         );
     }
+}
+
+/// Regression guard for #275. Cross-direction-override-boundary singleton
+/// edges previously rendered with `delta_cross == 3` (off-center by 3
+/// cells in the visible text grid). After the targeted attachment-plan
+/// fix they render at or within 1 cell of the rect geometric center;
+/// the remaining 1-cell residual on even-width rects is the fundamental
+/// integer-grid representation gap (a w=10 rect's center sits between
+/// cells 5 and 6) and is visually correct.
+#[test]
+fn override_boundary_singleton_endpoints_are_centered() {
+    const MAX_DELTA: i64 = 1;
+    let cases: &[(&str, &str, &str)] = &[
+        ("subgraph_direction_lr.mmd", "Start", "A"),
+        ("subgraph_direction_lr.mmd", "C", "End"),
+        ("direction_override.mmd", "Start", "A"),
+        ("direction_override.mmd", "C", "End"),
+    ];
+    let summaries = observe_singleton_centering_report();
+    let mut failures = Vec::new();
+    for (fixture, from, to) in cases {
+        let summary = summaries
+            .iter()
+            .find(|s| s.fixture == *fixture)
+            .unwrap_or_else(|| panic!("{fixture} should be in shortlist"));
+        let row = summary
+            .detail_rows
+            .iter()
+            .find(|r| r.from == *from && r.to == *to)
+            .unwrap_or_else(|| {
+                panic!("{fixture}: {from} -> {to} should be a survivor with detail row")
+            });
+        let delta = row
+            .delta_cross_cells
+            .expect("survivor row should carry delta");
+        if delta.abs() > MAX_DELTA {
+            failures.push(format!("{fixture}: {from} -> {to} delta_cross={delta}"));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "expected |delta_cross| <= {MAX_DELTA} on all four override-boundary singletons; got:\n  {}",
+        failures.join("\n  ")
+    );
 }

@@ -60,17 +60,42 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
             source_first_vertical: false,
         });
 
+        // Singletons usually skip override emission and let the consumer fall
+        // back to dynamic-intersection / waypoint clamp; that path produces the
+        // visual face center for non-boundary edges. But when an edge crosses
+        // a direction-override subgraph boundary in TD/BT layouts the waypoint
+        // clamp pulls the cross-axis cell off-center (issue #275). Emit the
+        // singleton override only in that narrow case so non-boundary fixtures
+        // keep their existing snapshots.
+        let src_node_dir = layout
+            .node_directions
+            .get(&edge.from)
+            .copied()
+            .unwrap_or(direction);
+        let tgt_node_dir = layout
+            .node_directions
+            .get(&edge.to)
+            .copied()
+            .unwrap_or(direction);
+        let cross_override_boundary = src_node_dir != tgt_node_dir;
+        let td_or_bt = matches!(direction, Direction::TopDown | Direction::BottomTop);
+        let emit_singleton_for_boundary = cross_override_boundary
+            && td_or_bt
+            && edge.from_subgraph.is_none()
+            && edge.to_subgraph.is_none();
+
         if let Some(source_attachment) = attachments.source
-            && shared.group_size(src_id, source_attachment.face) > 1
             && let Some(src_bounds) = bounds_for_node_id(layout, src_id)
         {
             let group_size = shared.group_size(src_id, source_attachment.face);
-            entry.source = Some(point_on_face_grid(
-                &src_bounds,
-                source_attachment.face.to_node_face(),
-                source_attachment.fraction,
-                group_size,
-            ));
+            if group_size > 1 || (group_size == 1 && emit_singleton_for_boundary) {
+                entry.source = Some(point_on_face_grid(
+                    &src_bounds,
+                    source_attachment.face.to_node_face(),
+                    source_attachment.fraction,
+                    group_size,
+                ));
+            }
         }
 
         // Apply overflow correction if present, otherwise use shared plan.
@@ -91,16 +116,17 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
                 }
             }
         } else if let Some(target_attachment) = attachments.target
-            && shared.group_size(tgt_id, target_attachment.face) > 1
             && let Some(tgt_bounds) = bounds_for_node_id(layout, tgt_id)
         {
             let group_size = shared.group_size(tgt_id, target_attachment.face);
-            entry.target = Some(point_on_face_grid(
-                &tgt_bounds,
-                target_attachment.face.to_node_face(),
-                target_attachment.fraction,
-                group_size,
-            ));
+            if group_size > 1 || (group_size == 1 && emit_singleton_for_boundary) {
+                entry.target = Some(point_on_face_grid(
+                    &tgt_bounds,
+                    target_attachment.face.to_node_face(),
+                    target_attachment.fraction,
+                    group_size,
+                ));
+            }
         }
     }
 

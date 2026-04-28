@@ -29,6 +29,8 @@ use self::route_variants::{
     route_backward_with_synthetic_waypoints, route_edge_direct, route_edge_with_waypoints,
 };
 use self::self_edges::route_self_edge;
+#[cfg(test)]
+pub(crate) use self::types::AttachmentOverride;
 pub use self::types::{AttachDirection, Point, RoutedEdge, Segment};
 use self::types::{EdgeEndpoints, RoutingOverrides};
 use super::GridLayout;
