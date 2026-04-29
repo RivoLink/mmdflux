@@ -293,20 +293,20 @@
       },
       "is_backward": false,
       "source_port": {
-        "face": "right",
+        "face": "bottom",
         "fraction": 0.5,
         "position": {
-          "x": 469.9952,
-          "y": 239.0
+          "x": 415.496,
+          "y": 266.0
         },
         "group_size": 1
       },
       "target_port": {
-        "face": "left",
+        "face": "top",
         "fraction": 0.5,
         "position": {
-          "x": 134.00639999999999,
-          "y": 443.0
+          "x": 176.99839999999998,
+          "y": 416.0
         },
         "group_size": 1
       }

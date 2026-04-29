@@ -21,6 +21,7 @@ One Mermaid source, multiple outputs: terminal text, SVG, and machine-readable J
 
 **Mermaid source** ([`docs/assets/readme/at-a-glance.mmd`](docs/assets/readme/at-a-glance.mmd))
 
+<!-- mmdflux-readme-assets:source begin -->
 ```
 graph TD
     subgraph sg1[Horizontal Section]
@@ -30,6 +31,7 @@ graph TD
     Start --> A
     C --> End
 ```
+<!-- mmdflux-readme-assets:source end -->
 
 **SVG output** (`mmdflux --format svg --layout-engine flux-layered --curve linear-rounded ...`)
 
@@ -41,29 +43,31 @@ graph TD
 
 **Text output** (`mmdflux --format text ...`)
 
+<!-- mmdflux-readme-assets:text begin -->
 ```text
                ┌───────┐
                │ Start │
                └───────┘
-                 │
-         ┌───────┘
-         │
-         │
-┌────────┼Horizontal Section ────────┐
-│        ▼                           │
+                   │
+      ┌────────────┘
+      │
+      │
+┌─────┼── Horizontal Section ────────┐
+│     ▼                              │
 │ ┌────────┐  ┌────────┐  ┌────────┐ │
 │ │ Step 1 │─►│ Step 2 │─►│ Step 3 │ │
 │ └────────┘  └────────┘  └────────┘ │
-│                            │       │
-└────────────────────────────┼───────┘
-                             │
-                     ┌───────┘
-                     │
-                     ▼
+│                             │      │
+└─────────────────────────────┼──────┘
+                              │
+                   ┌──────────┘
+                   │
+                   ▼
                 ┌─────┐
                 │ End │
                 └─────┘
 ```
+<!-- mmdflux-readme-assets:text end -->
 
 **MMDS JSON output**: [`docs/assets/readme/at-a-glance.mmds.json`](docs/assets/readme/at-a-glance.mmds.json)
 
