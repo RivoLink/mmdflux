@@ -1,5 +1,6 @@
 mod architecture;
 mod lint;
+mod readme_assets;
 
 use std::path::{Path, PathBuf};
 
@@ -24,6 +25,7 @@ fn try_main() -> Result<()> {
     match command {
         "architecture" => run_architecture_command(&args),
         "lint" => run_lint_command(&args),
+        "readme-assets" => run_readme_assets_command(&args),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
@@ -56,6 +58,16 @@ fn run_lint_command(args: &[String]) -> Result<()> {
     lint::run(options)
 }
 
+fn run_readme_assets_command(args: &[String]) -> Result<()> {
+    if args.iter().skip(1).any(|arg| is_help_arg(arg)) {
+        eprintln!("{}", readme_assets::help_text());
+        return Ok(());
+    }
+
+    let options = readme_assets::parse_readme_assets_args(args.iter().map(String::as_str))?;
+    readme_assets::run(options)
+}
+
 fn print_help() {
     eprintln!(
         "\
@@ -64,6 +76,7 @@ cargo xtask <command>
 Commands:
     architecture    Run the repo architecture suite
     lint            Run clippy and architecture boundary checks
+    readme-assets   Refresh README showcase assets
 
 Run `cargo xtask <command> --help` for details."
     );
