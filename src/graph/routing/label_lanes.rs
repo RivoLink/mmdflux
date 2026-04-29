@@ -75,9 +75,9 @@ pub(super) fn group_label_compartments(descriptors: Vec<LabelDescriptor>) -> Vec
     }
 
     let mut compartments = Vec::new();
-    for (_scope, mut descs) in by_scope {
+    for (_scope, mut scope_descriptors) in by_scope {
         // Sort by cross_min for merge pass.
-        descs.sort_by(|a, b| {
+        scope_descriptors.sort_by(|a, b| {
             a.cross_min
                 .partial_cmp(&b.cross_min)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -86,18 +86,18 @@ pub(super) fn group_label_compartments(descriptors: Vec<LabelDescriptor>) -> Vec
         // Iterative merge: two descriptors merge if cross_bands overlap
         // (with LANE_GAP slack).
         let mut groups: Vec<Vec<LabelDescriptor>> = Vec::new();
-        for desc in descs {
+        for descriptor in scope_descriptors {
             let merged = groups.iter_mut().find(|g| {
                 let group_max = g
                     .iter()
                     .map(|d| d.cross_max)
                     .fold(f64::NEG_INFINITY, f64::max);
-                desc.cross_min <= group_max + LANE_GAP
+                descriptor.cross_min <= group_max + LANE_GAP
             });
             if let Some(group) = merged {
-                group.push(desc);
+                group.push(descriptor);
             } else {
-                groups.push(vec![desc]);
+                groups.push(vec![descriptor]);
             }
         }
 
@@ -194,7 +194,7 @@ pub(super) struct LabelTrackOutcome {
     /// arc-length midpoint) or fall through to the engine's
     /// `label_position`. Pre-split code conflated the two sizes; keeping
     /// the cross-band size preserves wire-up semantics for singleton
-    /// sub-clusters that share a compartment with other labelled edges.
+    /// sub-clusters that share a compartment with other labeled edges.
     pub full_compartment_size: usize,
     /// Per-compartment lane step (max axis-projected extent + `LANE_GAP`,
     /// floored to `MIN_LABEL_LANE_STEP`). Shared by every member of the
@@ -224,7 +224,7 @@ pub(super) struct LabelTrackOutcome {
     pub track_center: f64,
     /// Dense per-run compartment key assigned in compartment-iteration
     /// order. Edges that share an ID share a compartment, which means they
-    /// share `label_step` and must be recentered together when the fixed-
+    /// share `label_step` and must be re-centered together when the fixed-
     /// point pass recomputes that budget. Not stable across renders — do
     /// not serialize or compare across invocations.
     pub compartment_id: usize,
@@ -299,7 +299,7 @@ pub(super) fn assign_label_tracks(
             // the +1 member back into the available gap, re-overlapping
             // the other member. With the midpoint subtraction,
             // [0, +1] becomes [-0.5, +0.5] and the sub-cluster stays
-            // centred. [-1, 0, +1] stays [-1, 0, +1] (unchanged);
+            // centered. [-1, 0, +1] stays [-1, 0, +1] (unchanged);
             // reciprocal [0, -1] becomes [+0.5, -0.5].
             let track_center = if compartment_size > 1 {
                 let (min_track, max_track) = tracks

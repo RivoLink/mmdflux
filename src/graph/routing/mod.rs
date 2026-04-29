@@ -1168,7 +1168,7 @@ mod tests {
     }
 
     #[test]
-    fn light_normalize_dedups_and_removes_collinear_points() {
+    fn light_normalize_dedupes_and_removes_collinear_points() {
         let normalized = orthogonal::path_utils::light_normalize(&[
             FPoint::new(0.0, 0.0),
             FPoint::new(0.0, 0.0),

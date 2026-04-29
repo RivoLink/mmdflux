@@ -37,6 +37,18 @@ fmt *args:
 fmt-check:
     cargo +nightly fmt --all -- --check
 
+# Regenerate the cspell dictionary from the Codebook dictionary
+spell-sync:
+    node scripts/sync-cspell-dictionary.mjs
+
+# Verify the cspell dictionary matches the Codebook dictionary
+spell-sync-check:
+    node scripts/sync-cspell-dictionary.mjs --check
+
+# Run cspell using the generated Codebook dictionary
+spell-check +args: spell-sync
+    mise x -- cspell lint --config cspell.config.yaml {{ args }}
+
 # Install git hooks (commit-msg validation via cocogitto)
 setup-hooks:
     cog install-hook --all --overwrite

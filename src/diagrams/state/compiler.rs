@@ -543,20 +543,20 @@ fn build_description_label(descriptions: &[String], display_name: &str) -> Strin
 
 /// Append new descriptions to an existing node's label, adding a separator
 /// when this creates a multi-section box.
-fn append_descriptions(label: &mut String, new_descs: &[String], display_name: &str) {
-    if new_descs.is_empty() {
+fn append_descriptions(label: &mut String, new_descriptions: &[String], display_name: &str) {
+    if new_descriptions.is_empty() {
         return;
     }
     // If the label was just the display name (no prior descriptions), replace it.
     if *label == display_name {
-        *label = build_description_label(new_descs, display_name);
+        *label = build_description_label(new_descriptions, display_name);
         return;
     }
     // Already has content — check if it already has a separator (multi-section).
     let has_separator = label.contains(Node::SEPARATOR);
     if has_separator {
         // Append to the body section.
-        for desc in new_descs {
+        for desc in new_descriptions {
             label.push('\n');
             label.push_str(desc);
         }
@@ -564,7 +564,7 @@ fn append_descriptions(label: &mut String, new_descs: &[String], display_name: &
         // Current label is a single description. Adding more triggers two-section box.
         let existing = label.clone();
         let mut all = vec![existing];
-        all.extend(new_descs.iter().cloned());
+        all.extend(new_descriptions.iter().cloned());
         *label = build_description_label(&all, display_name);
     }
 }

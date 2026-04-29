@@ -183,7 +183,7 @@ fn rerouted_edge_indexes_for_mode(
         // Pass-through paths are already positioned by the layout engine
         // and should not receive extra shape clipping.
         EdgeRouting::EngineProvided => geom.edges.iter().map(|e| e.index).collect(),
-        // Orthgonal routes already encode endpoint intent and should not
+        // Orthogonal routes already encode endpoint intent and should not
         // be shape-adjusted again in SVG (all path styles).
         EdgeRouting::OrthogonalRoute => geom.edges.iter().map(|e| e.index).collect(),
         // Direct and polyline routes need normal endpoint adjustment.

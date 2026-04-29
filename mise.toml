@@ -13,6 +13,7 @@ just = "latest"
 "cargo:cargo-nextest" = "latest"
 "cargo:wasm-pack" = "latest"
 "npm:@mermaid-js/mermaid-cli" = "latest"
+"npm:cspell" = "10.0.0"
 
 
 [tools.node]

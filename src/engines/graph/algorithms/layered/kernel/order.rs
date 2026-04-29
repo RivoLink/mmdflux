@@ -321,7 +321,7 @@ fn sort_entries(entries: &[ResolvedEntry], bias_right: bool, graph: &LayoutGraph
     }
 
     // No drain: dagre's sort.js relies solely on consumeUnsortable.
-    // Remaining unsortables (if any) are not appended.
+    // Remaining unsortable entries (if any) are not appended.
 
     SortResult {
         vs,
@@ -682,8 +682,8 @@ fn init_order(graph: &mut LayoutGraph, layers: &[Vec<usize>], backward_dummies: 
     for &(from, to, _) in &edges {
         successors[from].push(to);
     }
-    for succs in &mut successors {
-        succs.sort_by(|&a, &b| graph.model_order[a].cmp(&graph.model_order[b]));
+    for successor_list in &mut successors {
+        successor_list.sort_by(|&a, &b| graph.model_order[a].cmp(&graph.model_order[b]));
     }
 
     // Get all nodes sorted by (rank, model_order). Rank is primary to match
@@ -721,9 +721,9 @@ fn init_order(graph: &mut LayoutGraph, layers: &[Vec<usize>], backward_dummies: 
             layer_next_idx[rank] += 1;
 
             // Push successors in reverse for correct DFS order
-            for &succ in successors[node].iter().rev() {
-                if !visited[succ] {
-                    stack.push(succ);
+            for &successor in successors[node].iter().rev() {
+                if !visited[successor] {
+                    stack.push(successor);
                 }
             }
         }
@@ -1286,8 +1286,8 @@ impl AdjacencyIndex {
         for &(from, to, _) in edges {
             if graph.ranks[from] < graph.ranks[to] {
                 // Edge goes from upper layer to lower layer
-                lower[from].push(to); // from's successor
-                upper[to].push(from); // to's predecessor
+                lower[from].push(to); // successor of from
+                upper[to].push(from); // predecessor of to
             }
         }
 
@@ -3638,11 +3638,11 @@ mod tests {
                 .filter(|&&n| backward_set.contains(&n))
                 .map(|&n| lg.order[n])
                 .min();
-            if let (Some(max_fwd), Some(min_bwd)) = (max_non_backward, min_backward) {
+            if let (Some(max_fwd), Some(min_backward)) = (max_non_backward, min_backward) {
                 assert!(
-                    min_bwd > max_fwd,
+                    min_backward > max_fwd,
                     "backward dummies should have higher order than forward nodes in same rank; \
-                     max_forward={max_fwd}, min_backward={min_bwd}"
+                     max_forward={max_fwd}, min_backward={min_backward}"
                 );
             }
         }

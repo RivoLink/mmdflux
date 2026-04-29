@@ -287,14 +287,14 @@ pub(super) fn resolve_sibling_overlaps_draw(
         let sub_dir = sg.dir.unwrap();
 
         // Find child subgraphs (subgraphs whose parent is this one).
-        let child_sgs: Vec<&str> = diagram
+        let child_subgraphs: Vec<&str> = diagram
             .subgraphs
             .iter()
             .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
             .map(|(id, _)| id.as_str())
             .collect();
 
-        if child_sgs.is_empty() {
+        if child_subgraphs.is_empty() {
             continue;
         }
 
@@ -304,7 +304,7 @@ pub(super) fn resolve_sibling_overlaps_draw(
             .iter()
             .filter(|n| {
                 !diagram.is_subgraph(n)
-                    && !child_sgs.iter().any(|cs| {
+                    && !child_subgraphs.iter().any(|cs| {
                         child_sg_nodes
                             .get(cs)
                             .is_some_and(|set| set.contains(n.as_str()))
@@ -314,7 +314,7 @@ pub(super) fn resolve_sibling_overlaps_draw(
             .collect();
 
         // For each child subgraph, check if any direct node overlaps.
-        for child_sg_id in &child_sgs {
+        for child_sg_id in &child_subgraphs {
             let Some(sg_b) = subgraph_bounds.get(*child_sg_id).cloned() else {
                 continue;
             };
@@ -1314,13 +1314,13 @@ fn shift_subgraph_and_contents(
         }
     }
     // Shift descendant subgraph bounds.
-    let descendant_sgs: Vec<String> = diagram
+    let descendant_subgraphs: Vec<String> = diagram
         .subgraphs
         .iter()
         .filter(|(_, child)| child.parent.as_deref() == Some(sg_id))
         .map(|(id, _)| id.clone())
         .collect();
-    for child_id in &descendant_sgs {
+    for child_id in &descendant_subgraphs {
         if let Some(sb) = subgraph_bounds.get_mut(child_id.as_str()) {
             sb.x = (sb.x as isize + dx).max(0) as usize;
             sb.y = (sb.y as isize + dy).max(0) as usize;
@@ -1421,26 +1421,26 @@ pub(super) fn compact_override_subgraph_vertical_gaps(
             continue;
         };
         let sg_bottom = sb.y + sb.height;
-        let mut nearest_succ_top: Option<usize> = None;
+        let mut nearest_success_top: Option<usize> = None;
         for edge in &diagram.edges {
             if sg_node_set.contains(edge.from.as_str())
                 && !sg_node_set.contains(edge.to.as_str())
                 && let Some(nb) = node_bounds.get(&edge.to)
                 && nb.y >= sg_bottom
             {
-                nearest_succ_top =
-                    Some(nearest_succ_top.map_or(nb.y, |current: usize| current.min(nb.y)));
+                nearest_success_top =
+                    Some(nearest_success_top.map_or(nb.y, |current: usize| current.min(nb.y)));
             }
         }
 
-        let Some(succ_top) = nearest_succ_top else {
+        let Some(successor_top) = nearest_success_top else {
             continue;
         };
-        let current_gap = succ_top.saturating_sub(sg_bottom);
+        let current_gap = successor_top.saturating_sub(sg_bottom);
         if current_gap > target_gap {
             let pull_up = current_gap - target_gap;
             shift_items_at_or_below(
-                succ_top,
+                successor_top,
                 -(pull_up as isize),
                 draw_positions,
                 node_bounds,

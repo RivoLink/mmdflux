@@ -671,7 +671,9 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
                 let keeps_prev_axis = prev_idx
                     .checked_sub(1)
                     .and_then(|idx| points.get(idx).copied())
-                    .is_none_or(|pprev| segment_axis(pprev, shifted_prev).is_some());
+                    .is_none_or(|previous_previous| {
+                        segment_axis(previous_previous, shifted_prev).is_some()
+                    });
                 if keeps_next_axis && keeps_prev_axis {
                     points[before_adjacent_idx] = shifted_before;
                     points[prev_idx] = shifted_prev;

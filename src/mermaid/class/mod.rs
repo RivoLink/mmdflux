@@ -344,7 +344,7 @@ fn normalize_class_direction(token: &str) -> Option<String> {
 ///
 /// Supports:
 /// - Mermaid literal/backtick names: `` `A B` ``
-/// - Regular identifiers including alnum + `_` + `.` + `-`.
+/// - Regular identifiers including alphanumeric + `_` + `.` + `-`.
 fn parse_class_name_token(s: &str) -> Option<(String, usize)> {
     if let Some(rest) = s.strip_prefix('`') {
         let end = rest.find('`')?;

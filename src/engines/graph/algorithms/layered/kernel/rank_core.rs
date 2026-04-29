@@ -46,12 +46,12 @@ pub(crate) fn longest_path(graph: &mut LayoutGraph) {
     let mut processed = 0;
     while let Some(node) = queue.pop_front() {
         processed += 1;
-        for &(succ, minlen) in &successors[node] {
-            ranks[succ] = ranks[succ].max(ranks[node] + minlen);
+        for &(successor, minlen) in &successors[node] {
+            ranks[successor] = ranks[successor].max(ranks[node] + minlen);
 
-            in_degree[succ] -= 1;
-            if in_degree[succ] == 0 {
-                queue.push_back(succ);
+            in_degree[successor] -= 1;
+            if in_degree[successor] == 0 {
+                queue.push_back(successor);
             }
         }
     }

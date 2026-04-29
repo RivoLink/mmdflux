@@ -167,7 +167,7 @@ mod tests {
         let mut diagram = Graph::new(Direction::TopDown);
         diagram.add_node(Node::new("S"));
         diagram.add_node(Node::new("T"));
-        diagram.add_edge(Edge::new("S", "T").with_label("lbl"));
+        diagram.add_edge(Edge::new("S", "T").with_label("label"));
 
         let mut nodes = HashMap::new();
         nodes.insert(

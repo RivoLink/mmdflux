@@ -103,7 +103,7 @@ impl ProportionalTextMetrics {
     }
 }
 
-/// Greedy word-wrap that honours `max_width` in pixels using `metrics` for
+/// Greedy word-wrap that honors `max_width` in pixels using `metrics` for
 /// per-character width estimates. `'\n'` in `text` is treated as a hard
 /// break; each segment is wrapped independently. Falls back to per-character
 /// splits when a single word exceeds `max_width`.
@@ -216,7 +216,7 @@ pub fn grid_edge_label_dimensions(label: &str) -> (f64, f64) {
 /// Grid edge-label dimensions for a pre-wrapped label. Mirrors
 /// [`grid_edge_label_dimensions`] but consumes a persisted wrap artifact
 /// instead of `'\n'`-splitting raw text, so wrap decisions made in pixel
-/// units (plan 0147) are honoured by the Grid measurement path too.
+/// units (plan 0147) are honored by the Grid measurement path too.
 pub fn grid_edge_label_dimensions_wrapped(lines: &[String]) -> (f64, f64) {
     let width = lines
         .iter()
@@ -452,7 +452,7 @@ mod tests {
         );
         // Simulate output of normalize_br_tags: <br> has already become '\n'.
         // max_width 100 keeps every word under the threshold so the test
-        // focuses on segment-boundary behaviour rather than char fallback.
+        // focuses on segment-boundary behavior rather than char fallback.
         let input = "yes\nsome very long continuation";
         let lines = wrap_lines(&metrics, input, 100.0);
 

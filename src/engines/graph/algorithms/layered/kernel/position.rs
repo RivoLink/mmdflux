@@ -428,7 +428,7 @@ mod tests {
         let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
 
         // Put A on a different rank so it gets a non-zero position,
-        // while the compound parent remains unpositioned.
+        // while the compound parent remains un-positioned.
         lg.ranks[lg.node_index[&"sg".into()]] = 0;
         lg.ranks[lg.node_index[&"A".into()]] = 1;
 
@@ -512,7 +512,7 @@ mod tests {
     // Plan 0150: compartment-pass integration tests.
     //
     // Fixture shape: two labeled edges A→C and B→C. Both edges get an
-    // EdgeLabel dummy at rank 1; with per_edge_label_spacing the labelled
+    // EdgeLabel dummy at rank 1; with per_edge_label_spacing the labeled
     // edges get minlen=2 so C lands at rank 2. The two label dummies sit
     // between A/B at rank 0 and C at rank 2, giving overlapping cross
     // bands under BK output.
@@ -575,7 +575,7 @@ mod tests {
         };
         let baseline = b_y(&build_two_label_layout(&cfg_off));
 
-        // Flipping variable_rank_spacing *on* is the behaviour-gate for the
+        // Flipping variable_rank_spacing *on* is the behavior gate for the
         // pass. The OFF case must exactly match the pre-change baseline —
         // which for this fixture is deterministic under the current formula.
         let again = b_y(&build_two_label_layout(&cfg_off));
@@ -637,7 +637,7 @@ mod tests {
     #[test]
     fn vertical_compartment_pass_respects_smaller_preexisting_override() {
         // Seed a tiny override so the compartment value wins when enabled.
-        // Observing behaviour: `y_on` should match the no-seed case, since
+        // Observing behavior: `y_on` should match the no-seed case, since
         // the compartment reservation outweighs the tiny seed.
         let seed_gap: i32 = 1;
 

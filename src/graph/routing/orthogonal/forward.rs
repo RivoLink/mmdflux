@@ -285,7 +285,7 @@ pub(super) fn avoid_forward_node_intrusions(
 /// penultimate-to-endpoint approach passes through the target interior
 /// (e.g. a vertical drop from above to the bottom face).
 ///
-/// Returns `true` if the path was modified, signalling that the caller
+/// Returns `true` if the path was modified, signaling that the caller
 /// should set `preserve_orthogonal_topology` to prevent the SVG renderer
 /// from collapsing the detour.
 pub(super) fn avoid_forward_target_transit(

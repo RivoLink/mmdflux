@@ -987,7 +987,7 @@ fn test_bk_allocates_space_for_label_dummy() {
 }
 
 #[test]
-fn test_denorm_extracts_label_position_between_nodes() {
+fn test_denormalization_extracts_label_position_between_nodes() {
     // A -> B with label: verify label position is geometrically between A and B
     let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
     graph.add_node("A", (100.0, 50.0));

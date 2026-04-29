@@ -297,7 +297,7 @@ pub fn reroute_override_edges(
 ///
 /// When nodes are placed by different sublayouts (e.g., one in an LR subgraph,
 /// another in a nested BT subgraph), their gap along the effective edge direction
-/// can be very small because the sublayouts optimise for different axes.  This
+/// can be very small because the sublayouts optimize for different axes.  This
 /// function pushes the shallower (less-constrained) node away to create at least
 /// `min_gap` units of float-space clearance.
 ///
@@ -474,14 +474,14 @@ pub fn reroute_subgraph_node_edges(diagram: &Graph, layout: &mut LayoutResult) -
                 .or_default()
                 .push((pi, exit_sort));
 
-            let enf = entry_face(pr.direction);
+            let nf = entry_face(pr.direction);
             let entry_sort = if horizontal_face {
                 fr.x + fr.width / 2.0
             } else {
                 fr.y + fr.height / 2.0
             };
             face_edges
-                .entry((pr.to_id.clone(), enf))
+                .entry((pr.to_id.clone(), nf))
                 .or_default()
                 .push((pi, entry_sort));
         }
@@ -578,8 +578,8 @@ pub fn align_cross_boundary_siblings(diagram: &Graph, layout: &mut LayoutResult)
                     None
                 };
                 if let Some(tid) = target {
-                    let nid = NodeId(tid.to_string());
-                    if let Some(r) = layout.nodes.get(&nid) {
+                    let id = NodeId(tid.to_string());
+                    if let Some(r) = layout.nodes.get(&id) {
                         let center = if is_horizontal {
                             r.y + r.height / 2.0
                         } else {
@@ -595,8 +595,8 @@ pub fn align_cross_boundary_siblings(diagram: &Graph, layout: &mut LayoutResult)
             }
 
             let avg: f64 = target_cross.iter().sum::<f64>() / target_cross.len() as f64;
-            let nid = NodeId(node_id.to_string());
-            let Some(rect) = layout.nodes.get_mut(&nid) else {
+            let id = NodeId(node_id.to_string());
+            let Some(rect) = layout.nodes.get_mut(&id) else {
                 continue;
             };
 
@@ -775,7 +775,7 @@ mod tests {
         assert!((left[0].x - 130.0).abs() < 0.01);
         assert!((right[0].x - 130.0).abs() < 0.01);
 
-        // Entry points differ on to's top face
+        // Entry points differ on the top face of `to`
         let left_end = left.last().unwrap();
         let right_end = right.last().unwrap();
         assert!(

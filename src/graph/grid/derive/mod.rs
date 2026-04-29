@@ -928,7 +928,7 @@ fn spread_colocated_backward_draw_path_sources(
             };
             // Use the full face including border rows — backward edge
             // departures can attach at any position along the face,
-            // matching the target-side spreading behaviour.
+            // matching the target-side spreading behavior.
             let (face_min, face_max) = if is_vertical {
                 (bounds.y, bounds.y + bounds.height.saturating_sub(1))
             } else {

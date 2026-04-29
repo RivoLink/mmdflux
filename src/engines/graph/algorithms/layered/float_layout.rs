@@ -16,7 +16,7 @@ use crate::graph::measure::{ProportionalTextMetrics, proportional_node_dimension
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::{Direction, Edge, Graph, Stroke};
 
-/// Edge-label sizing that honours the pre-engine wrap artifact when present
+/// Edge-label sizing that honors the pre-engine wrap artifact when present
 /// (plan 0147 Task 1.6). Falls back to single-line measurement otherwise.
 fn edge_label_dims_proportional(
     metrics: &ProportionalTextMetrics,
@@ -71,7 +71,7 @@ pub(super) fn pad_edge_label_dims(
 /// subtracted so the default config contributes 0 padding and existing
 /// Text snapshots stay byte-identical. Above-default spacings widen
 /// the label-dummy rank-axis extent by `(spacing + thickness - 3.0)`
-/// units, producing additional row/column cells between labelled ranks
+/// units, producing additional row/column cells between labeled ranks
 /// once the delta crosses the scale threshold.
 pub(super) fn pad_edge_label_dims_grid(
     dims: (f64, f64),

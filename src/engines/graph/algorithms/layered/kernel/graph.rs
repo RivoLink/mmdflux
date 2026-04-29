@@ -542,12 +542,12 @@ mod tests {
         graph.add_edge("A", "B");
         graph.add_edge("A", "C");
 
-        let succs: Vec<_> = graph.successors(&"A".into());
-        assert_eq!(succs.len(), 2);
+        let successors: Vec<_> = graph.successors(&"A".into());
+        assert_eq!(successors.len(), 2);
 
-        let preds: Vec<_> = graph.predecessors(&"B".into());
-        assert_eq!(preds.len(), 1);
-        assert_eq!(preds[0], &NodeId::from("A"));
+        let predecessors: Vec<_> = graph.predecessors(&"B".into());
+        assert_eq!(predecessors.len(), 1);
+        assert_eq!(predecessors[0], &NodeId::from("A"));
     }
 
     #[test]

@@ -1017,7 +1017,7 @@ mod owner_local_fixture_regressions {
 
         assert!(
             intrusions.is_empty(),
-            "issue_21 text routing should keep the reranked n3 -> n4 corridor out of unrelated nodes:\n{}",
+            "issue_21 text routing should keep the re-ranked n3 -> n4 corridor out of unrelated nodes:\n{}",
             intrusions.join("\n")
         );
     }

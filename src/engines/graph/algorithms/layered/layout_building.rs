@@ -234,7 +234,7 @@ where
     FN: Fn(&Node) -> (f64, f64),
     FE: Fn(&Edge) -> Option<(f64, f64)>,
 {
-    let mut dgraph = layered::DiGraph::new();
+    let mut digraph = layered::DiGraph::new();
 
     let mut seen = std::collections::HashSet::new();
     let mut ordered_node_ids = Vec::new();
@@ -256,7 +256,7 @@ where
     for id in &ordered_node_ids {
         if let Some(node) = diagram.nodes.get(id) {
             let dims = node_dims(node);
-            dgraph.add_node(id.as_str(), dims);
+            digraph.add_node(id.as_str(), dims);
         }
     }
 
@@ -285,13 +285,13 @@ where
         keys
     };
     for (order, sg_id) in semantic_subgraph_keys.iter().enumerate() {
-        dgraph.set_compound_semantic_order(sg_id.as_str(), order);
+        digraph.set_compound_semantic_order(sg_id.as_str(), order);
     }
     for sg_id in &subgraph_keys {
         let sg = &diagram.subgraphs[*sg_id];
-        dgraph.add_node(sg_id.as_str(), (0.0, 0.0));
+        digraph.add_node(sg_id.as_str(), (0.0, 0.0));
         if !sg.title.trim().is_empty() {
-            dgraph.set_has_title(sg_id.as_str());
+            digraph.set_has_title(sg_id.as_str());
         }
     }
 
@@ -301,7 +301,7 @@ where
     for node_id in node_parent_keys {
         let node = &diagram.nodes[node_id];
         if let Some(ref parent) = node.parent {
-            dgraph.set_parent(node_id.as_str(), parent.as_str());
+            digraph.set_parent(node_id.as_str(), parent.as_str());
         }
     }
 
@@ -309,7 +309,7 @@ where
     for sg_id in &subgraph_keys {
         let sg = &diagram.subgraphs[*sg_id];
         if let Some(ref parent_id) = sg.parent {
-            dgraph.set_parent(sg_id.as_str(), parent_id.as_str());
+            digraph.set_parent(sg_id.as_str(), parent_id.as_str());
         }
     }
 
@@ -362,9 +362,9 @@ where
         };
         if dir_override_internal.contains(&edge_idx) {
             // Keep connectivity but don't force rank separation.
-            dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, 0);
+            digraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, 0);
         } else {
-            dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, edge.minlen);
+            digraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, edge.minlen);
         }
         if let Some((label_width, label_height)) = edge_label_dims(edge) {
             let mut info = EdgeLabelInfo::new(label_width, label_height);
@@ -376,7 +376,7 @@ where
         }
     }
 
-    layered::layout_with_labels(&dgraph, layered_config, |_, dims| *dims, &edge_labels)
+    layered::layout_with_labels(&digraph, layered_config, |_, dims| *dims, &edge_labels)
 }
 
 #[cfg(test)]

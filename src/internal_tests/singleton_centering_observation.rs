@@ -212,7 +212,7 @@ fn probe_text_edge(ctx: &RoutedHarnessContext, edge: &Edge) -> TextProbeResult {
         .effective_edge_direction(&edge.from, &edge.to, ctx.diagram.direction);
     // Mirror the production `route_all_edges` flow: pull the per-edge
     // override from the attachment plan and pass it through. Without this
-    // the probe takes a no-override fallback path and observes uncentered
+    // the probe takes a no-override fallback path and observes un-centered
     // cells for cross-direction-override-boundary edges, even though
     // production text rendering centers them correctly.
     let plan_entry = ctx.attachment_plan.get(&edge.index);

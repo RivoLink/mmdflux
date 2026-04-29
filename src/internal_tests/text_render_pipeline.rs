@@ -1431,7 +1431,7 @@ mod edge_rendering_regression {
     }
 
     #[test]
-    fn branching_labels_dont_overlap() {
+    fn branching_labels_do_not_overlap() {
         let output = render_flowchart_fixture("label_spacing.mmd");
 
         assert!(output.contains("valid"), "Should contain 'valid' label");

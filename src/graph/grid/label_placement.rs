@@ -1010,7 +1010,7 @@ mod segments_to_footprint_tests {
     }
 
     /// C3: forward horizontal (LR) 1-segment path, side=Above. The placer
-    /// must honour the declared Above side when shifting off a load-bearing
+    /// must honor the declared Above side when shifting off a load-bearing
     /// Terminal at the target endpoint.
     #[test]
     fn c3_forward_horizontal_side_above() {

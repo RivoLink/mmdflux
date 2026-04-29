@@ -163,7 +163,7 @@ pub(super) fn render_edge_labels(
         // `track != 0` (numerical displacement) or `compartment_size > 1`
         // (coordinated placement inside a multi-edge group, even when the
         // member happens to sit on track 0 relative to the shared anchor).
-        // For either signal, trust the center directly — revalidating
+        // For either signal, trust the center directly — re-validating
         // would snap the coordinated label back to this edge's own path
         // midpoint and undo the shared-anchor placement. For singleton
         // track-0 edges (`compartment_size == 1`), the center is just the
@@ -207,7 +207,7 @@ pub(super) fn render_edge_labels(
         // Grid-mode measurement reads that artifact during layout. By the
         // time re-wrap fires (post-routing) layout is frozen; propagating
         // the narrower lines back to the shared source would silently
-        // desynchronise Grid-measured heights from Text output. See the
+        // de-synchronize Grid-measured heights from Text output. See the
         // `graph/routing/label_rewrap.rs` module header for the full
         // design note.
         let wrap_lines = layout_edge

@@ -226,8 +226,8 @@ pub(super) fn ensure_external_edge_spacing(
         // relative to the subgraph, not by the diagram's main direction.
         // This avoids false positives for nested subgraphs whose parent
         // has a different direction (e.g. inner BT inside outer LR).
-        let mut max_pred_bottom: Option<usize> = None; // preds above
-        let mut min_succ_top: Option<usize> = None; // succs below
+        let mut max_predecessor_bottom: Option<usize> = None; // predecessors above
+        let mut min_successor_top: Option<usize> = None; // successors below
 
         for edge in &diagram.edges {
             if sg_node_set.contains(edge.to.as_str())
@@ -238,7 +238,8 @@ pub(super) fn ensure_external_edge_spacing(
                 // Only count predecessors whose center is above the border.
                 if nb_cy < sb.y {
                     let bottom = nb.y + nb.height.saturating_sub(1);
-                    max_pred_bottom = Some(max_pred_bottom.map_or(bottom, |c| c.max(bottom)));
+                    max_predecessor_bottom =
+                        Some(max_predecessor_bottom.map_or(bottom, |c| c.max(bottom)));
                 }
             }
             if sg_node_set.contains(edge.from.as_str())
@@ -248,7 +249,7 @@ pub(super) fn ensure_external_edge_spacing(
                 let nb_cy = nb.y + nb.height / 2;
                 let sg_bottom = sb.y + sb.height.saturating_sub(1);
                 if nb_cy > sg_bottom {
-                    min_succ_top = Some(min_succ_top.map_or(nb.y, |c| c.min(nb.y)));
+                    min_successor_top = Some(min_successor_top.map_or(nb.y, |c| c.min(nb.y)));
                 }
             }
         }
@@ -256,7 +257,7 @@ pub(super) fn ensure_external_edge_spacing(
         // Top side: shift entire subgraph down if too close to predecessor bottom.
         // Use +4 to leave room for horizontal edge routing + 1 clear row
         // above the subgraph border.
-        if let Some(pred_bottom) = max_pred_bottom {
+        if let Some(pred_bottom) = max_predecessor_bottom {
             let min_y = pred_bottom + 4;
             let current_y = subgraph_bounds[sg_id].y;
             if current_y < min_y {
@@ -287,8 +288,8 @@ pub(super) fn ensure_external_edge_spacing(
             }
         }
         // Bottom side: shift entire subgraph up if border too close to successor top.
-        if let Some(succ_top) = min_succ_top {
-            let max_bottom = succ_top.saturating_sub(4);
+        if let Some(successor_top) = min_successor_top {
+            let max_bottom = successor_top.saturating_sub(4);
             let sb = &subgraph_bounds[sg_id];
             let current_bottom = sb.y + sb.height.saturating_sub(1);
             if current_bottom > max_bottom {

@@ -206,14 +206,20 @@ fn cubic_bezier_point(
     p3: (f64, f64),
     t: f64,
 ) -> (f64, f64) {
-    let omt = 1.0 - t;
-    let omt2 = omt * omt;
-    let omt3 = omt2 * omt;
+    let one_minus_t = 1.0 - t;
+    let one_minus_t_squared = one_minus_t * one_minus_t;
+    let one_minus_t_cubed = one_minus_t_squared * one_minus_t;
     let t2 = t * t;
     let t3 = t2 * t;
     (
-        omt3 * p0.0 + 3.0 * omt2 * t * p1.0 + 3.0 * omt * t2 * p2.0 + t3 * p3.0,
-        omt3 * p0.1 + 3.0 * omt2 * t * p1.1 + 3.0 * omt * t2 * p2.1 + t3 * p3.1,
+        one_minus_t_cubed * p0.0
+            + 3.0 * one_minus_t_squared * t * p1.0
+            + 3.0 * one_minus_t * t2 * p2.0
+            + t3 * p3.0,
+        one_minus_t_cubed * p0.1
+            + 3.0 * one_minus_t_squared * t * p1.1
+            + 3.0 * one_minus_t * t2 * p2.1
+            + t3 * p3.1,
     )
 }
 
@@ -936,7 +942,7 @@ fn parse_svg_viewbox(svg: &str) -> Option<(f64, f64, f64, f64)> {
 }
 
 /// Extract `(x, y, width, height)` tuples for every edge-label background
-/// rect in the rendered SVG, covering both default (themeless) output and
+/// rect in the rendered SVG, covering both default (theme-less) output and
 /// theme-enabled output.
 ///
 /// Default SVG does NOT tag label-bg rects with `class` or `data-svg-role`;
@@ -971,7 +977,7 @@ pub(crate) fn extract_label_bg_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
             continue;
         }
 
-        // Scope-based match (default themeless SVG): every `<rect>` inside
+        // Scope-based match (default theme-less SVG): every `<rect>` inside
         // `<g class="edgeLabels">` is a label background rect.
         if trimmed.starts_with("<g ") && trimmed.contains("class=\"edgeLabels\"") {
             in_edge_labels = true;
@@ -1044,7 +1050,7 @@ pub(crate) fn svg_viewbox_contains_rects(svg: &str) -> Vec<String> {
         return vec!["no viewBox found".to_string()];
     };
     // mmdflux's SVG wraps node/edge groups in a top-level
-    // `<g transform="translate(tx, ty)">` so geometry centred on zero
+    // `<g transform="translate(tx, ty)">` so geometry centered on zero
     // still lands inside the positive viewBox. Label-bg `<rect>` elements
     // are emitted inside that translated group — their raw `x`/`y`
     // attributes are LOCAL coords, which must be offset by the parent
@@ -5887,7 +5893,7 @@ mod plan_0145_q9_red {
     //
     // Plan 0147 uncovered that `extract_label_bg_rects` previously filtered
     // on `class="graph-edge-label-bg"`, a class only emitted when the SVG
-    // theme is active. Default themeless SVG returned an empty rect Vec,
+    // theme is active. Default theme-less SVG returned an empty rect Vec,
     // so these disjointness / viewBox assertions passed vacuously. After
     // the helper was extended to also scope-match `<g class="edgeLabels">`,
     // several fixtures genuinely fail: labels overlap and/or overrun the
@@ -5939,7 +5945,7 @@ mod plan_0145_q9_red {
     // `findings/plan-0149-completion.md`.
     // Plan 0150 task 4.3: compound visual-path regression. Exercise the
     // post-Phase-4 float/sublayout pipeline on a compound (nested
-    // subgraph) fixture with parallel labelled edges, under
+    // subgraph) fixture with parallel labeled edges, under
     // variable_rank_spacing=true (the flux-layered default). After kernel
     // reservations shift positions, subgraph bounds expansion, sublayout
     // reconciliation, and overlap resolution must still produce valid
@@ -6118,7 +6124,7 @@ mod plan_0147_task_4_1 {
     }
 
     /// Returns `(path_idx, rect_idx)` for every sampled SVG path point that
-    /// falls strictly inside a peer label rect — a rect whose centre is not
+    /// falls strictly inside a peer label rect — a rect whose center is not
     /// the closest to the path. Mirrors the routed-level invariant in
     /// `layered_kernel_bend::user_rl_repro_edges_do_not_cross_peer_label_rects`
     /// (Task 2.2): verifies path waypoints stay outside peer rect interiors,

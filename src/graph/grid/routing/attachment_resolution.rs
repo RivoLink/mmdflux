@@ -108,7 +108,7 @@ pub(super) fn compute_attachment_plan_from_shared_planner(
                     fraction,
                     group_size,
                 ));
-                // Tag overflow edges (non-primary face) so routing honours the
+                // Tag overflow edges (non-primary face) so routing honors the
                 // face instead of inferring from approach direction.
                 let primary = fan_in_primary_target_face(direction);
                 if face != primary {

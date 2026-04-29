@@ -193,7 +193,7 @@ pub struct LayoutConfig {
     /// 0148 / #238). The Grid path subtracts a 3.0 baseline (default
     /// spacing 2.0 + default thickness 1.0) so the default configuration
     /// contributes zero padding and existing Text snapshots are
-    /// byte-identical; larger values widen the rank gap around labelled
+    /// byte-identical; larger values widen the rank gap around labeled
     /// edges in proportion to the Grid scale factor.
     pub edge_label_spacing: f64,
     pub backward_edge_side_grouping: bool,

@@ -574,10 +574,10 @@ pub fn layout(
     }
 
     // Close unclosed activations
-    for (pidx, stack) in activation_stacks.iter_mut().enumerate() {
+    for (participant_index, stack) in activation_stacks.iter_mut().enumerate() {
         while let Some((y_start, depth)) = stack.pop() {
             let y_end = (cursor_y - EVENT_SPACING / 2.0).max(y_start);
-            let cx = participants[pidx].center_x;
+            let cx = participants[participant_index].center_x;
             activations.push(SvgActivation {
                 x: cx - ACTIVATION_WIDTH / 2.0 + (depth as f64 * 3.0),
                 y_start,

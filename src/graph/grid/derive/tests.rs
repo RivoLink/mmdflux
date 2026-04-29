@@ -807,11 +807,11 @@ fn direction_override_none_when_not_specified() {
 }
 
 // Plan 0148 (#238): padding grid-mode label dummies widens rank gaps
-// for labelled edges. `deconflict_backward_corridor_columns` (this
+// for labeled edges. `deconflict_backward_corridor_columns` (this
 // module, `MIN_CORRIDOR_GAP = 2`) runs post-projection on grid-space
 // paths, so same-column backward-edge corridors must still be spread
 // at the new scale. This regression guard renders a TD fixture with
-// two labelled backward edges at `edge_label_spacing = 20.0` and
+// two labeled backward edges at `edge_label_spacing = 20.0` and
 // asserts the corridor is well-formed (no silent collapse, both
 // labels present) while Text rendering continues to succeed.
 #[test]

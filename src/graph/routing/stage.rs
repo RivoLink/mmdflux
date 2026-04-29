@@ -175,7 +175,7 @@ pub fn route_graph_geometry(
     // `label_position` against the final post-fan path before freezing it
     // into `label_geometry`. Narrow predicate: OrthogonalRoute + is_backward
     // + label_side ∈ {Above, Below}. Forward orthogonal and non-orthogonal
-    // branches already get their anchors revalidated or recomputed upstream.
+    // branches already get their anchors re-validated or recomputed upstream.
     // See `findings/01-producer-seam-choice.md`.
     align_backward_side_offset_labels(&mut edges, diagram, metrics, edge_routing);
 
@@ -220,7 +220,7 @@ pub fn route_graph_geometry(
         // midpoint can end up only a few pixels apart when the engine
         // pre-shifted the forward. Keyed off `full_compartment_size`
         // (not `compartment_size`) so singleton axis-conflict
-        // sub-clusters inside a multi-labelled cross-band compartment
+        // sub-clusters inside a multi-labeled cross-band compartment
         // still get the wire-up — their arc-midpoint is the consistent
         // reference, not the engine anchor.
         if outcome.full_compartment_size == 1 {

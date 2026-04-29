@@ -251,7 +251,7 @@ pub fn get_layers_in_order(num_layers: usize, downward: bool) -> Vec<usize> {
 /// Returns node indices sorted by their position in their layer.
 pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
     let effective_edges = graph.effective_edges();
-    let mut preds: Vec<NodeIndex> = effective_edges
+    let mut predecessors: Vec<NodeIndex> = effective_edges
         .iter()
         .enumerate()
         .filter(|&(idx, &(from, to))| {
@@ -260,8 +260,8 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
         .map(|(_, &(from, _))| from)
         .collect();
 
-    preds.sort_by_key(|&n| graph.order[n]);
-    preds
+    predecessors.sort_by_key(|&n| graph.order[n]);
+    predecessors
 }
 
 /// Get the successors of a node (nodes in the layer below that this node connects to).
@@ -269,7 +269,7 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
 /// Returns node indices sorted by their position in their layer.
 pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
     let effective_edges = graph.effective_edges();
-    let mut succs: Vec<NodeIndex> = effective_edges
+    let mut successors: Vec<NodeIndex> = effective_edges
         .iter()
         .enumerate()
         .filter(|&(idx, &(from, to))| {
@@ -278,8 +278,8 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
         .map(|(_, &(_, to))| to)
         .collect();
 
-    succs.sort_by_key(|&n| graph.order[n]);
-    succs
+    successors.sort_by_key(|&n| graph.order[n]);
+    successors
 }
 
 /// Get neighbors based on sweep direction.
@@ -585,13 +585,13 @@ fn debug_dump_layer_matrix(graph: &LayoutGraph, layers: &[Vec<Option<NodeIndex>>
             let order = graph.order[node];
             let is_border = is_border_node(graph, node);
             let is_dummy_like = is_dummy_like(graph, node);
-            let preds = get_predecessors(graph, node);
-            let pred_entries: Vec<String> = preds
+            let predecessors = get_predecessors(graph, node);
+            let pred_entries: Vec<String> = predecessors
                 .iter()
                 .map(|&p| format!("{}(order={})", graph.node_ids[p].0, graph.order[p]))
                 .collect();
             eprintln!(
-                "[layer_matrix]   pos {} node={} order={} border={} dummy_like={} preds=[{}]",
+                "[layer_matrix]   pos {} node={} order={} border={} dummy_like={} predecessors=[{}]",
                 pos,
                 node_id,
                 order,
@@ -849,12 +849,12 @@ fn horizontal_compaction_with_direction(
 
     // Pass 1: Assign smallest valid coordinates (topological order from sources)
     // Each block root is placed at the max of (predecessor_x + edge_weight)
-    let topo = block_graph.topological_order();
-    for &root in &topo {
+    let topological_order = block_graph.topological_order();
+    for &root in &topological_order {
         let x = block_graph
             .predecessors(root)
             .iter()
-            .map(|&(pred, weight)| xs.get(&pred).copied().unwrap_or(0.0) + weight)
+            .map(|&(predecessor, weight)| xs.get(&predecessor).copied().unwrap_or(0.0) + weight)
             .fold(0.0_f64, f64::max);
         xs.insert(root, x);
     }
@@ -869,7 +869,7 @@ fn horizontal_compaction_with_direction(
     // For compound graphs, this pass applies a borderType guard: border nodes
     // matching the current alignment direction are skipped to prevent them
     // from crossing their subgraph boundary. See the guard logic below.
-    for &root in topo.iter().rev() {
+    for &root in topological_order.iter().rev() {
         let successors = block_graph.successors(root);
         if !successors.is_empty() {
             // borderType guard: skip pull-right for border nodes that match
@@ -894,7 +894,7 @@ fn horizontal_compaction_with_direction(
 
             let pull_right = successors
                 .iter()
-                .filter_map(|&(succ, weight)| xs.get(&succ).map(|&x| x - weight))
+                .filter_map(|&(successor, weight)| xs.get(&successor).map(|&x| x - weight))
                 .fold(f64::INFINITY, f64::min);
             if pull_right.is_finite() {
                 let current = xs[&root];
@@ -964,11 +964,11 @@ impl BlockGraph {
             out.push((to, weight));
         }
 
-        let inp = self.in_edges.entry(to).or_default();
-        if let Some(entry) = inp.iter_mut().find(|(n, _)| *n == from) {
+        let ie = self.in_edges.entry(to).or_default();
+        if let Some(entry) = ie.iter_mut().find(|(n, _)| *n == from) {
             entry.1 = entry.1.max(weight);
         } else {
-            inp.push((from, weight));
+            ie.push((from, weight));
         }
     }
 
@@ -1007,17 +1007,17 @@ impl BlockGraph {
         while let Some(node) = queue.pop_front() {
             result.push(node);
             // Collect and sort successors for determinism
-            let mut succs: Vec<NodeIndex> = self
+            let mut successors: Vec<NodeIndex> = self
                 .successors(node)
                 .iter()
-                .filter_map(|&(succ, _)| {
-                    let deg = in_degree.get_mut(&succ).unwrap();
+                .filter_map(|&(successor, _)| {
+                    let deg = in_degree.get_mut(&successor).unwrap();
                     *deg -= 1;
-                    if *deg == 0 { Some(succ) } else { None }
+                    if *deg == 0 { Some(successor) } else { None }
                 })
                 .collect();
-            succs.sort();
-            queue.extend(succs);
+            successors.sort();
+            queue.extend(successors);
         }
 
         result
@@ -1271,7 +1271,7 @@ fn balance(
 ///    a. Compute vertical alignment (group nodes into blocks)
 ///    b. Compute horizontal compaction (assign x-coordinates)
 /// 3. Find the alignment with smallest width
-/// 4. Align all results to the smallest's bounds
+/// 4. Align all results to the smallest bounds
 /// 5. Return median of all 4 alignments for each node
 pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, f64> {
     if graph.node_ids.is_empty() {
@@ -1305,7 +1305,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
     // Step 3: Find smallest width
     let smallest = find_smallest_width(graph, &results, config.direction);
 
-    // Step 4: Align others to smallest's bounds
+    // Step 4: Align others to smallest bounds
     align_to_smallest(&mut results, smallest);
 
     // Step 5: Balance (median of all 4)
@@ -1531,8 +1531,8 @@ mod tests {
 
         assert!(!lg.is_position_node(sg_idx));
 
-        let preds = get_predecessors(&lg, b_idx);
-        assert_eq!(preds, vec![a_idx]);
+        let predecessors = get_predecessors(&lg, b_idx);
+        assert_eq!(predecessors, vec![a_idx]);
     }
 
     #[test]
@@ -1554,11 +1554,11 @@ mod tests {
         let b = lg.node_index[&"B".into()];
         let c = lg.node_index[&"C".into()];
 
-        let preds = get_predecessors(&lg, d);
+        let predecessors = get_predecessors(&lg, d);
         // D has predecessors B and C, sorted by order (B=0, C=1)
-        assert_eq!(preds.len(), 2);
-        assert_eq!(preds[0], b);
-        assert_eq!(preds[1], c);
+        assert_eq!(predecessors.len(), 2);
+        assert_eq!(predecessors[0], b);
+        assert_eq!(predecessors[1], c);
     }
 
     #[test]
@@ -1568,11 +1568,11 @@ mod tests {
         let b = lg.node_index[&"B".into()];
         let c = lg.node_index[&"C".into()];
 
-        let succs = get_successors(&lg, a);
+        let successors = get_successors(&lg, a);
         // A has successors B and C, sorted by order (B=0, C=1)
-        assert_eq!(succs.len(), 2);
-        assert_eq!(succs[0], b);
-        assert_eq!(succs[1], c);
+        assert_eq!(successors.len(), 2);
+        assert_eq!(successors[0], b);
+        assert_eq!(successors[1], c);
     }
 
     #[test]
@@ -2375,10 +2375,10 @@ mod tests {
         assert_eq!(bg.successors(1).len(), 1);
         assert_eq!(bg.successors(1)[0], (2, 50.0));
 
-        let topo = bg.topological_order();
-        let pos_0 = topo.iter().position(|&n| n == 0).unwrap();
-        let pos_1 = topo.iter().position(|&n| n == 1).unwrap();
-        let pos_2 = topo.iter().position(|&n| n == 2).unwrap();
+        let topological_order = bg.topological_order();
+        let pos_0 = topological_order.iter().position(|&n| n == 0).unwrap();
+        let pos_1 = topological_order.iter().position(|&n| n == 1).unwrap();
+        let pos_2 = topological_order.iter().position(|&n| n == 2).unwrap();
         assert!(pos_0 < pos_1);
         assert!(pos_1 < pos_2);
     }
@@ -2453,10 +2453,10 @@ mod tests {
         assert_eq!(bg.predecessors(1).len(), 1);
         assert_eq!(bg.predecessors(2).len(), 1);
 
-        let topo = bg.topological_order();
-        let pos_0 = topo.iter().position(|&n| n == 0).unwrap();
-        let pos_1 = topo.iter().position(|&n| n == 1).unwrap();
-        let pos_2 = topo.iter().position(|&n| n == 2).unwrap();
+        let topological_order = bg.topological_order();
+        let pos_0 = topological_order.iter().position(|&n| n == 0).unwrap();
+        let pos_1 = topological_order.iter().position(|&n| n == 1).unwrap();
+        let pos_2 = topological_order.iter().position(|&n| n == 2).unwrap();
         assert!(pos_0 < pos_1);
         assert!(pos_0 < pos_2);
     }

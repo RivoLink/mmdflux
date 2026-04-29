@@ -55,7 +55,7 @@ pub(super) fn label_block(label: &str) -> LabelBlock<'_> {
     }
 }
 
-/// Resolve the effective label string for text rendering, honouring the
+/// Resolve the effective label string for text rendering, honoring the
 /// pre-engine wrap artifact (plan 0147). When `wrapped_label_lines` is
 /// populated, returns the `'\n'`-joined line vector so existing
 /// `'\n'`-splitting call sites (`label_block`, `draw_label_direct`) pick

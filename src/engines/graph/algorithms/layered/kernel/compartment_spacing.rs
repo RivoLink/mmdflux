@@ -140,7 +140,7 @@ pub(crate) fn compute_reservations(compartments: &[Compartment]) -> HashMap<i32,
 /// dummies inserted by `pipeline::insert_self_edge_dummies`) are
 /// ignored.
 ///
-/// `cross_coords` gives the cross-axis centre of each dummy — x for
+/// `cross_coords` gives the cross-axis center of each dummy — x for
 /// TopBottom/BottomTop and y for LeftRight/RightLeft. Phase 3 passes in
 /// whichever axis Brandes-Köpf has just produced.
 #[allow(dead_code)]
@@ -621,7 +621,7 @@ mod projection_tests {
     #[test]
     fn compute_entry_point_reserves_for_two_overlapping_labels_td() {
         // Two 28-tall TD labels on rank 1 with overlapping cross bands.
-        // cross centres 10 and 30, widths 30 → bands [-5..25] and [15..45],
+        // cross centers 10 and 30, widths 30 → bands [-5..25] and [15..45],
         // overlap is trivial. Reservation = 28 + 28 + 4 = 60.
         let (lg, cross) = build_with_label_dummies(
             &[("A", "B"), ("C", "D")],
@@ -639,7 +639,7 @@ mod projection_tests {
         let (mut lg, cross) = build_with_label_dummies(&[("A", "B")], &[(0, 1, 30.0, 28.0, 10.0)]);
 
         // Inject a DummyType::Edge "self-edge carrier" dummy on the same rank.
-        let carrier_id = NodeId::from("_selfedge_carrier");
+        let carrier_id = NodeId::from("_self_edge_carrier");
         let carrier_idx = lg.node_ids.len();
         let carrier = DummyNode::edge(0, 1);
         lg.node_ids.push(carrier_id.clone());
@@ -668,7 +668,7 @@ mod projection_tests {
     #[test]
     fn direction_lr_uses_width_as_rank_axis_extent() {
         // Two 60-wide, 14-tall LR labels on rank 1. Cross (y) axis uses height.
-        // cross centres 10 and 20, heights 14 → bands [3..17] and [13..27],
+        // cross centers 10 and 20, heights 14 → bands [3..17] and [13..27],
         // overlap. Reservation = 60 + 60 + 4 = 124.
         let (lg, cross) = build_with_label_dummies(
             &[("A", "B"), ("C", "D")],

@@ -43,6 +43,7 @@ Rules:
 ## Issue and PR Workflow
 
 When fixing a GitHub issue:
+
 1. Read the issue and comments: `gh issue view <N> --comments`
 2. Create a conventional branch: `fix/description` or `feat/description`
 3. Keep PRs as a **single commit** — squash before merging, use `git push --force-with-lease` when iterating
@@ -62,7 +63,7 @@ just check                     # lint + test + architecture
 just build                     # Debug build
 just release                   # Release build
 just architecture-host         # Host a semantic architecture lint server
-just architecture-check        # Run the archnitecture linter
+just architecture-check        # Run the architecture linter
 just run diagram.mmd           # Run the CLI
 just fmt                       # Format code
 

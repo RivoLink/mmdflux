@@ -232,7 +232,7 @@ fn edge_label_info_padding_includes_edge_label_spacing_and_thickness() {
 // Grid-mode measurement pads label-dummy dims via
 // `pad_edge_label_dims_grid`, widening rank gaps in proportion to the
 // knob. Increasing spacing from the 2.0 default adds rows between
-// labelled ranks — the public-API anchor matching the kernel-level
+// labeled ranks — the public-API anchor matching the kernel-level
 // `grid_text_bounds_grow_with_edge_label_spacing` test.
 #[test]
 fn text_render_honors_edge_label_spacing() {
@@ -260,12 +260,12 @@ fn text_render_honors_edge_label_spacing() {
     let big_rows = text_big.lines().count();
     assert!(
         big_rows > small_rows + 1,
-        "increasing edge_label_spacing must add rows between labelled ranks: small={small_rows}, big={big_rows}"
+        "increasing edge_label_spacing must add rows between labeled ranks: small={small_rows}, big={big_rows}"
     );
 }
 
 // Plan 0147: the canonical-proportional solve path (`run_layered_layout`
-// with `MeasurementMode::Proportional`) must also honour
+// with `MeasurementMode::Proportional`) must also honor
 // `edge_label_spacing`. MMDS routed output and any other Canonical
 // consumer reads proportional geometry through this code path; a value
 // of 40 vs the 2.0 default must visibly change layout bounds / node
@@ -309,7 +309,7 @@ fn canonical_proportional_solve_honors_edge_label_spacing_override() {
 
 // Plan 0148 Task 1.1 spike (#238): Grid-mode `run_layered_layout` must
 // respond to `edge_label_spacing`. The Text renderer consumes Grid-mode
-// geometry, so if bounds don't grow with the knob, Text cannot honour
+// geometry, so if bounds don't grow with the knob, Text cannot honor
 // it. This is the kernel anchor for the public-API contract in
 // `text_render_honors_edge_label_spacing`. Red today (Grid arm ignores
 // the knob); Task 2.3 wires `pad_edge_label_dims_grid` and turns it

@@ -574,7 +574,7 @@ fn c4_backward_horizontal_corner_avoidance() {
 // ---- PR #B canaries (C5-C9). Activated in task 2.1. These pass against
 // the wrapper's `AllBodyLabels` scope today because `compute_label_placements`
 // is correct for that scope at the wrapper level; the strict Phase 2
-// callsite coverage (unified branch, drift-gate deletion, GridLayout field
+// call-site coverage (unified branch, drift-gate deletion, GridLayout field
 // deletion) is exercised by task 2.9's snapshot regeneration. These canaries
 // serve as targeted structural regression guards during Phase 2 refactoring.
 
@@ -616,7 +616,7 @@ fn c6_class_diagram_edge_renders_via_unified_path() {
 /// C7: backward edge with overwrite_arrows=true preserved. The backward
 /// edge in `label_clamp_bt_review.mmd` still paints its arrowhead after
 /// the render-time placer writes the label. PR #B's unified path must
-/// honour the `is_backward` signal that triggers arrow-overwrite behavior.
+/// honor the `is_backward` signal that triggers arrow-overwrite behavior.
 #[test]
 fn c7_backward_overwrite_arrows_preserved() {
     let output = render_flowchart_fixture("label_clamp_bt_review.mmd");

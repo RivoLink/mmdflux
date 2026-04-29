@@ -197,7 +197,7 @@ pub struct EdgeLabelGeometry {
     /// relative to the compartment's shared anchor and may sit off the
     /// edge's own arc-length midpoint by more than a revalidation
     /// tolerance. Pre-lane placeholders use the `Default` value of `1` so
-    /// singleton behaviour is preserved when no lane pass has run.
+    /// singleton behavior is preserved when no lane pass has run.
     pub compartment_size: usize,
 }
 
@@ -350,7 +350,7 @@ pub struct RoutedEdgeGeometry {
     /// so the kernel's Grid measurement (which ran pre-routing) stays on the
     /// original pre-engine wrap. That's what keeps Text snapshots
     /// byte-stable — Grid-measured layer heights were committed before this
-    /// field existed, and Text consumers that honour a routed override need
+    /// field existed, and Text consumers that honor a routed override need
     /// to opt in explicitly. See `findings/01-spike-result.md` §1.2.
     pub effective_wrapped_lines: Option<Vec<String>>,
 }

@@ -201,7 +201,7 @@ pub(crate) fn reconcile_sublayouts(
 /// intact.
 ///
 /// Edge points connected to shifted nodes are interpolated: full shift at the
-/// shifted endpoint, tapering to zero at the unshifted endpoint.
+/// shifted endpoint, tapering to zero at the un-shifted endpoint.
 pub(crate) fn center_override_subgraphs(diagram: &Graph, layout: &mut layered::LayoutResult) {
     // Cross-axis: x for TD/BT, y for LR/RL.
     let horizontal = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -491,11 +491,11 @@ pub(crate) fn center_override_subgraphs(diagram: &Graph, layout: &mut layered::L
                             }
                         }
                     };
-                let (eligible_preds, eligible_succs): (Vec<_>, Vec<_>) = eligible
+                let (eligible_predecessors, eligible_successors): (Vec<_>, Vec<_>) = eligible
                     .into_iter()
                     .partition(|(id, _, _)| pred_set.contains(id.as_str()));
-                apply_group_shift(&eligible_preds, &mut node_shifts);
-                apply_group_shift(&eligible_succs, &mut node_shifts);
+                apply_group_shift(&eligible_predecessors, &mut node_shifts);
+                apply_group_shift(&eligible_successors, &mut node_shifts);
             }
         }
     }
@@ -515,7 +515,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Graph, layout: &mut layered::L
         }
     }
 
-    // Adjust edge points: interpolate shift from shifted endpoint to unshifted endpoint.
+    // Adjust edge points: interpolate shift from shifted endpoint to un-shifted endpoint.
     for edge in &mut layout.edges {
         let from_delta = node_shifts.get(edge.from.0.as_str()).map(|&(d, _)| d);
         let to_delta = node_shifts.get(edge.to.0.as_str()).map(|&(d, _)| d);
@@ -791,7 +791,7 @@ pub(crate) fn rearrange_concurrent_regions(
             .collect();
 
         // Collect nested subgraph IDs for each region.
-        let region_nested_sgs: Vec<HashSet<String>> = sg
+        let region_nested_subgraphs: Vec<HashSet<String>> = sg
             .concurrent_regions
             .iter()
             .map(|region_id| collect_descendant_subgraphs(diagram, region_id))
@@ -805,7 +805,7 @@ pub(crate) fn rearrange_concurrent_regions(
         for members in &region_members {
             all_internal_ids.extend(members.iter().cloned());
         }
-        for nested in &region_nested_sgs {
+        for nested in &region_nested_subgraphs {
             all_internal_ids.extend(nested.iter().cloned());
         }
 
@@ -840,7 +840,7 @@ pub(crate) fn rearrange_concurrent_regions(
             }
 
             // Shift nested subgraph bounds and their compound node rects.
-            for nested_id in &region_nested_sgs[i] {
+            for nested_id in &region_nested_subgraphs[i] {
                 if let Some(bounds) = layout.subgraph_bounds.get_mut(nested_id) {
                     bounds.x += dx;
                     bounds.y += dy;

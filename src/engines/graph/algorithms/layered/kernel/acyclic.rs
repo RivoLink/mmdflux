@@ -67,7 +67,7 @@ pub(super) fn run_with_policy(graph: &mut LayoutGraph, policy: AcyclicPolicy) {
 
 /// Detect cross-compound edges that participate in compound-level cycles.
 ///
-/// Builds a compound-level graph from unreversed cross-compound edges, then
+/// Builds a compound-level graph from un-reversed cross-compound edges, then
 /// iteratively removes one deterministic feedback edge per remaining cycle.
 fn detect_compound_back_edges(graph: &LayoutGraph, back_edges: &mut BTreeSet<usize>) {
     use std::collections::HashMap;
@@ -91,7 +91,7 @@ fn detect_compound_back_edges(graph: &LayoutGraph, back_edges: &mut BTreeSet<usi
         })
         .collect();
 
-    // Build compound-level edges from unreversed cross-compound original edges.
+    // Build compound-level edges from un-reversed cross-compound original edges.
     // Each original edge remains a distinct candidate so tie-breaking can use
     // original edge index and preserve deterministic output.
     let mut compound_edges = Vec::new();

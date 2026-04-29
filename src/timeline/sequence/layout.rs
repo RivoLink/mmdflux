@@ -375,11 +375,11 @@ pub fn layout(model: &Sequence) -> SequenceLayout {
     }
 
     // Close any unclosed activations at the bottom of the diagram
-    for (pidx, stack) in activation_stacks.iter_mut().enumerate() {
+    for (participant_index, stack) in activation_stacks.iter_mut().enumerate() {
         while let Some((y_start, depth)) = stack.pop() {
             let y_end = cursor_y.saturating_sub(1).max(y_start);
             activations.push(ActivationRect {
-                participant_idx: pidx,
+                participant_idx: participant_index,
                 y_start,
                 y_end,
                 depth,

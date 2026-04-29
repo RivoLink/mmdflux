@@ -218,11 +218,11 @@ fn cleanup_stale_socket(cluster: &host::ClusterMetadata) {
     }
 }
 
-/// Standby liveness poll interval — how often to check if the leader is still alive
+/// Standby live-ness poll interval — how often to check if the leader is still alive
 /// when no file changes are happening.
 const STANDBY_LIVENESS_POLL: Duration = Duration::from_secs(5);
 
-/// Run as a standby: monitor leader liveness and promote to leader if it dies.
+/// Run as a standby: monitor leader live-ness and promote to leader if it dies.
 /// Standbys start cold (no warm-up) and only warm up on promotion.
 fn run_standby(
     runner: &mut ArchitectureWatchRunner,
@@ -245,11 +245,11 @@ fn run_standby(
             STANDBY_LIVENESS_POLL.as_secs()
         );
 
-        // Poll with timeout so we check leader liveness even without file changes.
+        // Poll with timeout so we check leader live-ness even without file changes.
         let event = match source.recv_timeout(STANDBY_LIVENESS_POLL)? {
             Some(event) => event,
             None => {
-                // Timeout — no file changes, but check leader liveness.
+                // Timeout — no file changes, but check leader live-ness.
                 if !leader_is_alive(repo_root) {
                     eprintln!("[standby] leader died, attempting promotion...");
                     if try_promote_to_leader(repo_root, my_pid)? {
@@ -279,7 +279,7 @@ fn run_standby(
             break;
         };
 
-        // Check leader liveness on file changes too.
+        // Check leader live-ness on file changes too.
         if !leader_is_alive(repo_root) {
             eprintln!("[standby] leader died, attempting promotion...");
             if try_promote_to_leader(repo_root, my_pid)? {

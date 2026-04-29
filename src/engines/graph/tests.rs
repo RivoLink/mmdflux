@@ -1033,7 +1033,7 @@ fn mermaid_subgraph_as_node_edge_uses_isolated_default_direction() {
 }
 
 #[test]
-fn mermaid_mmds_keeps_isolated_direction_override_layouted() {
+fn mermaid_mmds_keeps_isolated_direction_override_layout() {
     let input = include_str!("../../../tests/fixtures/flowchart/subgraph_direction_isolated.mmd");
     let flowchart = crate::mermaid::parse_flowchart(input).unwrap();
     let diagram = crate::diagrams::flowchart::compile_to_graph(&flowchart);
