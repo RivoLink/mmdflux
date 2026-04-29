@@ -41,6 +41,10 @@ fmt-check:
 setup-hooks:
     cog install-hook --all --overwrite
 
+# Check commit messages on the current branch
+commit-check range='origin/main..HEAD':
+    cog check "{{ range }}"
+
 # Run the CLI
 run *args:
     cargo +stable run -- {{ args }}
@@ -73,8 +77,8 @@ module-map-pivot-dag module *args:
 conformance *args:
     cargo +stable nextest run --test mmds_conformance --success-output immediate {{ args }}
 
-# Check that everything compiles, passes lint, tests, and architecture policy
-check: lint test
+# Check commit messages, compiles, lint, tests, and architecture policy
+check: commit-check lint test
 
 # Build wasm bindings for browser and bundler targets
 wasm-build:
