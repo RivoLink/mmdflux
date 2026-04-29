@@ -41,7 +41,7 @@ fn routing_style_parse_rejects_unknown() {
 }
 
 #[test]
-fn routing_style_display_roundtrips() {
+fn routing_style_display_round_trips() {
     assert_eq!(RoutingStyle::Direct.to_string(), "direct");
     assert_eq!(RoutingStyle::Polyline.to_string(), "polyline");
     assert_eq!(RoutingStyle::Orthogonal.to_string(), "orthogonal");
@@ -91,7 +91,7 @@ fn curve_parse_rejects_unknown() {
 }
 
 #[test]
-fn curve_display_roundtrips() {
+fn curve_display_round_trips() {
     assert_eq!(Curve::Basis.to_string(), "basis");
     assert_eq!(Curve::Linear(CornerStyle::Sharp).to_string(), "linear");
     assert_eq!(
@@ -117,7 +117,7 @@ fn corner_style_parse_rejects_unknown() {
 }
 
 #[test]
-fn corner_style_display_roundtrips() {
+fn corner_style_display_round_trips() {
     assert_eq!(CornerStyle::Sharp.to_string(), "sharp");
     assert_eq!(CornerStyle::Rounded.to_string(), "rounded");
 }
@@ -192,7 +192,7 @@ fn edge_preset_parse_rejects_unknown() {
 }
 
 #[test]
-fn edge_preset_display_roundtrips() {
+fn edge_preset_display_round_trips() {
     assert_eq!(EdgePreset::Straight.to_string(), "straight");
     assert_eq!(EdgePreset::Polyline.to_string(), "polyline");
     assert_eq!(EdgePreset::Step.to_string(), "step");

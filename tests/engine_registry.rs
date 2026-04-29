@@ -130,7 +130,7 @@ fn engine_algorithm_id_rejects_unknown() {
 }
 
 #[test]
-fn engine_algorithm_id_display_roundtrips() {
+fn engine_algorithm_id_display_round_trips() {
     for input in ["flux-layered", "mermaid-layered"] {
         let id = EngineAlgorithmId::parse(input).unwrap();
         assert_eq!(id.to_string(), input);
@@ -139,7 +139,7 @@ fn engine_algorithm_id_display_roundtrips() {
 
 #[cfg(feature = "engine-elk")]
 #[test]
-fn engine_algorithm_id_display_roundtrips_elk() {
+fn engine_algorithm_id_display_round_trips_elk() {
     for input in ["elk-layered", "elk-mrtree"] {
         let id = EngineAlgorithmId::parse(input).unwrap();
         assert_eq!(id.to_string(), input);

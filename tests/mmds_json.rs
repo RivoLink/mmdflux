@@ -1020,11 +1020,11 @@ fn mmds_schema_includes_port_definition() {
     let defs = v["$defs"].as_object().expect("schema should have $defs");
     let port = defs.get("Port").expect("schema should define Port");
     let required = port["required"].as_array().unwrap();
-    let required_strs: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
-    assert!(required_strs.contains(&"face"));
-    assert!(required_strs.contains(&"fraction"));
-    assert!(required_strs.contains(&"position"));
-    assert!(required_strs.contains(&"group_size"));
+    let required_strings: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
+    assert!(required_strings.contains(&"face"));
+    assert!(required_strings.contains(&"fraction"));
+    assert!(required_strings.contains(&"position"));
+    assert!(required_strings.contains(&"group_size"));
 }
 
 #[test]
@@ -1991,7 +1991,7 @@ mod plan_0151_routed_mmds_replay_contract {
         // `compartment_size = 2` trust signal is the mechanism).
         //
         // This is intentionally *not* a direct-vs-replay parity check:
-        // direct SVG currently revalidates side-offset labels against the
+        // direct SVG currently runs side-offset labels through revalidation against the
         // rendered path, so direct and replay legitimately disagree by the
         // side-offset magnitude (~14 px). Converging that gap is out of
         // scope for this plan — see the Non-Goals section of the plan.

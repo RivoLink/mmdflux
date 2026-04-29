@@ -1,3 +1,10 @@
+ignore_paths = [
+    "tests/fixtures/**/*",
+    "tests/parity-fixtures/**/*",
+    "tests/snapshots/**/*",
+    "tests/svg-snapshots/**/*",
+]
+
 words = [
     "aabb",
     "accdescr",
@@ -77,6 +84,7 @@ words = [
     "inserter",
     "intra",
     "invalidvalid",
+    "justfile",
     "kevinswiber",
     "kib",
     "köpf",

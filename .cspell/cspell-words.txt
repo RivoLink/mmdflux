@@ -9,9 +9,11 @@ deque
 hexdigit
 hypot
 icanon
+jsonschema
 multigraph
 peekable
 rfind
+replacen
 rposition
 rsplit
 signum

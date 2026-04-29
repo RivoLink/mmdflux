@@ -19,5 +19,7 @@ ignorePaths:
   - "**/package-lock.json"
   - scripts/out/**
   - scripts/tests/out/**
+  - tests/fixtures/**
+  - tests/parity-fixtures/**
   - tests/snapshots/**
   - tests/svg-snapshots/**

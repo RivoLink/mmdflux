@@ -128,18 +128,18 @@ fn check_semantic(direct: &Graph, roundtrip: &Graph) -> TierResult {
     // Normalize node lists to direct children only on both sides. Runtime
     // internals may carry descendant membership for compound layout parity,
     // but semantic parity compares the contract-level direct-children view.
-    let direct_sgs: BTreeMap<_, _> = direct.subgraphs.iter().collect();
-    let roundtrip_sgs: BTreeMap<_, _> = roundtrip.subgraphs.iter().collect();
+    let direct_subgraphs: BTreeMap<_, _> = direct.subgraphs.iter().collect();
+    let roundtrip_subgraphs: BTreeMap<_, _> = roundtrip.subgraphs.iter().collect();
 
-    if direct_sgs.len() != roundtrip_sgs.len() {
+    if direct_subgraphs.len() != roundtrip_subgraphs.len() {
         mismatches.push(format!(
             "subgraph count: {} vs {}",
-            direct_sgs.len(),
-            roundtrip_sgs.len()
+            direct_subgraphs.len(),
+            roundtrip_subgraphs.len()
         ));
     } else {
-        for (id, d_sg) in &direct_sgs {
-            match roundtrip_sgs.get(id) {
+        for (id, d_sg) in &direct_subgraphs {
+            match roundtrip_subgraphs.get(id) {
                 None => mismatches.push(format!("subgraph {id} missing in roundtrip")),
                 Some(r_sg) => {
                     let mut direct_children: Vec<String> = d_sg
