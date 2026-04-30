@@ -186,7 +186,7 @@ impl BoundariesCliHarness {
     }
 
     fn new(mut host: Option<HostFixture>, mode: HarnessMode) -> Self {
-        let discovery_root = unique_temp_dir("xbd-root");
+        let discovery_root = unique_temp_dir("boundaries-root");
         let config_path = discovery_root.join("invalid-boundaries.toml");
         fs::create_dir_all(&discovery_root).unwrap();
         fs::write(&config_path, "version = 99\n").unwrap();

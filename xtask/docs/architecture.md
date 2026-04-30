@@ -435,7 +435,7 @@ The design draws from several architecture enforcement tools:
 - **[Import Linter](https://import-linter.readthedocs.io/)** (Python) —
   contract-based dependency checking with explicit exception management.
   The separation of graph collection from rule evaluation follows Import
-  Linter's architecture.
+  Linter architecture.
 
 - **[dependency-cruiser](https://github.com/nicedoc/dependency-cruiser)**
   (JavaScript) — rule-based dependency validation with rich reporting. The
@@ -444,7 +444,7 @@ The design draws from several architecture enforcement tools:
 
 - **[Nx `enforce-module-boundaries`](https://nx.dev/features/enforce-module-boundaries)**
   (TypeScript) — tag-based boundary grouping. The tag system for grouping
-  modules and targeting rules by tag is directly inspired by Nx's tag
+  modules and targeting rules by tag is directly inspired by Nx tag
   constraints.
 
 - **[JS Boundaries](https://github.com/nicolo-ribaudo/eslint-plugin-boundaries)**

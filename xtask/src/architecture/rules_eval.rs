@@ -86,13 +86,13 @@ pub(crate) fn evaluate_rules_with_module_graph(
             RuleKind::Independence(ind) => {
                 evaluate_independence(graph, module_graph, rule, &ind.members, &mut all_violations);
             }
-            RuleKind::Acyclic(acyc) => {
+            RuleKind::Acyclic(acyclic_rule) => {
                 evaluate_acyclic(
                     graph,
                     module_graph,
                     rule,
-                    &acyc.members,
-                    acyc.skip_parent_child,
+                    &acyclic_rule.members,
+                    acyclic_rule.skip_parent_child,
                     &mut all_violations,
                 );
             }
@@ -1246,8 +1246,8 @@ mod tests {
             .modules
             .insert("render".to_string(), Default::default());
         // Enable skip_parent_child on the rule
-        if let RuleKind::Acyclic(ref mut acyc) = policy.rules[0].rule {
-            acyc.skip_parent_child = true;
+        if let RuleKind::Acyclic(ref mut acyclic_rule) = policy.rules[0].rule {
+            acyclic_rule.skip_parent_child = true;
         }
         let result = evaluate_rules_with_module_graph(&empty_graph(), Some(&graph), &policy);
         assert!(
@@ -1268,8 +1268,8 @@ mod tests {
         policy
             .modules
             .insert("graph".to_string(), Default::default());
-        if let RuleKind::Acyclic(ref mut acyc) = policy.rules[0].rule {
-            acyc.skip_parent_child = true;
+        if let RuleKind::Acyclic(ref mut acyclic_rule) = policy.rules[0].rule {
+            acyclic_rule.skip_parent_child = true;
         }
         let result = evaluate_rules_with_module_graph(&empty_graph(), Some(&graph), &policy);
         assert_eq!(result.violations.len(), 1, "peer cycle should be caught");

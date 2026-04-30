@@ -335,7 +335,7 @@ struct TimingBreakdown {
     qualified_path_candidate_file_filtering: Duration,
     qualified_path_file_reads: Duration,
     qualified_path_edition_attach: Duration,
-    qualified_path_sema_parse: Duration,
+    qualified_path_semantics_parse: Duration,
     qualified_path_module_locator_setup: Duration,
     qualified_path_module_locator_repeat: Duration,
     qualified_path_use_tree_walk: Duration,
@@ -373,7 +373,7 @@ struct QualifiedPathScanBreakdown {
     candidate_file_filtering: Duration,
     file_reads: Duration,
     edition_attach: Duration,
-    sema_parse: Duration,
+    semantics_parse: Duration,
     module_locator_setup: Duration,
     module_locator_repeat: Duration,
     use_tree_walk: Duration,
@@ -416,7 +416,7 @@ struct SlowModuleLocatorFile {
 }
 
 struct EdgeCollectionContext<'a> {
-    sema: &'a Semantics<'a, RootDatabase>,
+    semantics: &'a Semantics<'a, RootDatabase>,
     vfs: &'a Vfs,
     krate: HirCrate,
     root: Module,
@@ -493,7 +493,7 @@ pub(crate) fn run_with_context_report(
     // `attach_db` scope or it panics with "Try to use attached db, but no
     // db is attached".
     let collected_graphs = attach_db(db, || -> Result<_> {
-        let sema = Semantics::new(db);
+        let semantics = Semantics::new(db);
         let root = loaded.krate.root_module(db);
 
         let phase_started = Instant::now();
@@ -531,7 +531,7 @@ pub(crate) fn run_with_context_report(
             None
         };
         let edge_collection = EdgeCollectionContext {
-            sema: &sema,
+            semantics: &semantics,
             vfs: &loaded.vfs,
             krate: loaded.krate,
             root,
@@ -641,7 +641,7 @@ pub(crate) fn collect_graph_for_inspection(
     // See run_with_context_report — HIR queries on ra_ap 0.0.328 require
     // an attached db scope.
     attach_db(db, || -> Result<BoundaryGraph> {
-        let sema = Semantics::new(db);
+        let semantics = Semantics::new(db);
         let root = loaded.krate.root_module(db);
 
         let discovered_boundaries = discover_top_level_boundaries(root, db);
@@ -658,7 +658,7 @@ pub(crate) fn collect_graph_for_inspection(
         }
 
         let edge_collection = EdgeCollectionContext {
-            sema: &sema,
+            semantics: &semantics,
             vfs: &loaded.vfs,
             krate: loaded.krate,
             root,
@@ -1057,7 +1057,7 @@ fn collect_dependency_graphs(
     timings.qualified_path_candidate_file_filtering = breakdown.candidate_file_filtering;
     timings.qualified_path_file_reads = breakdown.file_reads;
     timings.qualified_path_edition_attach = breakdown.edition_attach;
-    timings.qualified_path_sema_parse = breakdown.sema_parse;
+    timings.qualified_path_semantics_parse = breakdown.semantics_parse;
     timings.qualified_path_module_locator_setup = breakdown.module_locator_setup;
     timings.qualified_path_module_locator_repeat = breakdown.module_locator_repeat;
     timings.qualified_path_use_tree_walk = breakdown.use_tree_walk;
@@ -1208,17 +1208,17 @@ fn collect_qualified_path_edges(
         let editioned_file_id = EditionedFileId::new(ctx.db, file_id, crate_edition);
         breakdown.edition_attach += attach_started.elapsed();
         let parse_started = Instant::now();
-        let source_file = ctx.sema.parse(editioned_file_id);
-        breakdown.sema_parse += parse_started.elapsed();
+        let source_file = ctx.semantics.parse(editioned_file_id);
+        breakdown.semantics_parse += parse_started.elapsed();
         let locator_started = Instant::now();
-        let module_locator = ModuleLocator::for_file(ctx.sema, ctx.db, file_id, ctx.krate);
+        let module_locator = ModuleLocator::for_file(ctx.semantics, ctx.db, file_id, ctx.krate);
         let locator_elapsed = locator_started.elapsed();
         breakdown.module_locator_setup += locator_elapsed;
         breakdown.parsed_files += 1;
         let parsed_ordinal = breakdown.parsed_files;
         if parsed_ordinal == 1 {
             let repeat_started = Instant::now();
-            let _ = ModuleLocator::for_file(ctx.sema, ctx.db, file_id, ctx.krate);
+            let _ = ModuleLocator::for_file(ctx.semantics, ctx.db, file_id, ctx.krate);
             breakdown.module_locator_repeat += repeat_started.elapsed();
         }
         update_slowest_module_locator_files(
@@ -1254,7 +1254,7 @@ fn collect_qualified_path_edges(
             file_use_tree_candidates += 1;
             let resolution_started = Instant::now();
             let resolution = record_relative_path_edge(
-                ctx.sema,
+                ctx.semantics,
                 ctx.krate,
                 ctx.root,
                 ctx.db,
@@ -1341,7 +1341,7 @@ fn collect_qualified_path_edges(
             file_path_candidates += 1;
             let resolution_started = Instant::now();
             let resolution = record_relative_path_edge(
-                ctx.sema,
+                ctx.semantics,
                 ctx.krate,
                 ctx.root,
                 ctx.db,
@@ -1419,7 +1419,7 @@ fn update_slowest_module_locator_files(
 
 #[allow(clippy::too_many_arguments)]
 fn record_relative_path_edge(
-    sema: &Semantics<'_, RootDatabase>,
+    semantics: &Semantics<'_, RootDatabase>,
     krate: HirCrate,
     root: Module,
     db: &RootDatabase,
@@ -1447,7 +1447,7 @@ fn record_relative_path_edge(
     let source_selector_path = module_selector_path(source_module, db);
     let source_module_segments = module_segments(source_module, db);
     let mut resolved_target_module = if graphs.exact_module_graph.is_some() {
-        resolve_target_module(sema, path, db, krate)
+        resolve_target_module(semantics, path, db, krate)
     } else {
         None
     };
@@ -1467,7 +1467,7 @@ fn record_relative_path_edge(
     } else {
         let Some(target_module) = resolved_target_module
             .take()
-            .or_else(|| resolve_target_module(sema, path, db, krate))
+            .or_else(|| resolve_target_module(semantics, path, db, krate))
         else {
             return PathResolutionKind::Ignored;
         };
@@ -1558,12 +1558,12 @@ fn source_location_for_range(path: &Path, source: &str, range: TextRange) -> Sou
 }
 
 fn resolve_target_module(
-    sema: &Semantics<'_, RootDatabase>,
+    semantics: &Semantics<'_, RootDatabase>,
     path: &ast::Path,
     db: &RootDatabase,
     krate: HirCrate,
 ) -> Option<Module> {
-    let PathResolution::Def(def) = sema.resolve_path(path)? else {
+    let PathResolution::Def(def) = semantics.resolve_path(path)? else {
         return None;
     };
     let target_module = owning_module(def, db)?;
@@ -1696,12 +1696,12 @@ fn root_export_boundaries(
 
 impl ModuleLocator {
     fn for_file(
-        sema: &Semantics<'_, RootDatabase>,
+        semantics: &Semantics<'_, RootDatabase>,
         db: &RootDatabase,
         file_id: ra_ap_vfs::FileId,
         krate: HirCrate,
     ) -> Self {
-        let mut modules = sema
+        let mut modules = semantics
             .file_to_module_defs(file_id)
             .filter(|module| module.krate(db) == krate)
             .filter_map(|module| {
@@ -2160,8 +2160,8 @@ fn render_timing_breakdown(timings: &TimingBreakdown) -> String {
     .unwrap();
     writeln!(
         output,
-        "[T] qualified path sema.parse: {:.2}s",
-        timings.qualified_path_sema_parse.as_secs_f64()
+        "[T] qualified path semantics.parse: {:.2}s",
+        timings.qualified_path_semantics_parse.as_secs_f64()
     )
     .unwrap();
     writeln!(

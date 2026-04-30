@@ -17,8 +17,7 @@ ignorePaths:
   - .cspell/cspell-words.txt
   - Cargo.lock
   - "**/package-lock.json"
-  - scripts/out/**
-  - scripts/tests/out/**
+  - scripts/**
   - tests/fixtures/**
   - tests/parity-fixtures/**
   - tests/snapshots/**

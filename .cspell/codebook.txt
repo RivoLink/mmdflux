@@ -6,6 +6,7 @@ accdescr
 acctitle
 acyclicer
 acyclicity
+actix
 apos
 autonumber
 autonumbering
@@ -55,7 +56,9 @@ dfs
 diamondhead
 discardable
 disjointness
+doctest
 doublecirc
+editioned
 edgesep
 elkjs
 eoi
@@ -70,6 +73,7 @@ frontmatter
 gansner
 gpt
 graphlib
+hir
 hkcu
 homebrew
 horiz
@@ -83,6 +87,7 @@ justfile
 kevinswiber
 kib
 köpf
+krate
 lca
 leftright
 lerp
@@ -116,9 +121,11 @@ nend
 networksimplex
 nextest
 nocapture
+nosemgrep
 nodesep
 noninteractive
 nord
+nx
 oneline
 orchestrator's
 orthogonalization
@@ -168,6 +175,7 @@ subgraph's
 sublayout
 sublayouts
 sugiyama
+suppressions
 svg's
 swiber
 tagdoc
@@ -178,6 +186,7 @@ tcsetattr
 termios
 tgt
 tldraw
+tmpfs
 tol
 topdown
 tradeoff
@@ -190,9 +199,11 @@ unpadded
 unparsed
 valinvalid
 verts
+vfs
 viewbox
 vmin
 vtime
+xdg
 xtask
 worktree
 worktrees
