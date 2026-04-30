@@ -17,6 +17,8 @@ ignorePaths:
   - .cspell/cspell-words.txt
   - "**/Cargo.lock"
   - "**/package-lock.json"
+  - docs/architecture/*.mmd
+  - docs/gallery.md
   - packages/package.json
   - scripts/**
   - tests/fixtures/**

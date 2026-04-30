@@ -36,8 +36,6 @@ host reuse and force a fresh local run. The watch-hosted architecture host
 uses Unix sockets on macOS/Linux and a named-pipe transport shape on Windows.
 The Windows client path still falls back locally today, so Windows
 contributors do not need any extra socket setup.
-Performance investigation notes for the xtask guard live in
-[`docs/architecture/semantic-boundaries-guard-performance.md`](/Users/kevin/src/mmdflux-semantic-architecture/docs/architecture/semantic-boundaries-guard-performance.md).
 
 ## Public Contract Tiers
 
