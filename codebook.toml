@@ -1,5 +1,7 @@
 ignore_paths = [
+    "**/Cargo.lock",
     "**/package-lock.json",
+    "packages/package.json",
     "scripts/**/*",
     "tests/fixtures/**/*",
     "tests/parity-fixtures/**/*",

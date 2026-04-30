@@ -15,8 +15,9 @@ dictionaryDefinitions:
 ignorePaths:
   - .cspell/codebook.txt
   - .cspell/cspell-words.txt
-  - Cargo.lock
+  - "**/Cargo.lock"
   - "**/package-lock.json"
+  - packages/package.json
   - scripts/**
   - tests/fixtures/**
   - tests/parity-fixtures/**
