@@ -1,6 +1,6 @@
 {
   "name": "@mmds/excalidraw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Convert MMDS JSON to Excalidraw format with polyline edge routing",
   "main": "dist/index.js",
@@ -32,7 +32,7 @@
     "start": "node dist/cli.js"
   },
   "dependencies": {
-    "@mmds/core": "^0.1.0"
+    "@mmds/core": "^0.2.1"
   },
   "keywords": [
     "mermaid",
