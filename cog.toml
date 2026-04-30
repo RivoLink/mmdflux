@@ -96,6 +96,10 @@ owner = "kevinswiber"
 signature = "Kevin Swiber"
 username = "kevinswiber"
 
+[[changelog.authors]]
+signature = "RivoLink"
+username = "RivoLink"
+
 # --- Monorepo packages ---
 # Only public packages are listed. Internal crates (mmdflux-wasm, xtask) are
 # version-locked to mmdflux via its pre_bump_hooks and excluded here to avoid
