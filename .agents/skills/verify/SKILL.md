@@ -1,6 +1,6 @@
 ---
-name: verify
-description: Run full project verification (lint + test + architecture boundaries)
+name: "verify"
+description: "Run full project verification (lint + test + architecture boundaries)"
 ---
 
 Run the full project verification suite:

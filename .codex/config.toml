@@ -1,0 +1,4 @@
+personality = "pragmatic"
+
+[features]
+codex_hooks = true

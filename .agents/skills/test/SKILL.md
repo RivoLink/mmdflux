@@ -1,6 +1,6 @@
 ---
-name: test
-description: Run tests with optional nextest filter expression
+name: "test"
+description: "Run tests with optional nextest filter expression"
 ---
 
 Run project tests using cargo-nextest.
