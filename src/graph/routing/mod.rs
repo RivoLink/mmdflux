@@ -16,6 +16,8 @@ mod label_rewrap;
 mod labels;
 mod orthogonal;
 mod stage;
+#[cfg(test)]
+pub(crate) mod trace;
 
 pub use self::float_core::{
     build_orthogonal_path_float, hexagon_vertices, intersect_convex_polygon,
@@ -96,6 +98,50 @@ mod tests {
         };
 
         (diagram, geom)
+    }
+
+    #[test]
+    fn route_graph_geometry_trace_records_route_input_and_output() {
+        let (diagram, geometry) = simple_geometry();
+
+        trace::begin_capture();
+        let routed = route_graph_geometry(
+            &diagram,
+            &geometry,
+            EdgeRouting::PolylineRoute,
+            &default_proportional_text_metrics(),
+        );
+        let trace = trace::finish_capture();
+
+        assert!(trace.has_stage(trace::RoutingTraceStage::Input));
+        assert!(trace.has_stage(trace::RoutingTraceStage::Output));
+        assert_eq!(trace.input().unwrap().edges[0].index, 0);
+        assert_eq!(
+            trace.output().unwrap().edges[0].index,
+            routed.edges[0].index
+        );
+    }
+
+    #[test]
+    fn route_input_trace_includes_label_descriptor_dimensions() {
+        let (mut diagram, mut geometry) = simple_geometry();
+        diagram.edges[0].label = Some("validate payload".to_string());
+        geometry.edges[0].label_position = Some(FPoint::new(50.0, 50.0));
+
+        trace::begin_capture();
+        let _ = route_graph_geometry(
+            &diagram,
+            &geometry,
+            EdgeRouting::PolylineRoute,
+            &default_proportional_text_metrics(),
+        );
+        let trace = trace::finish_capture();
+
+        let input = trace.input().unwrap();
+        assert_eq!(input.labels.len(), 1);
+        assert_eq!(input.labels[0].edge_index, 0);
+        assert!(input.labels[0].width > 0.0);
+        assert!(input.labels[0].height > 0.0);
     }
 
     #[test]

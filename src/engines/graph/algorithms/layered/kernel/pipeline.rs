@@ -12,6 +12,8 @@ use super::support::{
     make_space_for_labeled_edges, position_self_edges, select_label_sides_direction_down,
     select_label_sides_first_last, switch_label_dummies, translate_layout_result,
 };
+#[cfg(test)]
+use super::trace::{self, LayeredPhaseTrace, TraceStage};
 use super::types::EdgeLabelInfo;
 use super::{
     DiGraph, EdgeLayout, LabelDummyPlacement, LabelSideStrategy, LayoutConfig, LayoutResult,
@@ -41,6 +43,34 @@ where
     layout_with_labels(graph, config, get_dimensions, &HashMap::new())
 }
 
+#[cfg(test)]
+pub(crate) fn layout_with_trace<N, F>(
+    graph: &DiGraph<N>,
+    config: &LayoutConfig,
+    get_dimensions: F,
+) -> (LayoutResult, LayeredPhaseTrace)
+where
+    F: Fn(&NodeId, &N) -> (f64, f64),
+{
+    layout_with_labels_and_trace(graph, config, get_dimensions, &HashMap::new())
+}
+
+#[cfg(test)]
+pub(crate) fn layout_with_labels_and_trace<N, F>(
+    graph: &DiGraph<N>,
+    config: &LayoutConfig,
+    get_dimensions: F,
+    edge_labels: &HashMap<usize, EdgeLabelInfo>,
+) -> (LayoutResult, LayeredPhaseTrace)
+where
+    F: Fn(&NodeId, &N) -> (f64, f64),
+{
+    trace::begin_capture();
+    let result = layout_with_labels(graph, config, get_dimensions, edge_labels);
+    let trace = trace::finish_capture();
+    (result, trace)
+}
+
 /// Layout computation with edge label support.
 ///
 /// This variant allows specifying label dimensions for edges, which will be
@@ -66,6 +96,8 @@ where
     if config.acyclic {
         acyclic::run_with_policy(&mut lg, config.acyclic_policy);
     }
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Acyclic, &lg);
 
     // Phase 1.5: Create space for edge label dummies.
     // Two strategies (both halve rank_sep to compensate for the doubled minlen model):
@@ -122,6 +154,8 @@ where
         nesting::assign_rank_minmax(&mut lg);
         debug_dump_pipeline(&lg, "after_rank_minmax");
     }
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Rank, &lg);
 
     // Phase 2.4: Detect rank-reversed edges that the acyclic DFS missed.
     //
@@ -173,6 +207,8 @@ where
         border::add_segments(&mut lg);
         debug_dump_pipeline(&lg, "after_border_segments");
     }
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Normalize, &lg);
 
     // Clear model_order when tie-breaking is disabled so that it has no effect
     // on barycenter sorting (None.cmp(&None) == Equal).
@@ -190,6 +226,8 @@ where
         },
     );
     debug_dump_pipeline(&lg, "after_order");
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Order, &lg);
 
     // Phase 3.6: Assign Above/Below sides to label dummies to reduce overlaps
     if config.label_side_selection {
@@ -232,6 +270,8 @@ where
 
     // Phase 4: Assign coordinates (now uses per-gap overrides via rank_sep_for_gap)
     position::run(&mut lg, &config);
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Position, &lg);
 
     // Phase 4.5: Compute self-edge loop paths
     let self_edge_layouts = position_self_edges(&lg, &config);
@@ -473,6 +513,8 @@ where
     translate_layout_result(&mut result, config.margin, config.margin, config.direction);
     // Adjust edge endpoints to node borders (dagre.js assignNodeIntersects).
     assign_node_intersects(&mut result);
+    #[cfg(test)]
+    trace::capture_stage(TraceStage::Route, &lg);
 
     debug_dump_layout_result(&result, lg.original_edge_count);
 

@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use super::float_core::compute_port_attachments_from_geometry;
 use super::labels::{arc_length_midpoint, compute_end_labels_for_edge};
 use super::orthogonal::{OrthogonalRoutingOptions, build_path_from_hints, route_edges_orthogonal};
+#[cfg(test)]
+use super::trace;
 use super::{backward_corridor, label_clamp, label_lanes, label_rewrap};
 use crate::graph::direction_policy::effective_edge_direction;
 use crate::graph::geometry::{
@@ -39,6 +41,8 @@ pub fn route_graph_geometry(
     metrics: &ProportionalTextMetrics,
 ) -> RoutedGraphGeometry {
     let port_attachments = compute_port_attachments_from_geometry(diagram, geometry);
+    #[cfg(test)]
+    trace::capture_route_input(diagram, geometry, edge_routing, &port_attachments, metrics);
 
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::OrthogonalRoute => {
@@ -316,7 +320,7 @@ pub fn route_graph_geometry(
 
     let bounds = recompute_routed_bounds(geometry, &edges, &self_edges);
 
-    RoutedGraphGeometry {
+    let routed = RoutedGraphGeometry {
         nodes: geometry.nodes.clone(),
         edges,
         subgraphs: geometry.subgraphs.clone(),
@@ -324,7 +328,10 @@ pub fn route_graph_geometry(
         direction: geometry.direction,
         bounds,
         unfit_label_overlaps,
-    }
+    };
+    #[cfg(test)]
+    trace::capture_route_output(&routed);
+    routed
 }
 
 pub(crate) fn recompute_routed_bounds(

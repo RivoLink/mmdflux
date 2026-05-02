@@ -264,6 +264,12 @@ pub(super) fn assign_label_tracks(
     let descriptors = build_label_descriptors(diagram, geometry, paths, backward_flags, metrics);
     let compartments = group_label_compartments(descriptors);
     let mut outcomes: HashMap<usize, LabelTrackOutcome> = HashMap::new();
+    #[cfg(test)]
+    let mut trace_edges = Vec::new();
+    #[cfg(test)]
+    let mut trace_compartments = Vec::new();
+    #[cfg(test)]
+    let mut trace_subclusters = Vec::new();
 
     // Dense id counter assigned in iteration order. Each axis-conflict
     // sub-cluster within a compartment gets its own id so `label_step` is
@@ -271,6 +277,20 @@ pub(super) fn assign_label_tracks(
     // members together. Not stable across renders.
     let mut next_id: usize = 0;
     for compartment in compartments {
+        #[cfg(test)]
+        let trace_compartment_id = stable_label_lane_compartment_id(
+            compartment
+                .members
+                .first()
+                .and_then(|member| member.scope_parent.clone()),
+            &member_edge_ids(&compartment.members),
+        );
+        #[cfg(test)]
+        trace_compartments.push(label_lane_compartment_snapshot(
+            trace_compartment_id.clone(),
+            &compartment.members,
+        ));
+
         let full_compartment_size = compartment.members.len();
         for mut subcluster in split_into_axis_conflict_subclusters(compartment.members) {
             let compartment_id = next_id;
@@ -309,12 +329,49 @@ pub(super) fn assign_label_tracks(
             } else {
                 0.0
             };
+            #[cfg(test)]
+            let (trace_subcluster_id, trace_sort_positions) = {
+                let mut sweep_order = subcluster.iter().collect::<Vec<_>>();
+                sweep_order.sort_by(|a, b| {
+                    a.axis_min
+                        .partial_cmp(&b.axis_min)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then(a.edge_index.cmp(&b.edge_index))
+                });
+                let subcluster_id = stable_label_lane_subcluster_id(
+                    &trace_compartment_id,
+                    &member_edge_ids(&subcluster),
+                );
+                trace_subclusters.push(label_lane_subcluster_snapshot(
+                    subcluster_id.clone(),
+                    trace_compartment_id.clone(),
+                    &sweep_order,
+                ));
+                let sort_positions = sweep_order
+                    .iter()
+                    .enumerate()
+                    .map(|(sort_position, desc)| (desc.edge_index, sort_position))
+                    .collect::<HashMap<_, _>>();
+                (subcluster_id, sort_positions)
+            };
             for desc in &subcluster {
                 let track = tracks[&desc.edge_index];
                 let centered_track = track as f64 - track_center;
                 let label_offset = centered_track * label_step;
                 let path_offset = centered_track * path_step;
                 let (new_center, new_rect) = shift_label(desc, label_offset, direction);
+                #[cfg(test)]
+                trace_edges.push(crate::graph::routing::trace::LabelLaneEdgeSnapshot {
+                    edge_index: desc.edge_index,
+                    mmds_edge_id: mmds_edge_id(desc.edge_index),
+                    compartment_id: trace_compartment_id.clone(),
+                    subcluster_id: trace_subcluster_id.clone(),
+                    sort_position: trace_sort_positions[&desc.edge_index],
+                    track,
+                    track_center,
+                    label_step,
+                    label_rect: new_rect,
+                });
                 let new_path = paths
                     .get(&desc.edge_index)
                     .map(|p| shift_middle_segment(p, path_offset, direction))
@@ -337,6 +394,15 @@ pub(super) fn assign_label_tracks(
             }
         }
     }
+
+    #[cfg(test)]
+    crate::graph::routing::trace::capture_label_lanes(
+        crate::graph::routing::trace::LabelLaneTraceSnapshot {
+            edges: trace_edges,
+            compartments: trace_compartments,
+            subclusters: trace_subclusters,
+        },
+    );
 
     outcomes
 }
@@ -656,6 +722,113 @@ fn are_collinear(path: &[FPoint]) -> bool {
 }
 
 #[cfg(test)]
+fn mmds_edge_id(edge_index: usize) -> String {
+    format!("e{edge_index}")
+}
+
+#[cfg(test)]
+fn member_edge_ids(members: &[LabelDescriptor]) -> Vec<String> {
+    let mut edge_ids = members
+        .iter()
+        .map(|member| mmds_edge_id(member.edge_index))
+        .collect::<Vec<_>>();
+    edge_ids.sort();
+    edge_ids
+}
+
+#[cfg(test)]
+fn member_edge_indices(members: &[LabelDescriptor]) -> Vec<usize> {
+    let mut edge_indices = members
+        .iter()
+        .map(|member| member.edge_index)
+        .collect::<Vec<_>>();
+    edge_indices.sort_unstable();
+    edge_indices
+}
+
+#[cfg(test)]
+fn stable_label_lane_compartment_id(
+    scope_parent: Option<String>,
+    member_edge_ids: &[String],
+) -> String {
+    let scope = scope_parent.unwrap_or_else(|| "none".to_string());
+    format!(
+        "scope:{scope}|members:{}",
+        sorted_member_edge_ids(member_edge_ids).join(",")
+    )
+}
+
+#[cfg(test)]
+fn stable_label_lane_subcluster_id(compartment_id: &str, member_edge_ids: &[String]) -> String {
+    format!(
+        "{compartment_id}|cluster:{}",
+        sorted_member_edge_ids(member_edge_ids).join(",")
+    )
+}
+
+#[cfg(test)]
+fn sorted_member_edge_ids(member_edge_ids: &[String]) -> Vec<String> {
+    let mut member_edge_ids = member_edge_ids.to_vec();
+    member_edge_ids.sort();
+    member_edge_ids
+}
+
+#[cfg(test)]
+fn label_lane_compartment_snapshot(
+    id: String,
+    members: &[LabelDescriptor],
+) -> crate::graph::routing::trace::LabelLaneCompartmentSnapshot {
+    crate::graph::routing::trace::LabelLaneCompartmentSnapshot {
+        id,
+        member_edge_indices: member_edge_indices(members),
+        member_edge_ids: member_edge_ids(members),
+        scope_parent: members
+            .first()
+            .and_then(|member| member.scope_parent.clone()),
+        cross_min: members
+            .iter()
+            .map(|member| member.cross_min)
+            .fold(f64::INFINITY, f64::min),
+        cross_max: members
+            .iter()
+            .map(|member| member.cross_max)
+            .fold(f64::NEG_INFINITY, f64::max),
+    }
+}
+
+#[cfg(test)]
+fn label_lane_subcluster_snapshot(
+    id: String,
+    compartment_id: String,
+    sweep_order: &[&LabelDescriptor],
+) -> crate::graph::routing::trace::LabelLaneSubclusterSnapshot {
+    crate::graph::routing::trace::LabelLaneSubclusterSnapshot {
+        id,
+        compartment_id,
+        member_edge_indices: {
+            let mut indices = sweep_order
+                .iter()
+                .map(|member| member.edge_index)
+                .collect::<Vec<_>>();
+            indices.sort_unstable();
+            indices
+        },
+        member_edge_ids: {
+            let mut edge_ids = sweep_order
+                .iter()
+                .map(|member| mmds_edge_id(member.edge_index))
+                .collect::<Vec<_>>();
+            edge_ids.sort();
+            edge_ids
+        },
+        sweep_order: sweep_order
+            .iter()
+            .map(|member| mmds_edge_id(member.edge_index))
+            .collect(),
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -685,6 +858,132 @@ mod tests {
         assert_eq!(d.axis_max - d.axis_min, 40.0);
         assert_eq!(d.cross_max - d.cross_min, 20.0);
         assert_eq!(d.direction_sign, 1);
+    }
+
+    #[test]
+    fn stable_compartment_id_ignores_cross_band_extent_changes() {
+        let before = stable_label_lane_compartment_id(None, &["e1".to_string(), "e4".to_string()]);
+        let after = stable_label_lane_compartment_id(None, &["e1".to_string(), "e4".to_string()]);
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn stable_compartment_id_sorts_member_edge_ids() {
+        let before = stable_label_lane_compartment_id(None, &["e4".to_string(), "e1".to_string()]);
+        let after = stable_label_lane_compartment_id(None, &["e1".to_string(), "e4".to_string()]);
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn stable_subcluster_id_includes_parent_compartment_and_members() {
+        let compartment_id =
+            stable_label_lane_compartment_id(Some("outer".to_string()), &["e2".to_string()]);
+        let subcluster_id = stable_label_lane_subcluster_id(&compartment_id, &["e2".to_string()]);
+
+        assert!(subcluster_id.contains(&compartment_id));
+        assert!(subcluster_id.contains("e2"));
+    }
+
+    #[test]
+    fn label_lane_scope_snapshot_uses_lca_scope() {
+        let mut diagram = Graph::new(Direction::TopDown);
+        let mut source = crate::graph::Node::new("A");
+        source.parent = Some("LEFT".to_string());
+        let mut target = crate::graph::Node::new("B");
+        target.parent = Some("RIGHT".to_string());
+        diagram.add_node(source);
+        diagram.add_node(target);
+        diagram.subgraphs.insert(
+            "OUTER".to_string(),
+            crate::graph::Subgraph {
+                id: "OUTER".to_string(),
+                title: "OUTER".to_string(),
+                nodes: Vec::new(),
+                parent: None,
+                dir: None,
+                invisible: false,
+                concurrent_regions: Vec::new(),
+            },
+        );
+        diagram.subgraphs.insert(
+            "LEFT".to_string(),
+            crate::graph::Subgraph {
+                id: "LEFT".to_string(),
+                title: "LEFT".to_string(),
+                nodes: vec!["A".to_string()],
+                parent: Some("OUTER".to_string()),
+                dir: None,
+                invisible: false,
+                concurrent_regions: Vec::new(),
+            },
+        );
+        diagram.subgraphs.insert(
+            "RIGHT".to_string(),
+            crate::graph::Subgraph {
+                id: "RIGHT".to_string(),
+                title: "RIGHT".to_string(),
+                nodes: vec!["B".to_string()],
+                parent: Some("OUTER".to_string()),
+                dir: None,
+                invisible: false,
+                concurrent_regions: Vec::new(),
+            },
+        );
+        diagram.add_edge(crate::graph::Edge::new("A", "B").with_label("shared parent label"));
+
+        let geometry = GraphGeometry {
+            nodes: HashMap::from([
+                (
+                    "A".to_string(),
+                    crate::graph::geometry::PositionedNode {
+                        id: "A".to_string(),
+                        rect: FRect::new(0.0, 0.0, 40.0, 30.0),
+                        shape: crate::graph::Shape::Rectangle,
+                        label: "A".to_string(),
+                        parent: Some("LEFT".to_string()),
+                    },
+                ),
+                (
+                    "B".to_string(),
+                    crate::graph::geometry::PositionedNode {
+                        id: "B".to_string(),
+                        rect: FRect::new(100.0, 100.0, 40.0, 30.0),
+                        shape: crate::graph::Shape::Rectangle,
+                        label: "B".to_string(),
+                        parent: Some("RIGHT".to_string()),
+                    },
+                ),
+            ]),
+            edges: Vec::new(),
+            subgraphs: HashMap::new(),
+            self_edges: Vec::new(),
+            direction: Direction::TopDown,
+            node_directions: HashMap::new(),
+            bounds: FRect::new(0.0, 0.0, 100.0, 100.0),
+            reversed_edges: Vec::new(),
+            engine_hints: None,
+            grid_projection: None,
+            rerouted_edges: HashSet::new(),
+            enhanced_backward_routing: false,
+        };
+        let paths = HashMap::from([(0, vec![FPoint::new(0.0, 0.0), FPoint::new(100.0, 100.0)])]);
+        let descriptors = build_label_descriptors(
+            &diagram,
+            &geometry,
+            &paths,
+            &HashMap::new(),
+            &ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        );
+        let compartment_id = stable_label_lane_compartment_id(
+            descriptors[0].scope_parent.clone(),
+            &member_edge_ids(&descriptors),
+        );
+        let snapshot = label_lane_compartment_snapshot(compartment_id, &descriptors);
+
+        assert_eq!(descriptors[0].scope_parent.as_deref(), Some("OUTER"));
+        assert_eq!(snapshot.scope_parent.as_deref(), Some("OUTER"));
     }
 
     #[test]

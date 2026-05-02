@@ -9,6 +9,8 @@ pub mod graph;
 pub mod normalize;
 pub mod pipeline;
 pub mod support;
+#[cfg(test)]
+pub(crate) mod trace;
 pub mod types;
 
 pub(crate) mod acyclic;
