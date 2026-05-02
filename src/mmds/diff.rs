@@ -141,22 +141,11 @@ pub(crate) fn diff_outputs(before: &Output, after: &Output) -> MmdsDiff {
 
     let before_edges = edges_by_id(before);
     let after_edges = edges_by_id(after);
-    push_removed_added(
-        &mut events,
-        &before_edges,
-        &after_edges,
-        MmdsDiffKind::EdgeRemoved,
-        MmdsDiffKind::EdgeAdded,
-        MmdsDiffSubject::Edge,
-    );
-    push_edge_semantic_events(&mut events, &before_edges, &after_edges);
-    push_edge_geometry_events(
-        &mut events,
-        &before_edges,
-        &after_edges,
-        &before_nodes,
-        &after_nodes,
-    );
+    let edge_matches =
+        edge_correspondences(&before_edges, &after_edges, &before_nodes, &after_nodes);
+    push_edge_removed_added(&mut events, &edge_matches);
+    push_edge_semantic_events(&mut events, &edge_matches);
+    push_edge_geometry_events(&mut events, &edge_matches, &before_nodes, &after_nodes);
 
     let before_subgraphs = subgraphs_by_id(before);
     let after_subgraphs = subgraphs_by_id(after);
@@ -280,6 +269,359 @@ fn push_removed_added<T>(
     }
 }
 
+struct EdgeCorrespondences<'a> {
+    matches: Vec<EdgeMatch<'a>>,
+    removed: Vec<(String, &'a Edge)>,
+    added: Vec<(String, &'a Edge)>,
+}
+
+struct EdgeMatch<'a> {
+    before_id: String,
+    after_id: String,
+    before: &'a Edge,
+    after: &'a Edge,
+    method: EdgeMatchMethod,
+}
+
+#[derive(Clone, Copy)]
+enum EdgeMatchMethod {
+    Id,
+    IdReconnected,
+    Fallback {
+        rule: &'static str,
+        candidate_count: usize,
+    },
+}
+
+fn edge_correspondences<'a>(
+    before: &BTreeMap<String, &'a Edge>,
+    after: &BTreeMap<String, &'a Edge>,
+    before_nodes: &BTreeMap<String, &Node>,
+    after_nodes: &BTreeMap<String, &Node>,
+) -> EdgeCorrespondences<'a> {
+    let mut matches = Vec::new();
+    let mut before_unmatched = before.keys().cloned().collect::<BTreeSet<_>>();
+    let mut after_unmatched = after.keys().cloned().collect::<BTreeSet<_>>();
+
+    for id in before.keys().filter(|id| after.contains_key(*id)) {
+        let before_edge = before
+            .get(id)
+            .copied()
+            .expect("before edge ID should exist");
+        let after_edge = after.get(id).copied().expect("after edge ID should exist");
+        if same_edge_endpoints(before_edge, after_edge)
+            && endpoint_group_count(before, before_edge) == 1
+            && endpoint_group_count(after, after_edge) == 1
+        {
+            matches.push(EdgeMatch {
+                before_id: id.clone(),
+                after_id: id.clone(),
+                before: before_edge,
+                after: after_edge,
+                method: EdgeMatchMethod::Id,
+            });
+            before_unmatched.remove(id);
+            after_unmatched.remove(id);
+        }
+    }
+
+    let endpoint_groups = before_unmatched
+        .iter()
+        .map(|before_id| {
+            let edge = before
+                .get(before_id)
+                .copied()
+                .expect("unmatched before edge should exist");
+            (edge.source.clone(), edge.target.clone())
+        })
+        .collect::<BTreeSet<_>>();
+
+    for (source, target) in endpoint_groups {
+        let mut before_group = before_unmatched
+            .iter()
+            .filter(|before_id| {
+                let edge = before
+                    .get(*before_id)
+                    .copied()
+                    .expect("unmatched before edge should exist");
+                edge.source == source && edge.target == target
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut after_group = after_unmatched
+            .iter()
+            .filter(|after_id| {
+                let edge = after
+                    .get(*after_id)
+                    .copied()
+                    .expect("unmatched after edge should exist");
+                edge.source == source && edge.target == target
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        if after_group.is_empty() {
+            continue;
+        }
+
+        let mut matcher = EdgeFallbackMatcher {
+            matches: &mut matches,
+            before_unmatched: &mut before_unmatched,
+            after_unmatched: &mut after_unmatched,
+            before,
+            after,
+        };
+        matcher.pair_by_key(
+            &mut before_group,
+            &mut after_group,
+            "label_style",
+            edge_label_style_key,
+        );
+        matcher.pair_by_key(&mut before_group, &mut after_group, "label", edge_label_key);
+        matcher.pair_by_key(&mut before_group, &mut after_group, "style", edge_style_key);
+        matcher.pair_by_declaration_order(&mut before_group, &mut after_group);
+    }
+
+    for id in before_unmatched
+        .intersection(&after_unmatched)
+        .cloned()
+        .collect::<Vec<_>>()
+    {
+        let before_edge = before
+            .get(&id)
+            .copied()
+            .expect("same-ID before edge should exist");
+        let after_edge = after
+            .get(&id)
+            .copied()
+            .expect("same-ID after edge should exist");
+        if edge_endpoints_exist_in_both_outputs(before_edge, after_edge, before_nodes, after_nodes)
+        {
+            matches.push(EdgeMatch {
+                before_id: id.clone(),
+                after_id: id.clone(),
+                before: before_edge,
+                after: after_edge,
+                method: EdgeMatchMethod::IdReconnected,
+            });
+            before_unmatched.remove(&id);
+            after_unmatched.remove(&id);
+        }
+    }
+
+    let removed = before_unmatched
+        .into_iter()
+        .map(|id| {
+            let edge = before.get(&id).copied().expect("removed edge should exist");
+            (id, edge)
+        })
+        .collect();
+    let added = after_unmatched
+        .into_iter()
+        .map(|id| {
+            let edge = after.get(&id).copied().expect("added edge should exist");
+            (id, edge)
+        })
+        .collect();
+
+    EdgeCorrespondences {
+        matches,
+        removed,
+        added,
+    }
+}
+
+fn same_edge_endpoints(before: &Edge, after: &Edge) -> bool {
+    before.source == after.source && before.target == after.target
+}
+
+fn endpoint_group_count(edges: &BTreeMap<String, &Edge>, edge: &Edge) -> usize {
+    edges
+        .values()
+        .filter(|candidate| same_edge_endpoints(edge, candidate))
+        .count()
+}
+
+struct EdgeFallbackMatcher<'m, 'a> {
+    matches: &'m mut Vec<EdgeMatch<'a>>,
+    before_unmatched: &'m mut BTreeSet<String>,
+    after_unmatched: &'m mut BTreeSet<String>,
+    before: &'m BTreeMap<String, &'a Edge>,
+    after: &'m BTreeMap<String, &'a Edge>,
+}
+
+impl<'a> EdgeFallbackMatcher<'_, 'a> {
+    fn pair_by_key(
+        &mut self,
+        before_group: &mut BTreeSet<String>,
+        after_group: &mut BTreeSet<String>,
+        rule: &'static str,
+        key: fn(&Edge) -> String,
+    ) {
+        for before_id in before_group.iter().cloned().collect::<Vec<_>>() {
+            let before_edge = self
+                .before
+                .get(&before_id)
+                .copied()
+                .expect("fallback before edge should exist");
+            let before_key = key(before_edge);
+            let before_key_count = before_group
+                .iter()
+                .filter(|candidate_id| {
+                    let candidate = self
+                        .before
+                        .get(*candidate_id)
+                        .copied()
+                        .expect("fallback before edge should exist");
+                    key(candidate) == before_key
+                })
+                .count();
+            if before_key_count != 1 {
+                continue;
+            }
+
+            let candidates = after_group
+                .iter()
+                .filter(|after_id| {
+                    let after_edge = self
+                        .after
+                        .get(*after_id)
+                        .copied()
+                        .expect("fallback after edge should exist");
+                    key(after_edge) == before_key
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if candidates.len() != 1 {
+                continue;
+            }
+
+            let after_id = candidates
+                .first()
+                .expect("one fallback candidate should exist")
+                .clone();
+            self.push_match(&before_id, &after_id, rule, candidates.len());
+            before_group.remove(&before_id);
+            after_group.remove(&after_id);
+        }
+    }
+
+    fn pair_by_declaration_order(
+        &mut self,
+        before_group: &mut BTreeSet<String>,
+        after_group: &mut BTreeSet<String>,
+    ) {
+        while let (Some(before_id), Some(after_id)) = (
+            before_group.iter().next().cloned(),
+            after_group.iter().next().cloned(),
+        ) {
+            self.push_match(
+                &before_id,
+                &after_id,
+                "declaration_order",
+                after_group.len(),
+            );
+            before_group.remove(&before_id);
+            after_group.remove(&after_id);
+        }
+    }
+
+    fn push_match(
+        &mut self,
+        before_id: &str,
+        after_id: &str,
+        rule: &'static str,
+        candidate_count: usize,
+    ) {
+        let before_edge = self
+            .before
+            .get(before_id)
+            .copied()
+            .expect("fallback before edge should exist");
+        let after_edge = self
+            .after
+            .get(after_id)
+            .copied()
+            .expect("fallback after edge should exist");
+        self.matches.push(EdgeMatch {
+            before_id: before_id.to_string(),
+            after_id: after_id.to_string(),
+            before: before_edge,
+            after: after_edge,
+            method: EdgeMatchMethod::Fallback {
+                rule,
+                candidate_count,
+            },
+        });
+        self.before_unmatched.remove(before_id);
+        self.after_unmatched.remove(after_id);
+    }
+}
+
+fn edge_label_style_key(edge: &Edge) -> String {
+    format!("{}|{}", edge_label_key(edge), edge_style_key(edge))
+}
+
+fn edge_label_key(edge: &Edge) -> String {
+    match &edge.label {
+        Some(label) => format!("some:{label}"),
+        None => "none:".to_string(),
+    }
+}
+
+fn edge_style_key(edge: &Edge) -> String {
+    format!(
+        "{}|{}|{}|{}",
+        edge.stroke, edge.arrow_start, edge.arrow_end, edge.minlen
+    )
+}
+
+fn edge_endpoints_exist_in_both_outputs(
+    before_edge: &Edge,
+    after_edge: &Edge,
+    before_nodes: &BTreeMap<String, &Node>,
+    after_nodes: &BTreeMap<String, &Node>,
+) -> bool {
+    [
+        before_edge.source.as_str(),
+        before_edge.target.as_str(),
+        after_edge.source.as_str(),
+        after_edge.target.as_str(),
+    ]
+    .into_iter()
+    .all(|id| before_nodes.contains_key(id) && after_nodes.contains_key(id))
+}
+
+fn push_edge_removed_added(
+    events: &mut Vec<MmdsDiffEvent>,
+    correspondences: &EdgeCorrespondences<'_>,
+) {
+    for (id, _) in &correspondences.removed {
+        events.push(edge_event(MmdsDiffKind::EdgeRemoved, id));
+    }
+
+    for (id, _) in &correspondences.added {
+        events.push(edge_event(MmdsDiffKind::EdgeAdded, id));
+    }
+}
+
+fn edge_match_evidence(edge_match: &EdgeMatch<'_>) -> Vec<String> {
+    match edge_match.method {
+        EdgeMatchMethod::Id => Vec::new(),
+        EdgeMatchMethod::IdReconnected => vec![format!(
+            "matched_by=id_reconnected; before_id={}; after_id={}",
+            edge_match.before_id, edge_match.after_id
+        )],
+        EdgeMatchMethod::Fallback {
+            rule,
+            candidate_count,
+        } => vec![format!(
+            "matched_by=fallback; before_id={}; after_id={}; rule={rule}; candidate_count={candidate_count}",
+            edge_match.before_id, edge_match.after_id
+        )],
+    }
+}
+
 fn push_node_semantic_events(
     events: &mut Vec<MmdsDiffEvent>,
     before_output: &Output,
@@ -309,27 +651,41 @@ fn push_node_semantic_events(
 
 fn push_edge_semantic_events(
     events: &mut Vec<MmdsDiffEvent>,
-    before: &BTreeMap<String, &Edge>,
-    after: &BTreeMap<String, &Edge>,
+    correspondences: &EdgeCorrespondences<'_>,
 ) {
-    for (id, before_edge) in before {
-        let Some(after_edge) = after.get(id) else {
-            continue;
-        };
+    for edge_match in &correspondences.matches {
+        let before_edge = edge_match.before;
+        let after_edge = edge_match.after;
 
         if before_edge.source != after_edge.source || before_edge.target != after_edge.target {
-            events.push(edge_event(MmdsDiffKind::EdgeReconnected, id));
+            events.push(edge_event_for_match_with_evidence(
+                MmdsDiffKind::EdgeReconnected,
+                edge_match,
+                Vec::new(),
+            ));
         }
         if before_edge.from_subgraph != after_edge.from_subgraph
             || before_edge.to_subgraph != after_edge.to_subgraph
         {
-            events.push(edge_event(MmdsDiffKind::EdgeEndpointIntentChanged, id));
+            events.push(edge_event_for_match_with_evidence(
+                MmdsDiffKind::EdgeEndpointIntentChanged,
+                edge_match,
+                Vec::new(),
+            ));
         }
         if before_edge.label != after_edge.label {
-            events.push(edge_event(MmdsDiffKind::EdgeLabelChanged, id));
+            events.push(edge_event_for_match_with_evidence(
+                MmdsDiffKind::EdgeLabelChanged,
+                edge_match,
+                Vec::new(),
+            ));
         }
         if edge_style_changed(before_edge, after_edge) {
-            events.push(edge_event(MmdsDiffKind::EdgeStyleChanged, id));
+            events.push(edge_event_for_match_with_evidence(
+                MmdsDiffKind::EdgeStyleChanged,
+                edge_match,
+                Vec::new(),
+            ));
         }
     }
 }
@@ -425,21 +781,19 @@ fn node_semantics_same(
 
 fn push_edge_geometry_events(
     events: &mut Vec<MmdsDiffEvent>,
-    before: &BTreeMap<String, &Edge>,
-    after: &BTreeMap<String, &Edge>,
+    correspondences: &EdgeCorrespondences<'_>,
     before_nodes: &BTreeMap<String, &Node>,
     after_nodes: &BTreeMap<String, &Node>,
 ) {
-    for (id, before_edge) in before {
-        let Some(after_edge) = after.get(id) else {
-            continue;
-        };
+    for edge_match in &correspondences.matches {
+        let before_edge = edge_match.before;
+        let after_edge = edge_match.after;
 
         let path = path_delta(before_edge, after_edge);
         if path.changed {
-            events.push(edge_event_with_evidence(
+            events.push(edge_event_for_match_with_evidence(
                 MmdsDiffKind::EdgeRerouted,
-                id,
+                edge_match,
                 vec![format!(
                     "path point_count_delta={}; bend_count_delta={}; length_delta={:.2}; envelope_changed={}",
                     path.point_count_delta, path.bend_count_delta, path.length_delta, path.envelope_changed
@@ -460,9 +814,9 @@ fn push_edge_geometry_events(
             ),
         ] {
             if before_face != after_face {
-                events.push(edge_event_with_evidence(
+                events.push(edge_event_for_match_with_evidence(
                     MmdsDiffKind::EndpointFaceChanged,
-                    id,
+                    edge_match,
                     vec![format!(
                         "visible {endpoint} endpoint face {before_face}->{after_face}"
                     )],
@@ -483,9 +837,9 @@ fn push_edge_geometry_events(
             ),
         ] {
             if !same_port_intent(before_port, after_port) {
-                events.push(edge_event_with_evidence(
+                events.push(edge_event_for_match_with_evidence(
                     MmdsDiffKind::PortIntentChanged,
-                    id,
+                    edge_match,
                     vec![format!(
                         "logical {endpoint}_port {}->{}",
                         port_summary(before_port),
@@ -495,10 +849,10 @@ fn push_edge_geometry_events(
             }
         }
 
-        push_label_geometry_events(events, id, before_edge, after_edge);
+        push_label_geometry_events(events, edge_match, before_edge, after_edge);
         push_path_port_divergence_events(
             events,
-            id,
+            edge_match,
             before_edge,
             after_edge,
             before_nodes,
@@ -567,14 +921,14 @@ fn push_subgraph_geometry_events(
 
 fn push_label_geometry_events(
     events: &mut Vec<MmdsDiffEvent>,
-    edge_id: &str,
+    edge_match: &EdgeMatch<'_>,
     before: &Edge,
     after: &Edge,
 ) {
     if before.label_side != after.label_side {
-        events.push(edge_event_with_evidence(
+        events.push(edge_event_for_match_with_evidence(
             MmdsDiffKind::LabelSideChanged,
-            edge_id,
+            edge_match,
             vec![format!(
                 "label_side {:?}->{:?}",
                 before.label_side, after.label_side
@@ -592,16 +946,16 @@ fn push_label_geometry_events(
             let height_delta = after_rect.height - before_rect.height;
 
             if dx.hypot(dy) > DISPLAY_EPS {
-                events.push(edge_event_with_evidence(
+                events.push(edge_event_for_match_with_evidence(
                     MmdsDiffKind::LabelMoved,
-                    edge_id,
+                    edge_match,
                     vec![format!("label_rect center_dx={dx:.2}; center_dy={dy:.2}")],
                 ));
             }
             if width_delta.abs() > DISPLAY_EPS || height_delta.abs() > DISPLAY_EPS {
-                events.push(edge_event_with_evidence(
+                events.push(edge_event_for_match_with_evidence(
                     MmdsDiffKind::LabelResized,
-                    edge_id,
+                    edge_match,
                     vec![format!(
                         "label_rect width_delta={width_delta:.2}; height_delta={height_delta:.2}"
                     )],
@@ -609,14 +963,14 @@ fn push_label_geometry_events(
             }
         }
         (None, Some(_)) | (Some(_), None) => {
-            events.push(edge_event_with_evidence(
+            events.push(edge_event_for_match_with_evidence(
                 MmdsDiffKind::LabelMoved,
-                edge_id,
+                edge_match,
                 vec!["label_rect presence changed".to_string()],
             ));
-            events.push(edge_event_with_evidence(
+            events.push(edge_event_for_match_with_evidence(
                 MmdsDiffKind::LabelResized,
-                edge_id,
+                edge_match,
                 vec!["label_rect presence changed".to_string()],
             ));
         }
@@ -624,9 +978,9 @@ fn push_label_geometry_events(
             let before_pos = before.label_position.as_ref();
             let after_pos = after.label_position.as_ref();
             if option_position_moved(before_pos, after_pos) {
-                events.push(edge_event_with_evidence(
+                events.push(edge_event_for_match_with_evidence(
                     MmdsDiffKind::LabelMoved,
-                    edge_id,
+                    edge_match,
                     vec!["label_position changed without label_rect".to_string()],
                 ));
             }
@@ -636,7 +990,7 @@ fn push_label_geometry_events(
 
 fn push_path_port_divergence_events(
     events: &mut Vec<MmdsDiffEvent>,
-    edge_id: &str,
+    edge_match: &EdgeMatch<'_>,
     before_edge: &Edge,
     after_edge: &Edge,
     before_nodes: &BTreeMap<String, &Node>,
@@ -673,9 +1027,9 @@ fn push_path_port_divergence_events(
         let before_diverged = path_port_diverged(before_path_face.as_str(), before_port_face);
         let after_diverged = path_port_diverged(after_path_face.as_str(), after_port_face);
         if before_diverged != after_diverged {
-            events.push(edge_event_with_evidence(
+            events.push(edge_event_for_match_with_evidence(
                 MmdsDiffKind::PathPortDivergenceChanged,
-                edge_id,
+                edge_match,
                 vec![format!(
                     "path_port_divergence {endpoint} {before_diverged}->{after_diverged}; visible {before_path_face}->{after_path_face}; logical {endpoint}_port {:?}->{:?}",
                     before_port_face, after_port_face
@@ -1008,6 +1362,15 @@ fn edge_event_with_evidence(kind: MmdsDiffKind, id: &str, evidence: Vec<String>)
         evidence,
         related_event_ids: Vec::new(),
     }
+}
+
+fn edge_event_for_match_with_evidence(
+    kind: MmdsDiffKind,
+    edge_match: &EdgeMatch<'_>,
+    mut evidence: Vec<String>,
+) -> MmdsDiffEvent {
+    evidence.extend(edge_match_evidence(edge_match));
+    edge_event_with_evidence(kind, edge_match.after_id.as_str(), evidence)
 }
 
 fn subgraph_event(kind: MmdsDiffKind, id: &str) -> MmdsDiffEvent {

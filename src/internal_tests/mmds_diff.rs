@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 
+use super::layout_stability::mutations;
 use crate::graph::GeometryLevel;
 use crate::mmds::diff::{MmdsDiff, MmdsDiffKind};
 use crate::{OutputFormat, RenderConfig};
@@ -60,6 +63,141 @@ fn mmds_diff_semantic_reports_edge_label_and_style_changes() {
 
     assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e0"));
     assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeStyleChanged, "e0"));
+}
+
+#[test]
+fn mmds_diff_edge_matching_shifted_id_reports_label_change_not_remove_add() {
+    let before = parse_routed("graph TD; A --> B; B -->|old| C; C --> D");
+    let mut after = before.clone();
+
+    after.edges[0].id = "e1".to_string();
+    after.edges[1].id = "e2".to_string();
+    after.edges[1].label = Some("new".to_string());
+    after.edges[2].id = "e3".to_string();
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e2"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e1"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e2"));
+    assert!(
+        diff.events.iter().any(|event| {
+            matches!(
+                &event.subject,
+                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+            ) && event.evidence_mentions("matched_by=fallback")
+                && event.evidence_mentions("before_id=e1")
+                && event.evidence_mentions("after_id=e2")
+        }),
+        "{diff:#?}"
+    );
+}
+
+#[test]
+fn mmds_diff_edge_matching_shifted_id_uses_after_id_for_routed_evidence() {
+    let before = parse_routed("graph TD; A --> B; B --> C");
+    let mut after = before.clone();
+
+    after.edges[0].id = "e1".to_string();
+    after.edges[1].id = "e2".to_string();
+    after.edges[1].path = Some(vec![[0.0, 0.0], [40.0, 0.0], [40.0, 20.0]]);
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRerouted, "e2"));
+    assert!(
+        diff.events.iter().any(|event| {
+            matches!(
+                &event.subject,
+                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+            ) && event.evidence_mentions("matched_by=fallback")
+                && event.evidence_mentions("before_id=e1")
+                && event.evidence_mentions("after_id=e2")
+        }),
+        "{diff:#?}"
+    );
+}
+
+#[test]
+fn mmds_diff_edge_matching_m01_preserves_split_and_matches_downstream_shift() {
+    let before = parse_routed(include_str!("../../tests/fixtures/flowchart/chain.mmd"));
+    let after = parse_routed(
+        "graph TD
+    A[Step 1] --> B[Step 2] --> X[Inserted] --> C[Step 3] --> D[Step 4]
+",
+    );
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeAdded, "X"));
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e1"));
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e1"));
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e2"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e3"));
+}
+
+#[test]
+fn mmds_diff_edge_matching_keeps_existing_node_reconnect_as_reconnected() {
+    let before = parse_routed("graph TD; A --> B; C[Alternative]");
+    let after = parse_routed("graph TD; A --> C; B[Target]");
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeReconnected, "e0"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e0"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e0"));
+}
+
+#[test]
+fn mmds_diff_edge_matching_parallel_edges_prefers_label_tiebreaker() {
+    let before = parse_routed("graph TD; A -->|alpha| B; A -->|beta| B");
+    let mut after = before.clone();
+
+    after.edges[0].id = "e1".to_string();
+    after.edges[0].label = Some("beta".to_string());
+    after.edges[1].id = "e2".to_string();
+    after.edges[1].label = Some("alpha changed".to_string());
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e2"));
+    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e1"));
+    assert!(
+        diff.events.iter().any(|event| {
+            matches!(
+                &event.subject,
+                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+            ) && event.evidence_mentions("matched_by=fallback")
+                && event.evidence_mentions("before_id=e0")
+                && event.evidence_mentions("after_id=e2")
+        }),
+        "{diff:#?}"
+    );
+}
+
+#[test]
+fn mmds_diff_edge_matching_parallel_edges_falls_back_to_declaration_order() {
+    let before = parse_routed("graph TD; A --> B; A --> B");
+    let mut after = before.clone();
+
+    after.edges[0].id = "e1".to_string();
+    after.edges[0].path = Some(vec![[0.0, 0.0], [40.0, 0.0], [40.0, 20.0]]);
+    after.edges[1].id = "e2".to_string();
+
+    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+
+    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRerouted, "e1"));
+    assert!(
+        diff.events.iter().any(|event| {
+            matches!(
+                &event.subject,
+                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e1"
+            ) && event.evidence_mentions("matched_by=fallback")
+                && event.evidence_mentions("before_id=e0")
+                && event.evidence_mentions("after_id=e1")
+        }),
+        "{diff:#?}"
+    );
 }
 
 #[test]
@@ -154,6 +292,39 @@ fn mmds_diff_tier_a_reports_expected_event_families() {
     assert!(summaries["M10"].has_kind(MmdsDiffKind::SubgraphDirectionChanged));
 }
 
+#[test]
+fn mmds_diff_edge_matching_tier_a_controls_stay_calibrated() {
+    let summaries = run_tier_a_diff_summaries();
+
+    assert!(summaries["M01"].has_event(MmdsDiffKind::NodeAdded, "X"));
+    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeRemoved, "e1"));
+    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeAdded, "e1"));
+    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeAdded, "e2"));
+
+    for pair_id in ["M04", "M11", "M19", "M20", "M21"] {
+        assert!(
+            summaries[pair_id].has_kind(MmdsDiffKind::EdgeAdded),
+            "{pair_id} should stay an edge-addition control"
+        );
+        assert!(
+            !summaries[pair_id].has_kind(MmdsDiffKind::EdgeRemoved),
+            "{pair_id} should not report fallback-induced edge removals"
+        );
+    }
+
+    assert!(summaries["M05"].has_kind(MmdsDiffKind::NodeLabelChanged));
+    assert!(summaries["M07"].has_kind(MmdsDiffKind::EdgeStyleChanged));
+    assert!(!summaries["M07"].has_kind(MmdsDiffKind::EdgeRerouted));
+    assert!(summaries["S02"].has_kind(MmdsDiffKind::EdgeLabelChanged));
+    assert!(!summaries["S02"].has_kind(MmdsDiffKind::EdgeRerouted));
+    assert!(summaries["S03"].has_kind(MmdsDiffKind::EdgeStyleChanged));
+    assert!(!summaries["S03"].has_kind(MmdsDiffKind::EdgeRerouted));
+
+    assert!(summaries["M08"].has_kind(MmdsDiffKind::SubgraphAdded));
+    assert!(summaries["M09"].has_kind(MmdsDiffKind::SubgraphMembershipChanged));
+    assert!(summaries["M10"].has_kind(MmdsDiffKind::SubgraphDirectionChanged));
+}
+
 fn parse_layout(source: &str) -> crate::mmds::Output {
     let config = RenderConfig {
         geometry_level: GeometryLevel::Layout,
@@ -182,57 +353,41 @@ fn output_with_node_shift(
 }
 
 fn run_tier_a_diff_summaries() -> BTreeMap<&'static str, MmdsDiff> {
-    [
-        (
-            "M01",
-            include_str!("../../tests/fixtures/flowchart/chain.mmd"),
-            "graph TD
-    A[Step 1] --> B[Step 2] --> X[Inserted] --> C[Step 3] --> D[Step 4]
-",
-        ),
-        (
-            "M05",
-            include_str!("../../tests/fixtures/flowchart/ci_pipeline.mmd"),
-            "graph LR
-    Push[Git Push] --> Build[Build]
-    Build --> Test[Run Tests]
-    Test --> Lint[Static Analysis]
-    Lint --> Deploy{Deploy?}
-    Deploy -->|staging| Staging[Staging Env]
-    Deploy -->|production| Prod[Production]
-",
-        ),
-        (
-            "M07",
-            include_str!("../../tests/fixtures/flowchart/edge_styles.mmd"),
-            "graph TD
-    A[Solid] -.-> B[Normal]
-    C[Dotted] -.-> D[Arrow]
-    E[Thick] ==> F[Arrow]
-    G[Open] --- H[Line]
-",
-        ),
-        (
-            "M10",
-            include_str!("../../tests/fixtures/flowchart/subgraph_direction_lr.mmd"),
-            "graph TD
-    Start --> A
-    subgraph sg1[Horizontal Flow]
-        direction TB
-        A[Step 1] --> B[Step 2] --> C[Step 3]
-    end
-    C --> End
-",
-        ),
-    ]
-    .into_iter()
-    .map(|(pair_id, before, after)| {
-        (
-            pair_id,
-            crate::mmds::diff::diff_outputs(&parse_routed(before), &parse_routed(after)),
-        )
-    })
-    .collect()
+    mutations::tier_a_pairs()
+        .iter()
+        .map(|pair| {
+            let before = mutation_input_source(pair.id, "before", pair.base);
+            let after = mutation_input_source(pair.id, "after", pair.mutated);
+
+            (
+                pair.id,
+                crate::mmds::diff::diff_outputs(&parse_routed(&before), &parse_routed(&after)),
+            )
+        })
+        .collect()
+}
+
+fn mutation_input_source(
+    pair_id: &'static str,
+    side: &'static str,
+    input: mutations::MutationInput,
+) -> String {
+    match input {
+        mutations::MutationInput::Inline(source) => source.to_string(),
+        mutations::MutationInput::Fixture { family, name } => {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests")
+                .join("fixtures")
+                .join(family)
+                .join(name);
+            fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "failed to read {side} fixture for {pair_id} from {}: {error}",
+                    path.display()
+                )
+            })
+        }
+    }
 }
 
 fn render_pair_before_routed(pair_id: &str) -> crate::mmds::Output {

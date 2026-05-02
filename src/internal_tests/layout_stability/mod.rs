@@ -1,6 +1,6 @@
 mod geometry_metrics;
 mod mmds_metrics;
-mod mutations;
+pub(super) mod mutations;
 mod phase_attribution;
 mod proportionality;
 mod render_metrics;
