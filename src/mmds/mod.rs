@@ -5,6 +5,8 @@
 //! adapter workflows. Replay rendering lives in `runtime::mmds`.
 
 pub(crate) mod detect;
+#[cfg(test)]
+pub(crate) mod diff;
 pub(crate) mod hydrate;
 mod mermaid;
 pub(crate) mod output;
