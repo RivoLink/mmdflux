@@ -2,6 +2,8 @@
 //!
 //! Detailed flowchart parser invariants live owner-local in `src/mermaid/flowchart.rs`.
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

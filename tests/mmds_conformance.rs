@@ -9,6 +9,8 @@
 //! - **Layout**: MMDS geometry export equivalence (node positions, edge topology)
 //! - **Visual**: rendered text output equivalence
 
+mod common;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

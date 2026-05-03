@@ -44,7 +44,21 @@ pub fn render_diagram(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
-    if matches!(detect_input_frontend(input), Some(InputFrontend::Mmds)) {
+    let frontend = detect_input_frontend(input);
+    let render_span = tracing::debug_span!(
+        "render_diagram",
+        format = %format,
+        input_bytes = input.len(),
+        frontend = tracing::field::Empty,
+        diagram_type = tracing::field::Empty,
+        geometry_level = %config.geometry_level,
+    );
+    let _render_span_guard = render_span.enter();
+
+    if matches!(frontend, Some(InputFrontend::Mmds)) {
+        render_span.record("frontend", "mmds");
+        render_span.record("diagram_type", "mmds");
+        tracing::debug!(event = "render", "render_diagram");
         let svg_theme = if matches!(format, OutputFormat::Svg) {
             resolve_configured_svg_theme(config)?
         } else {
@@ -64,9 +78,12 @@ pub fn render_diagram(
 
     let registry = default_registry();
 
+    render_span.record("frontend", "mermaid");
     let diagram_id = registry.detect(input).ok_or_else(|| RenderError {
         message: "unknown diagram type".to_string(),
     })?;
+    render_span.record("diagram_type", diagram_id);
+    tracing::debug!(event = "render", "render_diagram");
 
     // Check format support and engine policy before creating an instance.
     if !registry.supports_format(diagram_id, format) {
@@ -225,9 +242,32 @@ pub(in crate::runtime) fn svg_theme_spec_from_config(config: &SvgThemeConfig) ->
 
 #[cfg(test)]
 mod tests {
-    use super::{RenderConfig, effective_render_config, validate_diagram};
+    use std::sync::{Arc, Mutex};
+
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::layer::Context;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::registry::LookupSpan;
+
+    use super::{RenderConfig, effective_render_config, render_diagram, validate_diagram};
     use crate::format::OutputFormat;
     use crate::runtime::config::SvgThemeConfig;
+
+    #[test]
+    fn render_diagram_emits_render_trace_context() {
+        let input = "graph TD\nA-->B";
+        let collected = collect_trace_events_with_scoped_subscriber(|| {
+            let _ = render_diagram(input, OutputFormat::Text, &RenderConfig::default())
+                .expect("render");
+        });
+
+        assert!(collected.contains_target("mmdflux::runtime"));
+        assert!(collected.contains_field("format", "text"));
+        assert!(collected.contains_field("input_bytes", &input.len().to_string()));
+        assert!(collected.contains_field("frontend", "mermaid"));
+        assert!(collected.contains_field("diagram_type", "flowchart"));
+        assert!(collected.contains_field("geometry_level", "layout"));
+    }
 
     #[test]
     fn validate_diagram_skips_warning_for_frontmatter_theme_hint() {
@@ -292,5 +332,137 @@ mod tests {
                 .and_then(|theme| theme.name.as_deref()),
             Some("dark")
         );
+    }
+
+    fn collect_trace_events_with_scoped_subscriber(f: impl FnOnce()) -> CollectedTraceEvents {
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::registry().with(TraceCollector {
+            records: Arc::clone(&records),
+        });
+
+        tracing::subscriber::with_default(subscriber, f);
+
+        CollectedTraceEvents {
+            records: records.lock().expect("records lock").clone(),
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct CollectedTraceEvents {
+        records: Vec<TraceRecord>,
+    }
+
+    impl CollectedTraceEvents {
+        fn contains_target(&self, target: &str) -> bool {
+            self.records.iter().any(|record| record.target == target)
+        }
+
+        fn contains_field(&self, name: &str, value: &str) -> bool {
+            self.records.iter().any(|record| {
+                record
+                    .fields
+                    .iter()
+                    .any(|(field_name, field_value)| field_name == name && field_value == value)
+            })
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct TraceRecord {
+        target: String,
+        fields: Vec<(String, String)>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct TraceCollector {
+        records: Arc<Mutex<Vec<TraceRecord>>>,
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for TraceCollector
+    where
+        S: tracing::Subscriber + for<'lookup> LookupSpan<'lookup>,
+    {
+        fn on_new_span(
+            &self,
+            attrs: &tracing::span::Attributes<'_>,
+            _id: &tracing::span::Id,
+            _ctx: Context<'_, S>,
+        ) {
+            let mut visitor = FieldVisitor::default();
+            attrs.record(&mut visitor);
+            self.records
+                .lock()
+                .expect("records lock")
+                .push(TraceRecord {
+                    target: attrs.metadata().target().to_string(),
+                    fields: visitor.fields,
+                });
+        }
+
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+            let mut visitor = FieldVisitor::default();
+            event.record(&mut visitor);
+            self.records
+                .lock()
+                .expect("records lock")
+                .push(TraceRecord {
+                    target: event.metadata().target().to_string(),
+                    fields: visitor.fields,
+                });
+        }
+
+        fn on_record(
+            &self,
+            id: &tracing::span::Id,
+            values: &tracing::span::Record<'_>,
+            ctx: Context<'_, S>,
+        ) {
+            let Some(span) = ctx.span(id) else {
+                return;
+            };
+
+            let mut visitor = FieldVisitor::default();
+            values.record(&mut visitor);
+            self.records
+                .lock()
+                .expect("records lock")
+                .push(TraceRecord {
+                    target: span.metadata().target().to_string(),
+                    fields: visitor.fields,
+                });
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct FieldVisitor {
+        fields: Vec<(String, String)>,
+    }
+
+    impl FieldVisitor {
+        fn push(&mut self, field: &Field, value: String) {
+            self.fields.push((field.name().to_string(), value));
+        }
+    }
+
+    impl Visit for FieldVisitor {
+        fn record_bool(&mut self, field: &Field, value: bool) {
+            self.push(field, value.to_string());
+        }
+
+        fn record_i64(&mut self, field: &Field, value: i64) {
+            self.push(field, value.to_string());
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            self.push(field, value.to_string());
+        }
+
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.push(field, value.to_string());
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            self.push(field, format!("{value:?}"));
+        }
     }
 }

@@ -1,3 +1,5 @@
+mod common;
+
 use mmdflux::mmds::supports_format;
 use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig};
 #[test]

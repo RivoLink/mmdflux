@@ -78,3 +78,31 @@ just run diagram.mmd   # Run the CLI
 ```
 
 See the [Justfile](../../Justfile) for the full list.
+
+## Diagnostics and tracing
+
+The CLI supports opt-in `tracing` output for development diagnostics:
+
+```bash
+mmdflux --log mmdflux::runtime=debug diagram.mmd >/tmp/render.txt
+mmdflux --log mmdflux::graph::grid::routing=trace --log-format json diagram.mmd
+mmdflux --log mmdflux::engines::graph::algorithms::layered::kernel::order=trace --log-file /tmp/mmdflux.log diagram.mmd
+```
+
+`--log` takes precedence over `MMDFLUX_LOG`; `MMDFLUX_LOG` takes precedence over
+`RUST_LOG`. Tracing output goes to stderr unless `--log-file` is provided, so
+rendered text, SVG, and MMDS output remain safe to pipe from stdout.
+
+`xtask` accepts the same global tracing flags before the subcommand and uses
+`MMDFLUX_XTASK_LOG` before falling back to `RUST_LOG`:
+
+```bash
+cargo xtask --log xtask=debug architecture check
+MMDFLUX_XTASK_LOG=xtask=debug cargo xtask readme-assets check
+```
+
+Parity fixture dumpers such as `MMDFLUX_DEBUG_PIPELINE`,
+`MMDFLUX_DEBUG_LAYOUT`, and `MMDFLUX_DEBUG_BORDER_NODES` remain separate
+deterministic file/stderr contracts. Use trace filters for interactive
+diagnostics and the `MMDFLUX_DEBUG_*` dumpers only for their documented parity
+or probe artifacts.

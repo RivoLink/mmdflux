@@ -1,5 +1,7 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
+mod common;
+
 use mmdflux::format::{CornerStyle, Curve, EdgePreset, RoutingStyle};
 use mmdflux::{AlgorithmId, EngineAlgorithmId, EngineId, OutputFormat, RenderConfig, RenderError};
 

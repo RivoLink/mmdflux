@@ -18,30 +18,6 @@ pub(crate) fn border_nodes_enabled() -> bool {
     env_flag("MMDFLUX_DEBUG_BORDER_NODES")
 }
 
-pub(crate) fn subgraph_bounds_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS")
-}
-
-pub(crate) fn dummy_parents_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_DUMMY_PARENTS")
-}
-
-pub(crate) fn order_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_ORDER")
-}
-
-pub(crate) fn conflicts_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_CONFLICTS")
-}
-
-pub(crate) fn bk_trace_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_BK_TRACE")
-}
-
-pub(crate) fn border_blocks_enabled() -> bool {
-    env_flag("MMDFLUX_DEBUG_BORDER_BLOCKS")
-}
-
 fn debug_pipeline_target() -> Option<String> {
     std::env::var("MMDFLUX_DEBUG_PIPELINE").ok()
 }

@@ -1,6 +1,8 @@
 //! Quality measurement for greedy switch validation.
 //! Records crossing-related quality metrics across all flowchart fixtures.
 
+mod common;
+
 use std::fs;
 use std::path::Path;
 

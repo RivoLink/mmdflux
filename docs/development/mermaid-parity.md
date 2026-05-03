@@ -133,15 +133,56 @@ cargo run -- fixture.mmd --format mmds | jq -f scripts/mmds-to-dagre-input.jq
 | `DAGRE_ROOT`   | `deps/dagre`   | Path to dagre v0.8.5 repo |
 | `MERMAID_ROOT` | `deps/mermaid` | Path to mermaid repo      |
 
-### Debug Output
+### Trace Streams
 
-| Variable                        | Description                              |
-| ------------------------------- | ---------------------------------------- |
-| `MMDFLUX_DEBUG_LAYOUT=<file>`   | Write layout JSON to file                |
-| `MMDFLUX_DEBUG_PIPELINE=<file>` | Write pipeline stages to JSONL           |
-| `MMDFLUX_DEBUG_BORDER_NODES=1`  | Print border node trace                  |
-| `MMDFLUX_DEBUG_ORDER=1`         | Enable order debug tracing               |
-| `MMDFLUX_DEBUG_BK_TRACE=1`      | Trace Brandes-Köpf coordinate assignment |
+`mmdflux` emits `tracing` events from the library, while the CLI owns subscriber
+configuration. Render output stays on stdout; tracing output goes to stderr by
+default or to `--log-file`.
+
+| Control | Description |
+| ------- | ----------- |
+| `--log <FILTER>` | Enable CLI tracing with a `tracing_subscriber::EnvFilter` directive |
+| `MMDFLUX_LOG=<FILTER>` | Enable CLI tracing when `--log` is absent |
+| `RUST_LOG=<FILTER>` | Fallback tracing filter for CLI and `xtask` |
+| `--log-format <compact|pretty|json>` | Select tracing output format (`compact` by default) |
+| `--log-file <path>` | Write tracing output to a file instead of stderr |
+| `MMDFLUX_XTASK_LOG=<FILTER>` | Enable `xtask` tracing when its `--log` is absent |
+
+Useful target filters:
+
+| Filter | Use |
+| ------ | --- |
+| `mmdflux::runtime=debug` | Render facade timing and outcome |
+| `mmdflux::engines::graph::algorithms::layered::kernel=trace` | All layered-kernel diagnostics |
+| `mmdflux::engines::graph::algorithms::layered::kernel::order=trace` | Order phase diagnostics |
+| `mmdflux::engines::graph::algorithms::layered::kernel::bk=trace` | Brandes-Köpf coordinate assignment diagnostics |
+| `mmdflux::engines::graph::algorithms::layered::kernel::border=trace` | Border and subgraph-bound diagnostics |
+| `mmdflux::engines::graph::algorithms::layered::kernel::parent_dummy_chains=trace` | Parent dummy-chain diagnostics |
+| `mmdflux::graph::grid::routing=trace` | Route candidate and segment diagnostics |
+
+Example:
+
+```bash
+MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel::order=trace \
+  cargo run -- tests/fixtures/flowchart/external_node_subgraph.mmd >/tmp/render.txt
+```
+
+### Retained Deterministic Dumpers
+
+These debug env vars are deterministic file or parity producers. They remain
+explicit file/stderr contracts and are not replaced by tracing subscriber JSON.
+
+| Variable | Description |
+| -------- | ----------- |
+| `MMDFLUX_DEBUG_LAYOUT=1` | Write one compact layout JSON document to stderr |
+| `MMDFLUX_DEBUG_LAYOUT=<file>` | Truncate and write one compact layout JSON document to file |
+| `MMDFLUX_DEBUG_PIPELINE=1` | Write pipeline stages as JSONL to stderr |
+| `MMDFLUX_DEBUG_PIPELINE=<file>` | Append pipeline JSONL to file |
+| `MMDFLUX_DEBUG_BORDER_NODES=1` | Print border-node parity trace to stderr for fixture generation |
+| `MMDFLUX_DEBUG_SVG_THEME_AUTO=<file>` | Truncate and write the SVG auto-theme probe transcript |
+
+Behavior-changing debug switches are not logging controls and are intentionally
+not part of tracing documentation.
 
 ## Troubleshooting
 

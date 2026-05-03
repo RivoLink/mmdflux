@@ -4,8 +4,9 @@ mod svg_theme_auto;
 mod terminal_appearance;
 
 use std::ffi::OsStr;
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::{env, fmt, fs};
 
 use clap::{Parser, ValueEnum};
@@ -291,6 +292,18 @@ struct Cli {
     /// Ignored for text/ASCII.
     #[arg(long, value_enum)]
     path_simplification: Option<PathSimplificationArg>,
+
+    /// Enable tracing output with an EnvFilter directive.
+    #[arg(long, value_name = "FILTER")]
+    log: Option<String>,
+
+    /// Tracing output format.
+    #[arg(long, value_enum, default_value_t = LogFormatArg::Compact)]
+    log_format: LogFormatArg,
+
+    /// Write tracing output to a file instead of stderr.
+    #[arg(long, value_name = "PATH")]
+    log_file: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -390,6 +403,13 @@ impl From<SvgThemeModeArg> for SvgThemeMode {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum LogFormatArg {
+    Compact,
+    Pretty,
+    Json,
+}
+
 fn resolve_curve_from_cli(raw: Option<&str>) -> Result<Option<Curve>, String> {
     raw.map(Curve::parse).transpose().map_err(|err| {
         if err.message.contains("expected one of") {
@@ -462,8 +482,97 @@ fn svg_theme_from_cli(cli: &Cli) -> Option<SvgThemeConfig> {
     svg_theme_from_cli_with_appearance(cli, detect_terminal_appearance(), detect_os_appearance())
 }
 
+fn resolve_log_filter(cli: &Cli) -> Option<String> {
+    if let Some(filter) = cli.log.as_deref().filter(|value| !value.trim().is_empty()) {
+        return Some(filter.to_string());
+    }
+
+    env::var("MMDFLUX_LOG")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            env::var("RUST_LOG")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+}
+
+fn init_tracing(cli: &Cli) -> io::Result<()> {
+    let Some(filter) = resolve_log_filter(cli) else {
+        return Ok(());
+    };
+
+    let env_filter = tracing_subscriber::EnvFilter::try_new(&filter).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid log filter: {error}"),
+        )
+    })?;
+
+    match &cli.log_file {
+        Some(path) => {
+            let writer = SharedLogWriter::new(fs::File::create(path)?);
+            init_tracing_with_writer(env_filter, cli.log_format, move || writer.clone())
+        }
+        None => init_tracing_with_writer(env_filter, cli.log_format, io::stderr),
+    }
+}
+
+fn init_tracing_with_writer<W>(
+    env_filter: tracing_subscriber::EnvFilter,
+    log_format: LogFormatArg,
+    make_writer: W,
+) -> io::Result<()>
+where
+    W: for<'writer> tracing_subscriber::fmt::MakeWriter<'writer> + Send + Sync + 'static,
+{
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(make_writer)
+        .with_ansi(false)
+        .with_target(true);
+
+    let result = match log_format {
+        LogFormatArg::Compact => builder.compact().try_init(),
+        LogFormatArg::Pretty => builder.pretty().try_init(),
+        LogFormatArg::Json => builder.json().try_init(),
+    };
+
+    result.map_err(|error| io::Error::other(format!("failed to initialize tracing: {error}")))
+}
+
+#[derive(Clone)]
+struct SharedLogWriter {
+    file: Arc<Mutex<fs::File>>,
+}
+
+impl SharedLogWriter {
+    fn new(file: fs::File) -> Self {
+        Self {
+            file: Arc::new(Mutex::new(file)),
+        }
+    }
+}
+
+impl Write for SharedLogWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.file
+            .lock()
+            .map_err(|_| io::Error::other("log file lock poisoned"))?
+            .write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.file
+            .lock()
+            .map_err(|_| io::Error::other("log file lock poisoned"))?
+            .flush()
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
+    init_tracing(&cli)?;
 
     let input = match &cli.input {
         Some(path) => fs::read_to_string(path)?,

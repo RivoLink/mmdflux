@@ -1,10 +1,22 @@
 //! CLI integration tests for mmdflux binary.
 
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fs, process};
 
 use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
+
+const RENDER_TRACE_FILTER: &str = "mmdflux::runtime=debug";
+const LAYERED_KERNEL_TRACE_FILTER: &str = concat!(
+    "mmdflux::engines::graph::algorithms::layered::kernel::border=trace,",
+    "mmdflux::engines::graph::algorithms::layered::kernel::parent_dummy_chains=trace",
+);
+const ORDER_TRACE_FILTER: &str =
+    "mmdflux::engines::graph::algorithms::layered::kernel::order=trace";
+const BK_TRACE_FILTER: &str = "mmdflux::engines::graph::algorithms::layered::kernel::bk=trace";
+const ROUTE_SEGMENT_TRACE_FILTER: &str = "mmdflux::graph::grid::routing=trace";
 
 fn mmdflux() -> Command {
     cargo_bin_cmd!("mmdflux")
@@ -31,6 +43,49 @@ fn strip_ansi(input: &str) -> String {
     stripped
 }
 
+fn output_stdout(output: &std::process::Output) -> String {
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn output_stderr(output: &std::process::Output) -> String {
+    String::from_utf8_lossy(&output.stderr).to_string()
+}
+
+fn assert_command_success(output: &std::process::Output) {
+    assert!(
+        output.status.success(),
+        "command failed: status={:?}\nstdout={}\nstderr={}",
+        output.status.code(),
+        output_stdout(output),
+        output_stderr(output)
+    );
+}
+
+fn assert_render_trace_present(log: &str) {
+    assert!(
+        log.contains("mmdflux::runtime")
+            || (log.contains("render_diagram") && log.contains("input_bytes")),
+        "expected render trace context in log output:\n{log}"
+    );
+}
+
+fn assert_render_trace_absent(log: &str) {
+    assert!(
+        !log.contains("mmdflux::runtime")
+            && !log.contains("render_diagram")
+            && !log.contains("input_bytes"),
+        "did not expect render trace context in output:\n{log}"
+    );
+}
+
+fn temp_log_path(name: &str) -> std::path::PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("mmdflux-{name}-{}-{nanos}.log", process::id()))
+}
+
 // =============================================================================
 // Debug Flag Tests
 // =============================================================================
@@ -43,6 +98,417 @@ fn cli_debug_shows_detected_diagram_type() {
         .assert()
         .success()
         .stderr(predicate::str::contains("Detected diagram type: flowchart"));
+}
+
+// =============================================================================
+// Tracing Log Tests
+// =============================================================================
+
+#[test]
+fn cli_log_filter_enables_trace_output() {
+    let output = mmdflux()
+        .args(["--log", RENDER_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stdout = output_stdout(&output);
+    let stderr = output_stderr(&output);
+    assert!(
+        stdout.contains('A'),
+        "render stdout should be preserved: {stdout}"
+    );
+    assert_render_trace_absent(&stdout);
+    assert_render_trace_present(&stderr);
+}
+
+#[test]
+fn cli_log_format_accepts_compact_pretty_and_json() {
+    for format in ["compact", "pretty", "json"] {
+        let output = mmdflux()
+            .args(["--log", RENDER_TRACE_FILTER, "--log-format", format])
+            .env_remove("MMDFLUX_LOG")
+            .env_remove("RUST_LOG")
+            .write_stdin("graph TD\nA-->B")
+            .output()
+            .expect("command should run");
+
+        assert_command_success(&output);
+        let stderr = output_stderr(&output);
+        assert_render_trace_present(&stderr);
+        if format == "json" {
+            assert!(
+                stderr.contains("\"target\":\"mmdflux::runtime\""),
+                "json trace output should include the render target:\n{stderr}"
+            );
+        }
+    }
+}
+
+#[test]
+fn cli_log_file_writes_trace_output_to_file_not_stdout() {
+    let log_path = temp_log_path("trace");
+    let output = mmdflux()
+        .args([
+            "--log",
+            RENDER_TRACE_FILTER,
+            "--log-file",
+            log_path.to_str().expect("temp path should be utf-8"),
+        ])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stdout = output_stdout(&output);
+    let stderr = output_stderr(&output);
+    assert_render_trace_absent(&stdout);
+    assert_render_trace_absent(&stderr);
+
+    let file_log = fs::read_to_string(&log_path).expect("log file should be written");
+    assert_render_trace_present(&file_log);
+    let _ = fs::remove_file(log_path);
+}
+
+#[test]
+fn cli_log_invalid_filter_exits_nonzero() {
+    mmdflux()
+        .args(["--log", "["])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid log filter"));
+}
+
+#[test]
+fn cli_log_filter_precedence_prefers_flag_then_mmdflux_log_then_rust_log() {
+    let flag_output = mmdflux()
+        .args(["--log", RENDER_TRACE_FILTER])
+        .env("MMDFLUX_LOG", "off")
+        .env("RUST_LOG", "off")
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+    assert_command_success(&flag_output);
+    assert_render_trace_present(&output_stderr(&flag_output));
+
+    let mmdflux_log_output = mmdflux()
+        .env("MMDFLUX_LOG", RENDER_TRACE_FILTER)
+        .env("RUST_LOG", "off")
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+    assert_command_success(&mmdflux_log_output);
+    assert_render_trace_present(&output_stderr(&mmdflux_log_output));
+
+    let rust_log_output = mmdflux()
+        .env_remove("MMDFLUX_LOG")
+        .env("RUST_LOG", RENDER_TRACE_FILTER)
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+    assert_command_success(&rust_log_output);
+    assert_render_trace_present(&output_stderr(&rust_log_output));
+
+    let mmdflux_log_beats_rust_log_output = mmdflux()
+        .env("MMDFLUX_LOG", "off")
+        .env("RUST_LOG", RENDER_TRACE_FILTER)
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+    assert_command_success(&mmdflux_log_beats_rust_log_output);
+    assert_render_trace_absent(&output_stderr(&mmdflux_log_beats_rust_log_output));
+}
+
+#[test]
+fn cli_log_debug_flag_still_only_prints_detected_diagram_type() {
+    let output = mmdflux()
+        .arg("--debug")
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stderr = output_stderr(&output);
+    assert!(stderr.contains("Detected diagram type: flowchart"));
+    assert_render_trace_absent(&stderr);
+}
+
+#[test]
+fn cli_log_quiet_suppresses_warnings_but_not_requested_trace_output() {
+    let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+    let output = mmdflux()
+        .args(["--quiet", "--log", RENDER_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(input)
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stderr = output_stderr(&output);
+    assert_render_trace_present(&stderr);
+    assert!(
+        !stderr.contains("Strict parsing would reject"),
+        "--quiet should suppress validation warnings even when traces are enabled:\n{stderr}"
+    );
+}
+
+#[test]
+fn cli_log_filter_enables_layered_kernel_trace_events() {
+    let output = mmdflux()
+        .args(["--log", LAYERED_KERNEL_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(include_str!(
+            "fixtures/flowchart/external_node_subgraph.mmd"
+        ))
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stderr = strip_ansi(&output_stderr(&output));
+    assert!(
+        stderr.contains("mmdflux::engines::graph::algorithms::layered::kernel::border")
+            && stderr.contains("event=\"subgraph_bounds\""),
+        "expected subgraph bounds trace event:\n{stderr}"
+    );
+    assert!(
+        stderr
+            .contains("mmdflux::engines::graph::algorithms::layered::kernel::parent_dummy_chains")
+            && stderr.contains("event=\"dummy_chain\"")
+            && stderr.contains("event=\"dummy_parent\""),
+        "expected dummy parent trace events:\n{stderr}"
+    );
+}
+
+#[test]
+fn cli_log_filter_enables_order_trace_events() {
+    let output = mmdflux()
+        .args(["--log", ORDER_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(include_str!(
+            "fixtures/flowchart/external_node_subgraph.mmd"
+        ))
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stderr = strip_ansi(&output_stderr(&output));
+    for event in [
+        "event=\"rank_order\"",
+        "event=\"sweep\"",
+        "event=\"new_best\"",
+        "event=\"greedy_switch\"",
+    ] {
+        assert!(
+            stderr.contains(event),
+            "expected order trace {event}:\n{stderr}"
+        );
+    }
+}
+
+#[test]
+fn cli_log_filter_enables_bk_trace_events() {
+    let compound_output = mmdflux()
+        .args(["--log", BK_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(include_str!(
+            "fixtures/flowchart/external_node_subgraph.mmd"
+        ))
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&compound_output);
+    let compound_stderr = strip_ansi(&output_stderr(&compound_output));
+    for event in [
+        "event=\"layer_matrix\"",
+        "event=\"vertical_alignment\"",
+        "event=\"alignment_result\"",
+        "event=\"border_block\"",
+    ] {
+        assert!(
+            compound_stderr.contains(event),
+            "expected BK trace {event}:\n{compound_stderr}"
+        );
+    }
+
+    let conflict_output = mmdflux()
+        .args(["--log", BK_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(include_str!(
+            "fixtures/flowchart/architecture_graph_lr_terminal_contracts.mmd"
+        ))
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&conflict_output);
+    let conflict_stderr = strip_ansi(&output_stderr(&conflict_output));
+    assert!(
+        conflict_stderr.contains("event=\"conflict\""),
+        "expected BK conflict trace event:\n{conflict_stderr}"
+    );
+}
+
+#[test]
+fn cli_log_filter_enables_route_segment_trace_events() {
+    let output = mmdflux()
+        .args(["--log", ROUTE_SEGMENT_TRACE_FILTER])
+        .env_remove("MMDFLUX_LOG")
+        .env_remove("RUST_LOG")
+        .write_stdin(include_str!(
+            "fixtures/flowchart/architecture_graph_lr_terminal_contracts.mmd"
+        ))
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stderr = strip_ansi(&output_stderr(&output));
+    for expected in [
+        "event=\"route_candidate\"",
+        "event=\"route_segments\"",
+        "event=\"draw_path\"",
+        "event=\"draw_path_rejected\"",
+        "segment_count",
+        "point_count",
+        "rejection_reason",
+    ] {
+        assert!(
+            stderr.contains(expected),
+            "expected route segment trace {expected}:\n{stderr}"
+        );
+    }
+}
+
+#[test]
+fn debug_pipeline_env_writes_jsonl_to_stderr_and_appends_file() {
+    let input = include_str!("fixtures/flowchart/external_node_subgraph.mmd");
+    let stderr_output = mmdflux()
+        .env("MMDFLUX_DEBUG_PIPELINE", "1")
+        .write_stdin(input)
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&stderr_output);
+    let stderr = output_stderr(&stderr_output);
+    let mut lines = stderr.lines();
+    let first_line = lines.next().expect("pipeline stderr should contain JSONL");
+    let parsed: serde_json::Value =
+        serde_json::from_str(first_line).expect("pipeline line should be JSON");
+    assert_eq!(parsed["stage"], "after_rank");
+    assert_eq!(parsed["id"], "Cloud");
+    assert!(stderr.contains(r#""stage":"after_border_segments""#));
+
+    let path = temp_log_path("debug-pipeline");
+    fs::write(&path, "sentinel\n").expect("seed pipeline file");
+    for _ in 0..2 {
+        let output = mmdflux()
+            .env("MMDFLUX_DEBUG_PIPELINE", &path)
+            .write_stdin(input)
+            .output()
+            .expect("command should run");
+        assert_command_success(&output);
+    }
+
+    let contents = fs::read_to_string(&path).expect("pipeline file should be written");
+    assert!(
+        contents.starts_with("sentinel\n"),
+        "pipeline file should append instead of truncating:\n{contents}"
+    );
+    assert!(
+        contents.matches(r#""stage":"after_rank""#).count() >= 2,
+        "pipeline file should append JSONL for each run:\n{contents}"
+    );
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn debug_layout_env_writes_compact_json_to_stderr_and_truncates_file() {
+    let input = include_str!("fixtures/flowchart/external_node_subgraph.mmd");
+    let stderr_output = mmdflux()
+        .env("MMDFLUX_DEBUG_LAYOUT", "1")
+        .write_stdin(input)
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&stderr_output);
+    let stderr = output_stderr(&stderr_output);
+    assert_eq!(
+        stderr.lines().count(),
+        1,
+        "layout stderr should be one compact JSON document:\n{stderr}"
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_str(stderr.trim()).expect("layout stderr should parse");
+    assert!(parsed["nodes"].is_array());
+    assert!(parsed["edges"].is_array());
+    assert!(parsed["subgraph_bounds"].is_array());
+    assert!(parsed["graph"].is_object());
+
+    let path = temp_log_path("debug-layout");
+    fs::write(&path, "stale").expect("seed layout file");
+    let output = mmdflux()
+        .env("MMDFLUX_DEBUG_LAYOUT", &path)
+        .write_stdin(input)
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let contents = fs::read_to_string(&path).expect("layout file should be written");
+    assert!(
+        !contents.contains("stale"),
+        "layout file should truncate previous contents:\n{contents}"
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_str(contents.trim()).expect("layout file should parse");
+    assert!(parsed["nodes"].is_array());
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn debug_svg_theme_auto_env_truncates_probe_transcript() {
+    let path = temp_log_path("svg-theme-auto");
+    fs::write(&path, "stale").expect("seed svg auto-theme trace file");
+
+    let output = mmdflux()
+        .args(["--format", "svg", "--svg-theme-auto"])
+        .env("MMDFLUX_DEBUG_SVG_THEME_AUTO", &path)
+        .write_stdin("graph TD\nA-->B")
+        .output()
+        .expect("command should run");
+
+    assert_command_success(&output);
+    let stdout = output_stdout(&output);
+    assert!(
+        stdout.starts_with("<svg"),
+        "svg output should still render: {stdout}"
+    );
+    let contents = fs::read_to_string(&path).expect("svg auto-theme trace file should be written");
+    assert!(
+        contents.starts_with("# MMDFLUX SVG auto-theme trace"),
+        "trace file should start with the current header:\n{contents}"
+    );
+    assert!(
+        !contents.contains("stale"),
+        "trace file should truncate previous contents:\n{contents}"
+    );
+    assert!(
+        contents.contains("probe_mode"),
+        "trace should record probe mode:\n{contents}"
+    );
+    let _ = fs::remove_file(path);
 }
 
 // =============================================================================

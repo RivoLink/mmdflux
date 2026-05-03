@@ -5,6 +5,8 @@
 
 #![cfg(feature = "engine-elk")]
 
+mod common;
+
 use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig, RenderError};
 
 /// Helper: render via the FlowchartInstance with a specific engine.

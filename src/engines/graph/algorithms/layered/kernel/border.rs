@@ -134,8 +134,6 @@ pub fn add_segments(lg: &mut LayoutGraph) {
 pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
     debug_border_nodes(lg);
 
-    let debug_bounds = debug::subgraph_bounds_enabled();
-
     let mut bounds = HashMap::new();
 
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
@@ -183,20 +181,21 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
             y_max = y_max.max(pos.y);
         }
 
-        // Bounds come from border nodes only, matching dagre.js removeBorderNodes
-        // (layout.js:309-330) which uses borderLeft/Right/Top/Bottom exclusively.
-        if debug_bounds {
-            let name = &lg.node_ids[compound_idx].0;
-            eprintln!(
-                "[subgraph_bounds] {} border=({:.2},{:.2})-({:.2},{:.2})",
-                name, x_min, y_min, x_max, y_max
-            );
-        }
-
         let width = (x_max - x_min).max(0.0);
         let height = (y_max - y_min).max(0.0);
 
         let name = lg.node_ids[compound_idx].0.clone();
+        tracing::trace!(
+            event = "subgraph_bounds",
+            compound = %name,
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+            width,
+            height,
+        );
+
         bounds.insert(
             name,
             Rect {

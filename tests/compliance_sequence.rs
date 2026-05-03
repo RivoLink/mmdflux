@@ -3,6 +3,8 @@
 //! Locks sequence rendering output with deterministic text snapshots.
 //! Generate snapshots: `GENERATE_SEQUENCE_TEXT_SNAPSHOTS=1 cargo test --test compliance_sequence`
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

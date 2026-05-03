@@ -4,7 +4,6 @@
 //! during normalization are associated with the correct compound ancestors,
 //! which affects ordering and border placement.
 
-use super::debug;
 use super::graph::LayoutGraph;
 
 #[derive(Clone, Copy, Debug)]
@@ -18,7 +17,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
         return;
     }
 
-    let debug = debug::dummy_parents_enabled();
+    let trace_enabled = tracing::enabled!(tracing::Level::TRACE);
     let postorder = compute_postorder(graph);
 
     for chain in &graph.dummy_chains {
@@ -31,7 +30,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             continue;
         }
 
-        if debug {
+        if trace_enabled {
             let src_id = &graph.node_ids[src].0;
             let tgt_id = &graph.node_ids[tgt].0;
             let lca_label = lca
@@ -44,9 +43,13 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
                         .unwrap_or_else(|| "None".to_string())
                 })
                 .collect();
-            eprintln!(
-                "[dummy_parents] edge {} src={} tgt={} lca={} path={:?}",
-                chain.edge_index, src_id, tgt_id, lca_label, path_ids
+            tracing::trace!(
+                event = "dummy_chain",
+                edge_index = chain.edge_index,
+                source_node = %src_id,
+                target_node = %tgt_id,
+                lca = %lca_label,
+                path = ?path_ids,
             );
         }
 
@@ -87,14 +90,17 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             }
 
             graph.parents[dummy_idx] = path_v;
-            if debug {
+            if trace_enabled {
                 let dummy_name = &graph.node_ids[dummy_idx].0;
                 let parent_label = path_v
                     .map(|pv| graph.node_ids[pv].0.clone())
                     .unwrap_or_else(|| "None".to_string());
-                eprintln!(
-                    "[dummy_parents]   dummy {} rank {} -> {}",
-                    dummy_name, dummy_rank, parent_label
+                tracing::trace!(
+                    event = "dummy_parent",
+                    edge_index = chain.edge_index,
+                    dummy = %dummy_name,
+                    rank = dummy_rank,
+                    parent = %parent_label,
                 );
             }
         }

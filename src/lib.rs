@@ -212,4 +212,7 @@ pub use runtime::validate_diagram;
 
 // Residual crate-local tests stay narrowly scoped to cross-pipeline coverage.
 #[cfg(test)]
+mod test_tracing;
+
+#[cfg(test)]
 mod internal_tests;

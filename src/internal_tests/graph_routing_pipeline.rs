@@ -88,6 +88,26 @@ fn layout_fixture_svg(name: &str) -> (crate::graph::Graph, GraphGeometry) {
     layout_test_svg(&input)
 }
 
+fn rust_log_requests_mmdflux_trace() -> bool {
+    std::env::var("RUST_LOG").is_ok_and(|value| {
+        value.split(',').any(|directive| {
+            let directive = directive.trim();
+            directive == "mmdflux=trace"
+                || directive == "mmdflux::runtime=trace"
+                || directive == "mmdflux::runtime=debug"
+        })
+    })
+}
+
+fn assert_render_trace_enabled_when_requested() {
+    if rust_log_requests_mmdflux_trace() {
+        assert!(
+            tracing::enabled!(target: "mmdflux::runtime", tracing::Level::DEBUG),
+            "RUST_LOG requests mmdflux render tracing, but no test subscriber enabled it"
+        );
+    }
+}
+
 const ROUTE_EPS: f64 = 0.000_001;
 
 fn approx_eq(a: f64, b: f64) -> bool {
@@ -3010,6 +3030,15 @@ fn fan_in_overflow_policy_spec_defines_spill_distribution_order() {
 
 #[test]
 fn fan_in_backward_channel_conflict_resolution_is_deterministic_and_documented() {
+    assert_render_trace_enabled_when_requested();
+    let rendered = crate::runtime::render_diagram(
+        "graph TD\nA-->B",
+        crate::format::OutputFormat::Text,
+        &crate::runtime::config::RenderConfig::default(),
+    )
+    .expect("render trace smoke should render");
+    assert!(rendered.contains("A"));
+
     let fixture = "fan_in_backward_channel_conflict.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
     let first = route_graph_geometry(
@@ -3119,19 +3148,23 @@ fn fan_in_backward_channel_conflict_resolution_is_deterministic_and_documented()
     );
 
     let incoming_to_b: Vec<_> = first.edges.iter().filter(|edge| edge.to == "B").collect();
-    if std::env::var("MMDFLUX_DEBUG_FAN_IN").is_ok_and(|v| v == "1") {
-        for edge in &incoming_to_b {
-            let end = edge
-                .path
-                .last()
-                .copied()
-                .expect("inbound edge should have endpoint");
-            let end_face = point_on_target_face(target_rect, end);
-            eprintln!(
-                "edge {}->{} index={} backward={} end={:?} face={}",
-                edge.from, edge.to, edge.index, edge.is_backward, end, end_face
-            );
-        }
+    for edge in &incoming_to_b {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        let end_face = point_on_target_face(target_rect, end);
+        tracing::trace!(
+            target: "mmdflux::tests::graph_routing_pipeline",
+            event = "fan_in_edge",
+            source_node = %edge.from,
+            target_node = %edge.to,
+            edge_index = edge.index,
+            is_backward = edge.is_backward,
+            ?end,
+            end_face = ?end_face,
+        );
     }
     assert_eq!(
         incoming_to_b.len(),

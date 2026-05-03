@@ -1,3 +1,5 @@
+mod common;
+
 use mmdflux::builtins::default_registry;
 use mmdflux::format::EdgePreset;
 use mmdflux::graph::GeometryLevel;

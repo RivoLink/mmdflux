@@ -474,6 +474,10 @@ fn find_other_inner_segment_node(graph: &LayoutGraph, node: NodeIndex) -> Option
         .find(|&u| is_dummy_like(graph, u))
 }
 
+fn bk_trace_enabled() -> bool {
+    tracing::enabled!(tracing::Level::TRACE)
+}
+
 /// Find all Type-2 conflicts in the graph.
 ///
 /// A Type-2 conflict occurs between inner segments of different long edges
@@ -485,7 +489,7 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
         return conflicts;
     }
 
-    if super::debug::conflicts_enabled() {
+    if bk_trace_enabled() {
         debug_dump_layer_matrix(graph, &layers);
     }
 
@@ -574,9 +578,7 @@ pub(crate) fn is_dummy_like(graph: &LayoutGraph, node: NodeIndex) -> bool {
 }
 
 fn debug_dump_layer_matrix(graph: &LayoutGraph, layers: &[Vec<Option<NodeIndex>>]) {
-    eprintln!("[layer_matrix] start");
     for (rank, layer) in layers.iter().enumerate() {
-        eprintln!("[layer_matrix] rank {}", rank);
         for (pos, slot) in layer.iter().enumerate() {
             let Some(node) = *slot else {
                 continue;
@@ -586,22 +588,33 @@ fn debug_dump_layer_matrix(graph: &LayoutGraph, layers: &[Vec<Option<NodeIndex>>
             let is_border = is_border_node(graph, node);
             let is_dummy_like = is_dummy_like(graph, node);
             let predecessors = get_predecessors(graph, node);
-            let pred_entries: Vec<String> = predecessors
-                .iter()
-                .map(|&p| format!("{}(order={})", graph.node_ids[p].0, graph.order[p]))
-                .collect();
-            eprintln!(
-                "[layer_matrix]   pos {} node={} order={} border={} dummy_like={} predecessors=[{}]",
-                pos,
-                node_id,
-                order,
-                is_border,
-                is_dummy_like,
-                pred_entries.join(", ")
-            );
+            if predecessors.is_empty() {
+                tracing::trace!(
+                    event = "layer_matrix",
+                    rank,
+                    position = pos,
+                    node_id = %node_id,
+                    order,
+                    is_border,
+                    is_dummy_like,
+                );
+            } else {
+                for predecessor in predecessors {
+                    tracing::trace!(
+                        event = "layer_matrix",
+                        rank,
+                        position = pos,
+                        node_id = %node_id,
+                        order,
+                        is_border,
+                        is_dummy_like,
+                        predecessor = %graph.node_ids[predecessor].0,
+                        predecessor_order = graph.order[predecessor],
+                    );
+                }
+            }
         }
     }
-    eprintln!("[layer_matrix] end");
 }
 
 /// Find all conflicts (Type-1 and Type-2) in the graph.
@@ -609,7 +622,7 @@ pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let type1 = find_type1_conflicts(graph);
     let type2 = find_type2_conflicts(graph);
 
-    if super::debug::conflicts_enabled() {
+    if bk_trace_enabled() {
         debug_log_conflicts(graph, &type1, &type2);
     }
 
@@ -633,9 +646,14 @@ fn debug_log_conflicts(graph: &LayoutGraph, type1: &ConflictSet, type2: &Conflic
         let (la, pa) = node_layer[a];
         let (lb, pb) = node_layer[b];
         let layer = la.max(lb);
-        eprintln!(
-            "[conflicts] {} layer {} pos {}({}) vs pos {}({})",
-            conflict_type, layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
+        tracing::trace!(
+            event = "conflict",
+            conflict_type,
+            layer,
+            a_node = %graph.node_ids[a].0,
+            a_position = pa,
+            b_node = %graph.node_ids[b].0,
+            b_position = pb,
         );
     };
 
@@ -680,7 +698,7 @@ pub fn vertical_alignment(
     let base_layers = get_layers_with_order(graph);
     let adjusted_layers = adjusted_layers_with_order(&base_layers, direction);
     let downward = direction.is_downward();
-    vertical_alignment_with_layering(graph, &adjusted_layers, conflicts, downward)
+    vertical_alignment_with_layering(graph, &adjusted_layers, conflicts, downward, direction)
 }
 
 fn vertical_alignment_with_layering(
@@ -688,6 +706,7 @@ fn vertical_alignment_with_layering(
     layers: &[Vec<Option<NodeIndex>>],
     conflicts: &ConflictSet,
     downward: bool,
+    direction: AlignmentDirection,
 ) -> BlockAlignment {
     let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
     let mut alignment = BlockAlignment::new(&all_nodes);
@@ -696,7 +715,7 @@ fn vertical_alignment_with_layering(
         return alignment;
     }
 
-    let bk_trace = super::debug::bk_trace_enabled();
+    let trace_enabled = bk_trace_enabled();
 
     let mut pos: HashMap<NodeIndex, isize> = HashMap::new();
     for layer in layers {
@@ -728,8 +747,7 @@ fn vertical_alignment_with_layering(
             let start = mp.floor() as usize;
             let end = mp.ceil() as usize;
 
-            for i in start..=end {
-                let m = neighbors[i];
+            for &m in &neighbors[start..=end] {
                 if alignment.align.get(&v) != Some(&v) {
                     continue;
                 }
@@ -738,16 +756,20 @@ fn vertical_alignment_with_layering(
                 let order_ok = prev_idx < m_pos;
                 let conflict_free = !has_conflict(conflicts, v, m);
 
-                if bk_trace && graph.border_type.contains_key(&v) {
+                if trace_enabled && graph.border_type.contains_key(&v) {
                     let v_name = &graph.node_ids[v].0;
-                    let neighbor_names: Vec<&str> = neighbors
-                        .iter()
-                        .map(|n| graph.node_ids[*n].0.as_str())
-                        .collect();
                     let m_name = &graph.node_ids[m].0;
-                    eprintln!(
-                        "[BK] border node={} neighbors={:?} prev_idx={} conflict_free={} order_ok={} median_candidate={}",
-                        v_name, neighbor_names, prev_idx, conflict_free, order_ok, m_name
+                    let root_name = &graph.node_ids[alignment.get_root(m)].0;
+                    tracing::trace!(
+                        event = "vertical_alignment",
+                        direction = ?direction,
+                        node_id = %v_name,
+                        neighbor = %m_name,
+                        prev_idx,
+                        conflict_free,
+                        order_ok,
+                        median_candidate = %m_name,
+                        root = %root_name,
                     );
                 }
 
@@ -758,16 +780,6 @@ fn vertical_alignment_with_layering(
                     alignment.root.insert(v, m_root);
                     alignment.align.insert(v, m_root);
                     prev_idx = m_pos;
-
-                    if bk_trace && graph.border_type.contains_key(&v) {
-                        let v_name = &graph.node_ids[v].0;
-                        let m_name = &graph.node_ids[m].0;
-                        let m_root_name = &graph.node_ids[alignment.get_root(m)].0;
-                        eprintln!(
-                            "[BK]   -> ALIGNED {}  to {} (root={})",
-                            v_name, m_name, m_root_name
-                        );
-                    }
                 }
             }
         }
@@ -1110,8 +1122,13 @@ fn compute_all_alignments(
         let adjusted_layers = adjusted_layers_with_order(&base_layers, direction);
         let compact_layers = compact_layers(&adjusted_layers);
         let downward = direction.is_downward();
-        let alignment =
-            vertical_alignment_with_layering(graph, &adjusted_layers, conflicts, downward);
+        let alignment = vertical_alignment_with_layering(
+            graph,
+            &adjusted_layers,
+            conflicts,
+            downward,
+            direction,
+        );
         let mut compaction = horizontal_compaction_with_direction(
             graph,
             &alignment,
@@ -1277,7 +1294,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
     if graph.node_ids.is_empty() {
         return HashMap::new();
     }
-    let bk_trace = super::debug::bk_trace_enabled();
+    let trace_enabled = bk_trace_enabled();
 
     // Step 1: Find all conflicts
     let conflicts = find_all_conflicts(graph);
@@ -1285,18 +1302,23 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 
     // Step 2: Compute all 4 alignments
     let mut results = compute_all_alignments(graph, &conflicts, config);
-    if bk_trace {
+    if trace_enabled {
         for dir in AlignmentDirection::all() {
             if let Some(result) = results.get(&dir) {
                 let (center_min, center_max) = find_center_bounds(result);
                 let (bounds_min, bounds_max) = find_bounds(graph, result, config.direction);
                 let width = calculate_width(graph, result, config.direction);
                 let finite = result.x.values().filter(|x| x.is_finite()).count();
-                eprintln!(
-                    "[BK] {:?}: nodes={} finite={} center=[{center_min}, {center_max}] bounds=[{bounds_min}, {bounds_max}] width={width}",
-                    dir,
-                    result.x.len(),
-                    finite,
+                tracing::trace!(
+                    event = "alignment_result",
+                    direction = ?dir,
+                    node_count = result.x.len(),
+                    finite_count = finite,
+                    center_min,
+                    center_max,
+                    bounds_min,
+                    bounds_max,
+                    width,
                 );
             }
         }
@@ -1313,21 +1335,18 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 }
 
 fn debug_dump_border_blocks(graph: &LayoutGraph, conflicts: &ConflictSet) {
-    if !super::debug::border_blocks_enabled() {
+    if !bk_trace_enabled() {
         return;
     }
 
     let mut compounds: Vec<usize> = graph.compound_nodes.iter().copied().collect();
     compounds.sort_by_key(|&idx| graph.node_ids[idx].0.clone());
 
-    eprintln!("[border_blocks] block roots");
     for dir in AlignmentDirection::all() {
         let alignment = vertical_alignment(graph, conflicts, dir);
-        eprintln!("[border_blocks] {:?}", dir);
 
         for compound_idx in &compounds {
             let name = &graph.node_ids[*compound_idx].0;
-            eprintln!("[border_blocks]   {}", name);
 
             let mut nodes: Vec<NodeIndex> = Vec::new();
             if let Some(left) = graph.border_left.get(compound_idx) {
@@ -1349,9 +1368,14 @@ fn debug_dump_border_blocks(graph: &LayoutGraph, conflicts: &ConflictSet) {
             for idx in nodes {
                 let root = alignment.get_root(idx);
                 let root_id = &graph.node_ids[root].0;
-                eprintln!(
-                    "[border_blocks]     {} rank={} order={} root={}",
-                    graph.node_ids[idx].0, graph.ranks[idx], graph.order[idx], root_id
+                tracing::trace!(
+                    event = "border_block",
+                    direction = ?dir,
+                    compound = %name,
+                    node_id = %graph.node_ids[idx].0,
+                    rank = graph.ranks[idx],
+                    order = graph.order[idx],
+                    root = %root_id,
                 );
             }
         }

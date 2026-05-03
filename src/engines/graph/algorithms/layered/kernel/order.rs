@@ -615,29 +615,32 @@ fn add_subgraph_constraints(graph: &LayoutGraph, cg: &mut ConstraintGraph, sorte
     }
 }
 
-/// Check if order debug tracing is enabled via MMDFLUX_DEBUG_ORDER=1.
-fn debug_order() -> bool {
-    super::debug::order_enabled()
+fn order_trace_enabled() -> bool {
+    tracing::enabled!(tracing::Level::TRACE)
 }
 
 /// Dump per-rank node names and order values.
-fn debug_dump_order(graph: &LayoutGraph, label: &str) {
-    if !debug_order() {
+fn trace_rank_order(graph: &LayoutGraph, stage: &str) {
+    if !order_trace_enabled() {
         return;
     }
-    let layers = rank::by_rank(graph);
-    eprintln!("[order] {label}");
+
+    let layers = rank::by_rank_filtered(graph, |node| graph.is_position_node(node));
     for (rank, layer) in layers.iter().enumerate() {
         let mut nodes: Vec<(usize, &str)> = layer
             .iter()
             .map(|&idx| (graph.order[idx], graph.node_ids[idx].0.as_str()))
             .collect();
         nodes.sort_by_key(|&(ord, _)| ord);
-        let names: Vec<String> = nodes
-            .iter()
-            .map(|(ord, name)| format!("{name}={ord}"))
-            .collect();
-        eprintln!("[order]   rank {rank}: [{}]", names.join(", "));
+        for (order, node_id) in nodes {
+            tracing::trace!(
+                event = "rank_order",
+                stage,
+                rank,
+                node_id = %node_id,
+                order,
+            );
+        }
     }
 }
 
@@ -828,7 +831,7 @@ pub fn run_with_options(graph: &mut LayoutGraph, options: &OrderingOptions) {
 
     // DFS-based initial ordering
     init_order(graph, &layers, &backward_dummies);
-    debug_dump_order(graph, "after init_order");
+    trace_rank_order(graph, "after init_order");
 
     // Rebuild layers sorted by the new DFS order
     let layers = layers_sorted_by_order(&layers, graph);
@@ -845,6 +848,7 @@ pub fn run_with_options(graph: &mut LayoutGraph, options: &OrderingOptions) {
     let mut i: usize = 0;
     let mut last_best: usize = 0;
     let use_compound_sweeps = options.always_compound_ordering || !graph.compound_nodes.is_empty();
+    let trace_enabled = order_trace_enabled();
 
     while last_best < 4 {
         let bias_right = (i % 4) >= 2;
@@ -867,20 +871,25 @@ pub fn run_with_options(graph: &mut LayoutGraph, options: &OrderingOptions) {
 
         let cc = count_all_crossings(graph, &layers, &edges);
 
-        if debug_order() {
-            let dir = if i.is_multiple_of(2) { "up" } else { "down" };
-            eprintln!(
-                "[order] iter {i}: sweep_{dir}, bias_right={bias_right}, cc={cc}, best_cc={best_cc}"
+        if trace_enabled {
+            let sweep = if i.is_multiple_of(2) { "up" } else { "down" };
+            tracing::trace!(
+                event = "sweep",
+                iteration = i,
+                sweep,
+                bias_right,
+                crossings = cc,
+                best_crossings = best_cc,
             );
-            debug_dump_order(graph, &format!("after iter {i}"));
+            trace_rank_order(graph, &format!("after iter {i}"));
         }
 
         if cc < best_cc {
             last_best = 0;
             best_cc = cc;
             best_order = graph.order.clone();
-            if debug_order() {
-                eprintln!("[order] iter {i}: NEW BEST cc={cc}");
+            if trace_enabled {
+                tracing::trace!(event = "new_best", iteration = i, crossings = cc,);
             }
         }
         // NOTE: dagre 0.8.5 (used by Mermaid) does NOT replace the best order
@@ -901,17 +910,21 @@ pub fn run_with_options(graph: &mut LayoutGraph, options: &OrderingOptions) {
 
     // Post-pass: greedy switch refinement (two-sided, never increases crossings)
     if options.greedy_switch {
-        if debug_order() {
+        if trace_enabled {
             let before = count_all_crossings(graph, &layers, &edges);
             greedy_switch(graph, &layers, &edges, &backward_dummies);
             let after = count_all_crossings(graph, &layers, &edges);
-            eprintln!("[order] greedy_switch: {before} -> {after} crossings");
+            tracing::trace!(
+                event = "greedy_switch",
+                before_crossings = before,
+                after_crossings = after,
+            );
         } else {
             greedy_switch(graph, &layers, &edges, &backward_dummies);
         }
     }
 
-    debug_dump_order(graph, "final");
+    trace_rank_order(graph, "final");
 }
 
 /// Compound graph sweep: hierarchical ordering via sort_subgraph at each rank.

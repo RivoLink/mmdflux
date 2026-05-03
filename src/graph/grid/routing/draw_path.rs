@@ -276,10 +276,20 @@ pub(super) fn route_edge_from_draw_path(
         return Err(TextPathRejection::SegmentCollision);
     }
 
-    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|value| value == "1") {
-        eprintln!(
-            "[route-routed] {} -> {}: points={points:?} waypoints={waypoints:?} start={:?} end={:?} segments={:?}",
-            edge.from, edge.to, routed.start, routed.end, routed.segments
+    if tracing::enabled!(tracing::Level::TRACE) {
+        tracing::trace!(
+            event = "draw_path",
+            source_node = %edge.from,
+            target_node = %edge.to,
+            direction = ?direction,
+            point_count = points.len(),
+            waypoint_count = waypoints.len(),
+            segment_count = routed.segments.len(),
+            start = ?routed.start,
+            end = ?routed.end,
+            points = ?points,
+            waypoints = ?waypoints,
+            segments = ?routed.segments,
         );
     }
 

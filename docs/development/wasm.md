@@ -78,6 +78,19 @@ Notes:
 - Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
   `svgEdgeCurveRadius` are rejected.
 
+## Tracing and Diagnostics
+
+The wasm adapter depends on the root `mmdflux` crate with
+`default-features = false`, and it does not install a tracing subscriber or
+export an `init_logging()` function. Subscriber setup is owned by native
+entrypoints such as the CLI, `xtask`, and test harnesses.
+
+Keep `tracing-subscriber`, wasm-specific subscriber setup, and log-interop
+features out of the default wasm dependency path unless a browser consumer has
+a concrete need for them. For parity dumpers and trace-stream diagnostics, use
+the native CLI workflows documented in
+[mermaid-parity.md](./mermaid-parity.md).
+
 Example:
 
 ```json

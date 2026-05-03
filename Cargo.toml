@@ -23,6 +23,8 @@ pest_derive = "2.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.23", optional = true, default-features = false, features = ["std", "fmt", "ansi", "env-filter", "json"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52", features = [
@@ -38,7 +40,7 @@ windows-sys = { version = "0.52", features = [
 # Keep CLI behavior by default while allowing library/WASM users to opt out.
 default = ["cli"]
 # CLI-only dependency surface.
-cli = ["dep:clap", "dep:libc", "dep:windows-sys"]
+cli = ["dep:clap", "dep:libc", "dep:tracing-subscriber", "dep:windows-sys"]
 engine-elk = []
 
 [[bin]]
@@ -49,6 +51,8 @@ required-features = ["cli"]
 
 [dev-dependencies]
 assert_cmd = "2"
+ctor = "0.12.0"
 jsonschema = "0.41"
 predicates = "3"
 regex = "1.12.2"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "ansi", "env-filter"] }

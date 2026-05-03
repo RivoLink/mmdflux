@@ -1,5 +1,7 @@
 //! Parity checks between the direct render API and registry instance API.
 
+mod common;
+
 use mmdflux::builtins::default_registry;
 use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig, render_diagram};
 

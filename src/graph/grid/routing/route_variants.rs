@@ -16,6 +16,10 @@ use super::types::{
 };
 use crate::graph::{Arrow, Direction, Edge};
 
+fn route_segments_trace_enabled() -> bool {
+    tracing::enabled!(tracing::Level::TRACE)
+}
+
 /// Route an edge using waypoints from normalization.
 pub(super) fn route_edge_with_waypoints(
     edge: &Edge,
@@ -34,13 +38,6 @@ pub(super) fn route_edge_with_waypoints(
 
     let src_attach_point = clamp_to_boundary(src_attach_raw, &ep.from_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
-
-    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|v| v == "1") {
-        eprintln!(
-            "[route] {} -> {}: waypoints={:?}",
-            edge.from, edge.to, waypoints
-        );
-    }
 
     let is_backward = is_backward_edge(&ep.from_bounds, &ep.to_bounds, direction);
     let (default_src_face, default_tgt_face) = edge_faces(direction, is_backward);
@@ -76,6 +73,20 @@ pub(super) fn route_edge_with_waypoints(
     };
     let mut start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
+    let trace_enabled = route_segments_trace_enabled();
+    if trace_enabled {
+        tracing::trace!(
+            event = "route_candidate",
+            source_node = %edge.from,
+            target_node = %edge.to,
+            direction = ?direction,
+            is_backward,
+            src_face = ?src_face,
+            target_face = ?tgt_face,
+            waypoint_count = waypoints.len(),
+            waypoints = ?waypoints,
+        );
+    }
 
     if let Some(&(wp_x, wp_y)) = waypoints.first() {
         let should_skip_offset = match src_face {
@@ -159,10 +170,20 @@ pub(super) fn route_edge_with_waypoints(
     ensure_terminal_face_support(&mut segments, start, end, tgt_face);
     let entry_direction = entry_direction_from_face(tgt_face);
 
-    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|v| v == "1") {
-        eprintln!(
-            "[route] {} -> {}: start={:?} end={:?} segments={:?}",
-            edge.from, edge.to, start, end, segments
+    if trace_enabled {
+        tracing::trace!(
+            event = "route_segments",
+            source_node = %edge.from,
+            target_node = %edge.to,
+            direction = ?direction,
+            is_backward,
+            src_face = ?src_face,
+            target_face = ?tgt_face,
+            waypoint_count = waypoints.len(),
+            segment_count = segments.len(),
+            start = ?start,
+            end = ?end,
+            segments = ?segments,
         );
     }
 

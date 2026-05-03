@@ -168,13 +168,41 @@ cargo nextest run -E 'test(dagre_parity)'  # Compare layout against dagre.js fix
 ./scripts/refresh-parity-fixtures.sh   # Regenerate from dagre.js
 ```
 
-### Debug Environment Variables
+### Tracing Controls
 
-- `MMDFLUX_DEBUG_LAYOUT=<file>` - Write layout JSON
-- `MMDFLUX_DEBUG_PIPELINE=<file>` - Write pipeline stages (JSONL)
-- `MMDFLUX_DEBUG_BORDER_NODES=1` - Print border node trace
-- `MMDFLUX_DEBUG_ORDER=1` - Order debug tracing
-- `MMDFLUX_DEBUG_BK_TRACE=1` - Brandes-Köpf coordinate assignment trace
+Library code emits `tracing` events but does not install subscribers. The CLI
+and `xtask` own subscriber setup.
+
+- `--log <FILTER>` - Enable CLI tracing with a `tracing_subscriber::EnvFilter`
+  directive
+- `MMDFLUX_LOG=<FILTER>` - Enable CLI tracing when `--log` is absent
+- `RUST_LOG=<FILTER>` - Fallback tracing filter for CLI and `xtask`
+- `--log-format <compact|pretty|json>` - Select tracing format (`compact` by default)
+- `--log-file <path>` - Write tracing output to a file instead of stderr
+- `MMDFLUX_XTASK_LOG=<FILTER>` - Enable `xtask` tracing when its `--log` is absent
+
+Common target filters:
+
+- `MMDFLUX_LOG=mmdflux::runtime=debug` - Render facade timing and outcome
+- `MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel=trace` - All layered-kernel diagnostics
+- `MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel::order=trace` - Order diagnostics
+- `MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel::bk=trace` - Brandes-Köpf diagnostics
+- `MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel::border=trace` - Border/subgraph diagnostics
+- `MMDFLUX_LOG=mmdflux::engines::graph::algorithms::layered::kernel::parent_dummy_chains=trace` - Dummy-parent diagnostics
+- `MMDFLUX_LOG=mmdflux::graph::grid::routing=trace` - Route-segment diagnostics
+
+### Retained Debug Dumpers
+
+These env vars produce deterministic files or parity text and are intentionally
+not replaced by subscriber formatting:
+
+- `MMDFLUX_DEBUG_LAYOUT=1|<file>` - Write one compact layout JSON document
+- `MMDFLUX_DEBUG_PIPELINE=1|<file>` - Write pipeline stages as JSONL; file mode appends
+- `MMDFLUX_DEBUG_BORDER_NODES=1` - Print border-node parity trace to stderr
+- `MMDFLUX_DEBUG_SVG_THEME_AUTO=<file>` - Write/truncate the SVG auto-theme probe transcript
+
+Behavior-changing debug switches are separate from tracing. Do not add new
+behavior modifiers as tracing controls.
 
 ### Debug Scripts
 
@@ -183,4 +211,4 @@ cargo nextest run -E 'test(dagre_parity)'  # Compare layout against dagre.js fix
 - `scripts/dump-dagre-borders.js` - Extract dagre border nodes
 - `scripts/dump-dagre-order.js` - Dump node order per rank
 
-See `docs/DEBUG.md` for comprehensive documentation.
+See `docs/development/mermaid-parity.md` for comprehensive parity and debug documentation.

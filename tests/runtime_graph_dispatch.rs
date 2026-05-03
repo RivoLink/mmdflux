@@ -3,6 +3,8 @@
 //! Verifies that graph-family diagrams stay reachable through the supported
 //! public registry/payload/runtime workflow.
 
+mod common;
+
 use std::path::Path;
 
 use mmdflux::OutputFormat;

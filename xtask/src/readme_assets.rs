@@ -380,14 +380,7 @@ fn run_mmdflux_capture<I>(options: &ResolvedOptions, label: &str, args: I) -> Re
 where
     I: IntoIterator<Item = OsString>,
 {
-    let mut command = if let Some(bin) = &options.mmdflux_bin {
-        Command::new(bin)
-    } else {
-        let mut command = Command::new("cargo");
-        command.current_dir(&options.repo_root);
-        command.args(["run", "--quiet", "--bin", "mmdflux", "--"]);
-        command
-    };
+    let mut command = mmdflux_command_for_capture(options);
     command.args(args);
 
     let output = command
@@ -403,6 +396,17 @@ where
     }
 
     Ok(output.stdout)
+}
+
+fn mmdflux_command_for_capture(options: &ResolvedOptions) -> Command {
+    if let Some(bin) = &options.mmdflux_bin {
+        Command::new(bin)
+    } else {
+        let mut command = Command::new("cargo");
+        command.current_dir(&options.repo_root);
+        command.args(["run", "--quiet", "--bin", "mmdflux", "--"]);
+        command
+    }
 }
 
 fn should_update_readme(mode: ReadmeUpdate, name: &str) -> bool {
@@ -592,6 +596,8 @@ fn display_path(repo_root: &Path, path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+
     use super::*;
 
     #[test]
@@ -644,5 +650,25 @@ old
     #[test]
     fn fenced_block_trims_extra_trailing_newlines() {
         assert_eq!(fenced_block("text", "a\n\n"), "```text\na\n```");
+    }
+
+    #[test]
+    fn tracing_mmdflux_log_is_left_for_readme_assets_child() {
+        let options = ResolvedOptions {
+            repo_root: PathBuf::from("/tmp/mmdflux"),
+            source: PathBuf::from("/tmp/mmdflux/input.mmd"),
+            out_dir: PathBuf::from("/tmp/mmdflux/out"),
+            name: "fixture".to_string(),
+            mmdflux_bin: Some(PathBuf::from("/bin/echo")),
+            readme: ReadmeUpdate::No,
+            check: true,
+        };
+
+        let command = mmdflux_command_for_capture(&options);
+        let removes_mmdflux_log = command
+            .get_envs()
+            .any(|(key, value)| key == OsStr::new("MMDFLUX_LOG") && value.is_none());
+
+        assert!(!removes_mmdflux_log);
     }
 }

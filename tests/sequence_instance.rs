@@ -1,3 +1,5 @@
+mod common;
+
 use mmdflux::builtins::default_registry;
 use mmdflux::payload::Diagram;
 use mmdflux::registry::DiagramInstance;

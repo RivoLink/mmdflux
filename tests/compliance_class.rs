@@ -4,6 +4,8 @@
 //! Generate snapshots: `GENERATE_CLASS_TEXT_SNAPSHOTS=1 cargo test --test compliance_class`
 //! Generate SVG:       `GENERATE_CLASS_SVG_SNAPSHOTS=1 cargo test --test compliance_class`
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

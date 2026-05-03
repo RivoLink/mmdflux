@@ -266,10 +266,14 @@ fn debug_draw_path_rejection(
     rejection: TextPathRejection,
     draw_path: &[(usize, usize)],
 ) {
-    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|value| value == "1") {
-        eprintln!(
-            "[route-routed-reject] {} -> {}: reason={rejection:?} points={draw_path:?}",
-            edge.from, edge.to
+    if tracing::enabled!(tracing::Level::TRACE) {
+        tracing::trace!(
+            event = "draw_path_rejected",
+            source_node = %edge.from,
+            target_node = %edge.to,
+            rejection_reason = ?rejection,
+            point_count = draw_path.len(),
+            points = ?draw_path,
         );
     }
 }

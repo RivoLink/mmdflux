@@ -4,6 +4,8 @@
 //! - Default output is `geometry_level: "layout"` with no edge geometry.
 //! - Routed output is explicit opt-in with edge paths and bounds.
 
+mod common;
+
 use std::path::Path;
 
 use mmdflux::graph::GeometryLevel;

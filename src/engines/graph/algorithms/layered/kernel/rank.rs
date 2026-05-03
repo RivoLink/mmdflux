@@ -73,6 +73,7 @@ pub fn remove_empty_ranks(graph: &mut LayoutGraph) {
 }
 
 /// Get nodes grouped by rank.
+#[cfg(test)]
 pub fn by_rank(graph: &LayoutGraph) -> Vec<Vec<usize>> {
     let max_rank = graph.ranks.iter().max().copied().unwrap_or(0) as usize;
     let mut layers: Vec<Vec<usize>> = vec![Vec::new(); max_rank + 1];

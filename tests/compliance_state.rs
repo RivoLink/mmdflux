@@ -4,6 +4,8 @@
 //! Generate snapshots: `GENERATE_STATE_TEXT_SNAPSHOTS=1 cargo nextest run --test compliance_state -E 'test(state_text_snapshots)'`
 //! Generate SVG:       `GENERATE_STATE_SVG_SNAPSHOTS=1 cargo nextest run --test compliance_state -E 'test(state_svg_snapshots)'`
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

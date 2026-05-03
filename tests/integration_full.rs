@@ -3,12 +3,34 @@
 //! These tests validate that registry detection, parsing, and rendering work
 //! together across diagram types and output formats.
 
+mod common;
+
 use std::fs;
 use std::path::Path;
 
 use mmdflux::builtins::default_registry;
 use mmdflux::mmds::generate_mermaid_from_str;
 use mmdflux::{OutputFormat, RenderConfig, render_diagram};
+
+fn rust_log_requests_mmdflux_trace() -> bool {
+    std::env::var("RUST_LOG").is_ok_and(|value| {
+        value.split(',').any(|directive| {
+            let directive = directive.trim();
+            directive == "mmdflux=trace"
+                || directive == "mmdflux::runtime=trace"
+                || directive == "mmdflux::runtime=debug"
+        })
+    })
+}
+
+fn assert_render_trace_enabled_when_requested() {
+    if rust_log_requests_mmdflux_trace() {
+        assert!(
+            tracing::enabled!(target: "mmdflux::runtime", tracing::Level::DEBUG),
+            "RUST_LOG requests mmdflux render tracing, but no test subscriber enabled it"
+        );
+    }
+}
 
 fn render_with_registry(input: &str, format: OutputFormat) -> String {
     render_diagram(input, format, &RenderConfig::default()).expect("should render")
@@ -97,6 +119,14 @@ fn registry_detects_all_diagram_types() {
         registry.detect("sequenceDiagram\nA->>B: hi"),
         Some("sequence")
     );
+}
+
+#[test]
+fn simple_render_trace_is_enabled_when_rust_log_requests_mmdflux_trace() {
+    assert_render_trace_enabled_when_requested();
+
+    let output = render_with_registry("graph TD\nA-->B", OutputFormat::Text);
+    assert!(output.contains("A"));
 }
 
 #[test]
