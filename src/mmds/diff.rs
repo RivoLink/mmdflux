@@ -65,7 +65,7 @@ pub(crate) enum MmdsDiffKind {
 }
 
 impl MmdsDiffKind {
-    fn is_geometry_effect(self) -> bool {
+    pub(crate) fn is_geometry_effect(self) -> bool {
         matches!(
             self,
             Self::NodeMoved

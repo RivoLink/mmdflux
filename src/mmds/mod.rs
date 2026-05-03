@@ -4,6 +4,8 @@
 //! regeneration helpers, validation, and hydration to `Diagram` for
 //! adapter workflows. Replay rendering lives in `runtime::mmds`.
 
+#[cfg(test)]
+pub(crate) mod commands;
 pub(crate) mod detect;
 #[cfg(test)]
 pub(crate) mod diff;

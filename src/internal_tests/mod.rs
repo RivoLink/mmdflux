@@ -6,6 +6,7 @@ mod grid_routing_regression;
 mod label_node_overlap;
 mod layered_adapter_pipeline;
 mod layout_stability;
+mod mmds_commands;
 mod mmds_diff;
 mod mmds_output_serialization;
 mod mmds_roundtrip;
