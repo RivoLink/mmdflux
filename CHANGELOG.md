@@ -1,6 +1,14 @@
 # Changelog
 
 - - -
+## [mmdflux-v2.3.0](https://github.com/kevinswiber/mmdflux/compare/fd18585640373f080e52f057cb038dcfeec65495..mmdflux-v2.3.0) - 2026-05-04
+#### Features
+- support tracing diagnostics - ([8e16714](https://github.com/kevinswiber/mmdflux/commit/8e1671472b813168d90b8e1f42ab785b05e420ac)) - [@kevinswiber](https://github.com/kevinswiber)
+#### Bug Fixes
+- preserve utf-8 flowchart labels - ([3c59728](https://github.com/kevinswiber/mmdflux/commit/3c597288f135a94fa69220e8845f710f89f088b4)) - [@fukata](https://github.com/fukata)
+
+- - -
+
 ## [mmdflux-v2.2.0](https://github.com/kevinswiber/mmdflux/compare/f1bed91486f4849155eb2d2d3c4bc351a8ff6b66..mmdflux-v2.2.0) - 2026-04-30
 #### Features
 - (**mmds-core**) populate label_side and label_rect on MMDS edge output - ([55e6705](https://github.com/kevinswiber/mmdflux/commit/55e670555328af25fd601141ed58155ce03f0d0d)) - [@kevinswiber](https://github.com/kevinswiber)
