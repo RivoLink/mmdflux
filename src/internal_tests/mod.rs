@@ -1,5 +1,6 @@
 //! Residual crate-local tests that intentionally remain cross-pipeline.
 
+mod composition_probe;
 mod cross_pipeline;
 mod graph_routing_pipeline;
 mod grid_routing_regression;
