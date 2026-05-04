@@ -117,10 +117,11 @@ jobs:
 
             current_version="${latest_tag#"${tag_prefix}"}"
 
-            # Dry-run to check for a pending bump
-            dry_output=$(cog bump --package "$pkg" --auto --dry-run --skip-untracked 2>&1 || true)
-
-            if echo "$dry_output" | grep -q "No conventional commits"; then
+            # Dry-run to check for a pending bump. Keep Cocogitto failures
+            # visible so error text cannot be mistaken for a version number.
+            if dry_output=$(cog bump --package "$pkg" --auto --dry-run --skip-untracked 2>&1); then
+              true
+            elif echo "$dry_output" | grep -q "No conventional commit found"; then
               {
                 echo "**Current version:** ${current_version}"
                 echo ""
@@ -128,10 +129,35 @@ jobs:
                 echo ""
               } | out
               continue
+            else
+              {
+                echo "**Current version:** ${current_version}"
+                echo ""
+                echo "Could not determine next version."
+                echo ""
+                echo '```'
+                echo "$dry_output"
+                echo '```'
+                echo ""
+              } | out
+              exit 1
             fi
 
             # Extract next version from dry-run output
-            next_version=$(echo "$dry_output" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | tail -1 || echo "unknown")
+            next_version=$(echo "$dry_output" | sed -nE "s/^${pkg}-v([0-9]+\.[0-9]+\.[0-9]+)$/\1/p" | tail -1)
+            if [ -z "$next_version" ]; then
+              {
+                echo "**Current version:** ${current_version}"
+                echo ""
+                echo "Could not parse next version from Cocogitto dry-run output."
+                echo ""
+                echo '```'
+                echo "$dry_output"
+                echo '```'
+                echo ""
+              } | out
+              exit 1
+            fi
 
             {
               echo "**Current version:** ${current_version} **-->** ${next_version}"
