@@ -99,6 +99,7 @@ fn crate_root_only_exports_supported_public_modules() {
         "registry",
         "simplification",
         "timeline",
+        "views",
     ] {
         assert!(
             modules.contains(required),
@@ -121,6 +122,59 @@ fn crate_root_only_exports_supported_public_modules() {
             "{forbidden} should no longer be a public crate-root module"
         );
     }
+}
+
+#[test]
+fn views_module_is_public_low_level_api() {
+    let modules = public_modules_for_test();
+
+    assert!(
+        modules.contains("views"),
+        "views should be a supported low-level public module"
+    );
+}
+
+#[test]
+fn view_contract_types_compile() {
+    use mmdflux::views::{
+        AnchorRef, BoundaryPolicy, CompoundPolicy, EdgeAnchor, LayoutMode, NodePredicate, Selector,
+        TraversalDirection, ViewError, ViewEvent, ViewSpec, ViewStatement, apply_view,
+    };
+
+    let spec = ViewSpec::default();
+    let statement = ViewStatement::Include(Selector::Traversal {
+        anchor: AnchorRef::Node("gateway".to_string()),
+        direction: TraversalDirection::Downstream,
+        hops: 2,
+    });
+    let edge_anchor = AnchorRef::Edge(EdgeAnchor {
+        source: "gateway".to_string(),
+        target: "auth".to_string(),
+        ordinal: 0,
+        label: Some("calls".to_string()),
+    });
+    let stub_policy = BoundaryPolicy::Stub {
+        aggregate_threshold: 4,
+    };
+    let tag_predicate = NodePredicate::Tag("database".to_string());
+
+    let _ = (
+        spec,
+        statement,
+        edge_anchor,
+        stub_policy,
+        tag_predicate,
+        LayoutMode::SharedCoordinates,
+        CompoundPolicy::Preserve,
+        ViewEvent::NodeLeftView {
+            id: "internal".to_string(),
+            reason: mmdflux::views::ElisionReason::Excluded,
+        },
+        ViewError::NotImplementedYet {
+            feature: "edge anchors".to_string(),
+        },
+        apply_view,
+    );
 }
 
 #[test]
@@ -171,6 +225,15 @@ fn crate_root_reexports_curated_runtime_and_value_types() {
             "PathSimplification",
             "ColorToken",
             "NodeStyle",
+            "ViewSpec",
+            "ViewStatement",
+            "Selector",
+            "AnchorRef",
+            "LayoutMode",
+            "BoundaryPolicy",
+            "CompoundPolicy",
+            "ViewEvent",
+            "ViewError",
         ],
         "the crate-root export surface (types moved to home modules)",
     );
@@ -251,28 +314,43 @@ fn builtin_registry_module_is_public_and_registry_default_registry_is_gone() {
 
 #[test]
 fn mmds_module_keeps_supported_adapter_helpers_public() {
-    let _ = std::any::type_name::<mmdflux::mmds::Output>();
+    let _ = std::any::type_name::<mmdflux::mmds::Document>();
     let _ = std::any::type_name::<mmdflux::mmds::HydrationError>();
     let _ = std::any::type_name::<mmdflux::mmds::GenerationError>();
 
     let _parse_with_profiles: fn(
         &str,
     ) -> Result<
-        (mmdflux::mmds::Output, mmdflux::mmds::ProfileNegotiation),
+        (mmdflux::mmds::Document, mmdflux::mmds::ProfileNegotiation),
         mmdflux::mmds::ParseError,
     > = mmdflux::mmds::parse_with_profiles;
     let _validate_input: fn(&str) -> Result<(), mmdflux::RenderError> =
         mmdflux::mmds::validate_input;
     let _from_mmds_str: fn(&str) -> Result<mmdflux::graph::Graph, mmdflux::mmds::HydrationError> =
         mmdflux::mmds::from_str;
+    let _from_mmds_document: fn(
+        &mmdflux::mmds::Document,
+    )
+        -> Result<mmdflux::graph::Graph, mmdflux::mmds::HydrationError> =
+        mmdflux::mmds::from_document;
     let _generate_mermaid_from_mmds_str: fn(
         &str,
     ) -> Result<String, mmdflux::mmds::GenerationError> = mmdflux::mmds::generate_mermaid_from_str;
+    let _materialize_diagram: fn(
+        &str,
+        &mmdflux::RenderConfig,
+    ) -> Result<mmdflux::mmds::Document, mmdflux::RenderError> = mmdflux::materialize_diagram;
+    let _render_mmds_document: fn(
+        &mmdflux::mmds::Document,
+        mmdflux::OutputFormat,
+        &mmdflux::RenderConfig,
+    ) -> Result<String, mmdflux::RenderError> = mmdflux::render_mmds_document;
 }
 
 #[test]
 fn mmds_module_hides_geometry_coupled_helpers() {
     let source = repo_file("src/mmds/mod.rs");
+    let document_source = repo_file("src/mmds/document.rs");
 
     // These geometry-coupled helpers must not appear on the public surface.
     // The single runtime helper (to_mmds_json_typed_with_routing) may appear
@@ -302,4 +380,25 @@ fn mmds_module_hides_geometry_coupled_helpers() {
             panic!("to_mmds_json* helpers must be re-exports only, found: {trimmed}");
         }
     }
+
+    let reexport_lines: Vec<_> = source.lines().map(str::trim).collect();
+    let reexport_index = reexport_lines
+        .iter()
+        .position(|line| *line == "pub use document::to_json_typed_with_routing;")
+        .expect("legacy typed JSON routing helper should remain re-exported for compatibility");
+    let reexport_attrs = &reexport_lines[reexport_index.saturating_sub(3)..reexport_index];
+
+    assert!(
+        reexport_attrs.contains(&"#[doc(hidden)]"),
+        "legacy typed JSON routing helper should stay hidden on the mmds public surface"
+    );
+    assert!(
+        reexport_attrs.contains(&"#[allow(deprecated)]"),
+        "legacy typed JSON routing helper re-export should suppress its own deprecation warning"
+    );
+    assert!(
+        document_source.contains("#[deprecated(")
+            && document_source.contains("pub fn to_json_typed_with_routing("),
+        "legacy typed JSON routing helper should remain deprecated"
+    );
 }

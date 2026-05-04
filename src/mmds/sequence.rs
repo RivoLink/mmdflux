@@ -1,4 +1,4 @@
-//! MMDS output types for sequence diagrams.
+//! MMDS document types for sequence diagrams.
 //!
 //! Defines the serde-serializable envelope for sequence MMDS JSON. The builder
 //! that populates these types from layout data lives in `runtime` (which has
@@ -7,11 +7,11 @@
 use serde::Serialize;
 
 // ---------------------------------------------------------------------------
-// Output types
+// Document types
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-pub(crate) struct SequenceOutput {
+pub(crate) struct SequenceDocument {
     pub version: u32,
     pub geometry_level: String,
     pub metadata: SequenceMetadata,
@@ -127,7 +127,7 @@ pub(crate) struct MmdsParticipantBox {
     pub rect: MmdsRect,
 }
 
-/// Serialize a pre-built sequence output to pretty-printed JSON.
-pub(crate) fn serialize(output: &SequenceOutput) -> String {
-    serde_json::to_string_pretty(output).expect("sequence MMDS serialization should not fail")
+/// Serialize a pre-built sequence document to pretty-printed JSON.
+pub(crate) fn serialize(document: &SequenceDocument) -> String {
+    serde_json::to_string_pretty(document).expect("sequence MMDS serialization should not fail")
 }

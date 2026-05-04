@@ -776,7 +776,7 @@ impl LabelLaneTraceSnapshot {
     }
 }
 
-fn routed_mmds_signature(output: &crate::mmds::Output) -> String {
+fn routed_mmds_signature(output: &crate::mmds::Document) -> String {
     serde_json::to_string(output).expect("MMDS output should serialize")
 }
 

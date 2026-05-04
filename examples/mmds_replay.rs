@@ -1,4 +1,4 @@
-use mmdflux::mmds::{generate_mermaid, parse_with_profiles};
+use mmdflux::mmds::{Document, evaluate_profiles_for_document, generate_mermaid};
 use mmdflux::{OutputFormat, RenderConfig};
 
 const MMDS_INPUT: &str = r#"{
@@ -43,8 +43,10 @@ const MMDS_INPUT: &str = r#"{
 }"#;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (payload, negotiation) = parse_with_profiles(MMDS_INPUT)?;
-    let text = mmdflux::render_diagram(MMDS_INPUT, OutputFormat::Text, &RenderConfig::default())?;
+    let payload: Document = MMDS_INPUT.parse()?;
+    let negotiation = evaluate_profiles_for_document(&payload);
+    let text =
+        mmdflux::render_mmds_document(&payload, OutputFormat::Text, &RenderConfig::default())?;
     let mermaid = generate_mermaid(&payload)?;
 
     println!("supported profiles: {:?}", negotiation.supported);

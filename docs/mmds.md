@@ -4,7 +4,7 @@ MMDS is the structured JSON output format for graph-family diagrams produced by 
 
 ## Contract Ownership and Parity Harness
 
-Rust owns the canonical MMDS contract, MMDS input helpers, and output helpers under `src/mmds/`, while runtime MMDS frontend detection lives in `src/frontends.rs`.
+Rust owns the canonical MMDS contract, MMDS input helpers, and document helpers under `src/mmds/`, while runtime MMDS frontend detection lives in `src/frontends.rs`.
 
 Locked cross-language contract fixtures live under `tests/fixtures/mmds/contracts/`. They are consumed by:
 
@@ -20,14 +20,21 @@ Most Rust callers should produce MMDS through the high-level runtime facade:
 
 - `render_diagram(input, OutputFormat::Mmds, &RenderConfig::default())`
   (`render_diagram` auto-detects MMDS input and dispatches to the replay path)
+- `materialize_diagram(input, &config)` for materializing a graph-family
+  `mmds::Document` directly from Mermaid or MMDS input
+- `render_mmds_document(&document, output_format, &config)` for rendering an
+  already-parsed graph-family `mmds::Document` without a JSON round trip
 
 Adapter-oriented workflows can use the low-level API:
 
 - `mmdflux::builtins::default_registry()` for builtin registry wiring
 - `mmdflux::registry` and `mmdflux::payload` for explicit payload flows
-- `mmdflux::mmds` for hydration, profile negotiation, and Mermaid generation
+- `mmdflux::mmds` for parsing into `Document`, hydration, profile negotiation,
+  and Mermaid generation
+- `mmdflux::views` for materialized read-side views over canonical MMDS payloads
 
 The current Rust replay example lives at `examples/mmds_replay.rs`.
+The materialized-view example lives at `examples/materialized_view.rs`.
 
 Fixture-backed payloads used throughout the Rust contract tests live at:
 
@@ -52,14 +59,84 @@ MMDS input support is active:
 
 \* For text/ascii, routed path fields are currently ignored and output is re-routed on the text grid from core topology.
 
+## Materialized Views
+
+The Rust `mmdflux::views` module provides a read-side contract for focused
+diagram views over canonical graph-family MMDS payloads. It is intentionally a
+small materialization API, not a general graph query language.
+
+The primary entry point is:
+
+- `mmdflux::views::apply_view(canonical: &mmdflux::mmds::Document, spec: &ViewSpec) -> Result<(Document, Vec<ViewEvent>), ViewError>`
+
+`ViewSpec` v1 supports:
+
+- `Selector::All`
+- `Selector::Anchor(AnchorRef::Node(id))`
+- `Selector::Anchor(AnchorRef::Subgraph(id))` for the subgraph container only
+- `Selector::Traversal` from a node anchor with upstream, downstream, or neighbor hops
+- `Selector::Predicate(NodePredicate::Shape(value))`
+- `Selector::Predicate(NodePredicate::Parent(subgraph_id))`
+- `Selector::SubgraphDescendants(id)` for recursive subgraph contents
+- ordered `Include` and `Exclude` statements
+
+These primitives are present in the public types but intentionally deferred in
+the v1 evaluator:
+
+- tag predicates
+- edge anchors
+- boundary stubs
+- compact, local-reflow, and incremental layout modes
+- compound flattening
+
+Unsupported primitives return `ViewError::NotImplementedYet` rather than
+falling back silently.
+
+### View Payload Contract
+
+`apply_view` returns a normal MMDS `Document` with retained nodes, retained
+subgraphs, surviving edges, and a `Vec<ViewEvent>` describing omitted canonical
+elements. Surviving edge IDs are preserved verbatim from the canonical payload;
+filtered views may therefore contain sparse IDs such as `["e0", "e2", "e4"]`.
+Consumers should not assume edge IDs are contiguous.
+
+Materialized view payloads carry a top-level extension marker:
+
+```json
+{
+  "extensions": {
+    "org.mmdflux.view.v1": {
+      "layout_mode": "shared_coordinates",
+      "boundary_policy": "omit"
+    }
+  }
+}
+```
+
+When the canonical payload contains the text renderer projection extension
+(`org.mmdflux.render.text.v1`), v1 view materialization keeps `projection.node_ranks`
+for retained nodes and drops edge-array-indexed projection maps such as
+`edge_waypoints` and `label_positions`. This avoids reindexing edge projection
+data through sparse view edges.
+
+To render a materialized view, pass the returned `Document` through the typed
+runtime replay helper:
+
+```rust
+use mmdflux::{OutputFormat, RenderConfig, render_mmds_document};
+
+let text = render_mmds_document(&view_payload, OutputFormat::Text, &RenderConfig::default())?;
+println!("{text}");
+```
+
 ## MMDS -> Mermaid Generation Contract
 
 mmdflux provides deterministic Mermaid generation for graph-family MMDS payloads:
 
 - `mmdflux::mmds::generate_mermaid_from_str(input: &str) -> Result<String, GenerationError>`
-- `mmdflux::mmds::generate_mermaid(output: &Output) -> Result<String, GenerationError>`
+- `mmdflux::mmds::generate_mermaid(document: &Document) -> Result<String, GenerationError>`
 
-### Canonical Output Rules
+### Canonical Document Rules
 
 Generated Mermaid is canonicalized as:
 
@@ -67,7 +144,7 @@ Generated Mermaid is canonicalized as:
 2. Subgraphs emitted in deterministic ID order, with nested `subgraph ... end` blocks and optional `direction` lines
 3. Nodes emitted in deterministic ID order within each scope
 4. Edges emitted in deterministic edge-ID order (`e{number}` before non-numeric IDs)
-5. Output always ends with a trailing newline (`\n`)
+5. Generated Mermaid always ends with a trailing newline (`\n`)
 
 ### Identifier and Label Policy
 
@@ -170,7 +247,7 @@ Explicit opt-in via `--geometry-level routed`. Includes everything from layout p
 mmdflux --format mmds --geometry-level routed diagram.mmd
 ```
 
-## Output Envelope
+## Document Envelope
 
 ```json
 {
@@ -423,11 +500,11 @@ just conformance
 | State     | `"state"`      | Graph    | Supported |
 | Sequence  | `"sequence"`   | Timeline | Supported |
 
-### Graph-Family vs Timeline-Family Output
+### Graph-Family vs Timeline-Family Document
 
-Graph-family diagrams (flowchart, class, state) use the standard MMDS envelope with `nodes`, `edges`, `subgraphs`, and `defaults`.
+Graph-family diagrams (flowchart, class, state) use the standard MMDS envelope with `nodes`, `edges`, `subgraphs`, and `defaults`. This is the typed Rust `mmdflux::mmds::Document` contract.
 
-Timeline-family diagrams (sequence) use the same envelope structure (`version`, `geometry_level`, `metadata`, `nodes`, `edges`) for compatibility, but `nodes` and `edges` are always empty arrays. The diagram content is in sequence-specific body fields described below.
+Timeline-family diagrams (sequence) use a separate internal serde envelope with the same top-level compatibility fields (`version`, `geometry_level`, `metadata`, `nodes`, `edges`), but `nodes` and `edges` are always empty arrays. The diagram content is in sequence-specific body fields described below.
 
 ## Sequence MMDS Profile
 

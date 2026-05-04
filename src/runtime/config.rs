@@ -93,6 +93,7 @@ impl RenderConfig {
                 .unwrap_or(RoutingStyle::Orthogonal),
             cluster_ranksep: self.cluster_ranksep,
             padding: self.padding,
+            use_pinned_ranks: false,
             path_simplification: self.path_simplification,
         }
     }
@@ -152,6 +153,7 @@ mod tests {
 
         assert_eq!(options.output_format, OutputFormat::Text);
         assert_eq!(options.routing_style, RoutingStyle::Orthogonal);
+        assert!(!options.use_pinned_ranks);
     }
 
     #[test]

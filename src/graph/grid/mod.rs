@@ -66,6 +66,8 @@ pub struct GridLayoutConfig {
     pub margin: f64,
     /// Additional ranksep applied when subgraphs are present (Mermaid clusters).
     pub cluster_rank_sep: f64,
+    /// Honor hydrated projection ranks when replaying a marked materialized view.
+    pub use_pinned_ranks: bool,
 }
 
 impl Default for GridLayoutConfig {
@@ -82,6 +84,7 @@ impl Default for GridLayoutConfig {
             rank_sep: 50.0,
             margin: 8.0,
             cluster_rank_sep: 25.0,
+            use_pinned_ranks: false,
         }
     }
 }

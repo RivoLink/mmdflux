@@ -1,4 +1,4 @@
-//! MMDS output contract and serialization helpers.
+//! MMDS document contract and serialization helpers.
 //!
 //! Produces structured JSON from graph-family geometry with two levels:
 //! - `layout`: Node geometry + edge topology/semantics (no edge paths).
@@ -46,7 +46,7 @@ pub(crate) fn to_layout_typed(
     diagram: &Graph,
     geometry: &GraphGeometry,
 ) -> String {
-    render_output(
+    render_document_json(
         diagram_type,
         diagram,
         geometry,
@@ -77,7 +77,7 @@ pub(crate) fn to_routed_typed(
     geometry: &GraphGeometry,
     routed: &RoutedGraphGeometry,
 ) -> String {
-    render_output(
+    render_document_json(
         diagram_type,
         diagram,
         geometry,
@@ -109,6 +109,7 @@ pub(crate) fn to_json(
 }
 
 /// Serialize a diagram to MMDS JSON at the specified geometry level with explicit type.
+#[cfg(test)]
 pub(crate) fn to_json_typed(
     diagram_type: &str,
     diagram: &Graph,
@@ -118,8 +119,29 @@ pub(crate) fn to_json_typed(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> Result<String, RenderError> {
+    to_document_typed(
+        diagram_type,
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_simplification,
+        engine_id,
+    )
+    .map(|document| serialize_document(&document))
+}
+
+pub(crate) fn to_document_typed(
+    diagram_type: &str,
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    routed: Option<&RoutedGraphGeometry>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+    engine_id: Option<&str>,
+) -> Result<Document, RenderError> {
     match level {
-        GeometryLevel::Layout => Ok(render_output(
+        GeometryLevel::Layout => Ok(build_document(
             diagram_type,
             diagram,
             geometry,
@@ -133,7 +155,7 @@ pub(crate) fn to_json_typed(
                     .to_string(),
             })
             .map(|routed| {
-                render_output(
+                build_document(
                     diagram_type,
                     diagram,
                     geometry,
@@ -145,6 +167,10 @@ pub(crate) fn to_json_typed(
     }
 }
 
+/// Serialize a graph-family diagram to MMDS JSON with fallback routing.
+#[deprecated(
+    note = "use materialize_diagram plus serde_json serialization for JSON output, or render_mmds_document for replay"
+)]
 pub fn to_json_typed_with_routing(
     diagram_type: &str,
     diagram: &Graph,
@@ -154,6 +180,27 @@ pub fn to_json_typed_with_routing(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> Result<String, RenderError> {
+    to_document_typed_with_routing(
+        diagram_type,
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_simplification,
+        engine_id,
+    )
+    .map(|document| serialize_document(&document))
+}
+
+pub(crate) fn to_document_typed_with_routing(
+    diagram_type: &str,
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    routed: Option<&RoutedGraphGeometry>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+    engine_id: Option<&str>,
+) -> Result<Document, RenderError> {
     // MMDS fallback routing: default metrics are sufficient since this path
     // only fires when no pre-routed geometry was provided (design §6.3).
     let metrics = default_proportional_text_metrics();
@@ -161,7 +208,7 @@ pub fn to_json_typed_with_routing(
         .then(|| route_graph_geometry(diagram, geometry, EdgeRouting::OrthogonalRoute, &metrics));
     let routed = routed.or(routed_owned.as_ref());
 
-    to_json_typed(
+    to_document_typed(
         diagram_type,
         diagram,
         geometry,
@@ -172,7 +219,8 @@ pub fn to_json_typed_with_routing(
     )
 }
 
-fn render_output(
+#[cfg(test)]
+fn render_document_json(
     diagram_type: &str,
     diagram: &Graph,
     geometry: &GraphGeometry,
@@ -180,7 +228,7 @@ fn render_output(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> String {
-    let output = build_output(
+    let document = build_document(
         diagram_type,
         diagram,
         geometry,
@@ -188,11 +236,11 @@ fn render_output(
         path_simplification,
         engine_id,
     );
-    serialize_output(&output)
+    serialize_document(&document)
 }
 
-fn serialize_output(output: &Output) -> String {
-    serde_json::to_string_pretty(output).expect("MMDS serialization should not fail")
+fn serialize_document(document: &Document) -> String {
+    serde_json::to_string_pretty(document).expect("MMDS serialization should not fail")
 }
 
 fn edge_port_to_mmds(port: &EdgePort) -> Port {
@@ -247,14 +295,14 @@ fn mmds_edge_label_rect(routed_edge: Option<&RoutedEdgeGeometry>, is_routed: boo
     })
 }
 
-fn build_output(
+fn build_document(
     diagram_type: &str,
     diagram: &Graph,
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
-) -> Output {
+) -> Document {
     let level = if routed.is_some() { "routed" } else { "layout" };
     let styled_nodes = collect_styled_nodes(diagram);
 
@@ -391,7 +439,7 @@ fn build_output(
         );
     }
 
-    Output {
+    Document {
         version: 1,
         profiles,
         extensions,
@@ -676,9 +724,9 @@ fn arrow_str(arrow: Arrow) -> &'static str {
 // MMDS data types
 // ---------------------------------------------------------------------------
 
-/// Top-level MMDS output envelope.
+/// Top-level graph-family MMDS document envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Output {
+pub struct Document {
     /// Schema version (1 for MMDS).
     pub version: u32,
     /// Optional behavior bundle declarations for capability negotiation.
@@ -704,6 +752,14 @@ pub struct Output {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subgraphs: Vec<Subgraph>,
 }
+
+/// Legacy name for [`Document`].
+///
+/// New code should use `mmds::Document`. The alias remains available so
+/// existing adapter code that imports `mmds::Output` continues to compile.
+#[doc(hidden)]
+#[deprecated(note = "use mmds::Document instead")]
+pub type Output = Document;
 
 /// Default values for omitted fields in nodes and edges.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -13,6 +13,7 @@ use crate::graph::measure::{
     DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ProportionalTextMetrics,
 };
 use crate::graph::{GeometryLevel, Graph};
+use crate::mmds::Document;
 use crate::render::graph::{
     SvgRenderOptions, render_svg_from_geometry_with_theme_and_routing,
     render_svg_from_routed_geometry_with_theme, render_text_from_geometry,
@@ -27,35 +28,7 @@ pub(crate) fn render_graph_family(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
-    let engine_id = config
-        .layout_engine
-        .unwrap_or(EngineAlgorithmId::FLUX_LAYERED);
-    engine_id.check_available()?;
-    engine_id.check_routing_style(
-        config
-            .routing_style
-            .or_else(|| config.edge_preset.map(|preset| preset.expand().0)),
-    )?;
-
-    // Pre-engine wrap pass: plan 0147 Task 1.5b / 1.7. Populates
-    // `diagram::Edge.wrapped_label_lines` once per render so the kernel
-    // sizing scan, label geometry, SVG text, and MMDS replay all agree on
-    // the wrap decision. Uses Proportional metrics regardless of render
-    // mode — Grid consumers read the same line splits (see design.md §6.1).
-    // Threshold comes from `RenderConfig.layout.edge_label_max_width`; the
-    // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
-    // default. Explicit `None` disables wrap (dagre-parity fallback).
-    let wrap_metrics = proportional_text_metrics_for_config(config);
-    prepare_wrapped_labels(
-        &mut diagram.edges,
-        &wrap_metrics,
-        config.layout.edge_label_max_width,
-    );
-
-    let request = graph_solve_request_for(format, config, diagram_id);
-    let engine_config = EngineConfig::Layered(config.layout.clone().into());
-    let engine_id = resolve_graph_engine_for_request(engine_id, &request);
-    let result = solve_graph_family(diagram, engine_id, &engine_config, &request)?;
+    let result = solve_graph_family_for_render(diagram_id, diagram, format, config)?;
 
     match format {
         OutputFormat::Mmds => render_mmds_from_solve_result(
@@ -84,6 +57,58 @@ pub(crate) fn render_graph_family(
             message: format!("{format} output is not supported for {diagram_id} diagrams"),
         }),
     }
+}
+
+pub(crate) fn materialize_graph_family(
+    diagram_id: &str,
+    diagram: &mut Graph,
+    config: &RenderConfig,
+) -> Result<Document, RenderError> {
+    let result = solve_graph_family_for_render(diagram_id, diagram, OutputFormat::Mmds, config)?;
+    mmds_document_from_solve_result(
+        diagram_id,
+        diagram,
+        &result,
+        config.geometry_level,
+        config.path_simplification,
+    )
+}
+
+fn solve_graph_family_for_render(
+    diagram_id: &str,
+    diagram: &mut Graph,
+    format: OutputFormat,
+    config: &RenderConfig,
+) -> Result<GraphSolveResult, RenderError> {
+    let engine_id = config
+        .layout_engine
+        .unwrap_or(EngineAlgorithmId::FLUX_LAYERED);
+    engine_id.check_available()?;
+    engine_id.check_routing_style(
+        config
+            .routing_style
+            .or_else(|| config.edge_preset.map(|preset| preset.expand().0)),
+    )?;
+
+    // Pre-engine wrap pass: plan 0147 Task 1.5b / 1.7. Populates
+    // `diagram::Edge.wrapped_label_lines` once per render so the kernel
+    // sizing scan, label geometry, SVG text, and MMDS replay all agree on
+    // the wrap decision. Uses Proportional metrics regardless of render
+    // mode — Grid consumers read the same line splits (see design.md §6.1).
+    // Threshold comes from `RenderConfig.layout.edge_label_max_width`; the
+    // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
+    // default. Explicit `None` disables wrap (dagre-parity fallback).
+    let wrap_metrics = proportional_text_metrics_for_config(config);
+    prepare_wrapped_labels(
+        &mut diagram.edges,
+        &wrap_metrics,
+        config.layout.edge_label_max_width,
+    );
+
+    let request = graph_solve_request_for(format, config, diagram_id);
+    let engine_config = EngineConfig::Layered(config.layout.clone().into());
+    let engine_id = resolve_graph_engine_for_request(engine_id, &request);
+    solve_graph_family(diagram, engine_id, &engine_config, &request)
 }
 
 fn subgraph_direction_policy_for(diagram_id: &str) -> SubgraphDirectionPolicy {
@@ -182,8 +207,22 @@ fn render_mmds_from_solve_result(
     level: GeometryLevel,
     path_simplification: PathSimplification,
 ) -> Result<String, RenderError> {
+    let document =
+        mmds_document_from_solve_result(diagram_type, diagram, result, level, path_simplification)?;
+    serde_json::to_string_pretty(&document).map_err(|error| RenderError {
+        message: format!("MMDS serialization error: {error}"),
+    })
+}
+
+fn mmds_document_from_solve_result(
+    diagram_type: &str,
+    diagram: &Graph,
+    result: &GraphSolveResult,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+) -> Result<Document, RenderError> {
     let engine_id = result.engine_id.to_string();
-    crate::mmds::to_json_typed_with_routing(
+    crate::mmds::document::to_document_typed_with_routing(
         diagram_type,
         diagram,
         &result.geometry,

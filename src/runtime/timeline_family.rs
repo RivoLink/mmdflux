@@ -6,8 +6,8 @@
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::mmds::sequence::{
     self, MmdsActivation, MmdsBlock, MmdsBlockDivider, MmdsBounds, MmdsMessage, MmdsNote,
-    MmdsParticipant, MmdsParticipantBox, MmdsPosition, MmdsRect, MmdsSize, SequenceMetadata,
-    SequenceOutput,
+    MmdsParticipant, MmdsParticipantBox, MmdsPosition, MmdsRect, MmdsSize, SequenceDocument,
+    SequenceMetadata,
 };
 use crate::render::timeline::svg_layout::{
     self as svg_layout, SvgBlock, SvgRow, SvgSequenceLayout,
@@ -71,18 +71,18 @@ fn block_divider_kind_str(k: BlockDividerKind) -> &'static str {
 /// positions from the SVG layout engine.
 pub(in crate::runtime) fn to_json(model: &Sequence, metrics: &ProportionalTextMetrics) -> String {
     let svg = svg_layout::layout(model, metrics, "sans-serif");
-    let output = build_output(model, &svg);
-    sequence::serialize(&output)
+    let document = build_document(model, &svg);
+    sequence::serialize(&document)
 }
 
-fn build_output(model: &Sequence, svg: &SvgSequenceLayout) -> SequenceOutput {
+fn build_document(model: &Sequence, svg: &SvgSequenceLayout) -> SequenceDocument {
     let participants = build_participants(model, svg);
     let (messages, notes) = build_messages_and_notes(svg);
     let activations = build_activations(svg);
     let blocks = build_blocks(svg);
     let participant_boxes = build_participant_boxes(model, svg);
 
-    SequenceOutput {
+    SequenceDocument {
         version: 1,
         geometry_level: "layout".to_string(),
         metadata: SequenceMetadata {

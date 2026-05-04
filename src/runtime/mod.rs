@@ -104,6 +104,74 @@ pub fn render_diagram(
     payload::render_payload(payload, format, &effective_config)
 }
 
+/// Detect, parse, solve, and materialize a graph-family diagram as MMDS.
+///
+/// This is the typed counterpart to `render_diagram(input,
+/// OutputFormat::Mmds, config)`. It returns a graph-family
+/// [`crate::mmds::Document`] directly instead of serializing to JSON first.
+/// For MMDS input, this is equivalent to [`crate::mmds::Document::try_from`]
+/// and `config` is unused.
+pub fn materialize_diagram(
+    input: &str,
+    config: &RenderConfig,
+) -> Result<crate::mmds::Document, RenderError> {
+    if matches!(detect_input_frontend(input), Some(InputFrontend::Mmds)) {
+        return crate::mmds::parse_input(input).map_err(|error| RenderError {
+            message: format!("parse error: {error}"),
+        });
+    }
+
+    let effective_config = effective_render_config(input, OutputFormat::Mmds, config);
+    let registry = default_registry();
+    let diagram_id = registry.detect(input).ok_or_else(|| RenderError {
+        message: "unknown diagram type".to_string(),
+    })?;
+
+    if !registry.supports_format(diagram_id, OutputFormat::Mmds) {
+        return Err(RenderError {
+            message: format!("{diagram_id} diagrams do not support MMDS output"),
+        });
+    }
+
+    let instance = registry.create(diagram_id).ok_or_else(|| RenderError {
+        message: format!("no implementation for diagram type: {diagram_id}"),
+    })?;
+
+    let parsed = instance.parse(input).map_err(|error| RenderError {
+        message: format!("parse error: {error}"),
+    })?;
+
+    let payload = parsed.into_payload()?;
+    payload::materialize_payload(payload, &effective_config)
+}
+
+/// Render a parsed graph-family MMDS document.
+///
+/// This is the typed replay path for consumers that already hold
+/// [`crate::mmds::Document`], such as materialized view pipelines. It avoids
+/// serializing the document to JSON just to feed it back through
+/// [`render_diagram`].
+pub fn render_mmds_document(
+    document: &crate::mmds::Document,
+    format: OutputFormat,
+    config: &RenderConfig,
+) -> Result<String, RenderError> {
+    let svg_theme = if matches!(format, OutputFormat::Svg) {
+        resolve_configured_svg_theme(config)?
+    } else {
+        None
+    };
+
+    mmds::render_document(
+        document,
+        format,
+        config.geometry_level,
+        &config.text_render_options(format),
+        &config.svg_render_options(),
+        svg_theme.as_ref(),
+    )
+}
+
 /// Validate Mermaid input and return structured diagnostics as JSON.
 ///
 /// Returns a JSON string with shape:

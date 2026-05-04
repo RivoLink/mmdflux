@@ -1,7 +1,7 @@
-//! MMDS interchange contract and output-generation namespace.
+//! MMDS interchange contract and document-generation namespace.
 //!
-//! This module owns the typed MMDS envelope, profile vocabulary, Mermaid
-//! regeneration helpers, validation, and hydration to `Diagram` for
+//! This module owns the typed graph-family MMDS document, profile vocabulary,
+//! Mermaid regeneration helpers, validation, and hydration to `Diagram` for
 //! adapter workflows. Replay rendering lives in `runtime::mmds`.
 
 #[cfg(test)]
@@ -9,9 +9,9 @@ pub(crate) mod commands;
 pub(crate) mod detect;
 #[cfg(test)]
 pub(crate) mod diff;
+pub(crate) mod document;
 pub(crate) mod hydrate;
 mod mermaid;
-pub(crate) mod output;
 pub(crate) mod parse;
 pub(crate) mod sequence;
 
@@ -22,22 +22,33 @@ pub use detect::{
     SUPPORTED_OUTPUT_FORMATS, detect_diagram_type, is_mmds_input, resolve_logical_diagram_id,
     supports_format,
 };
-pub use hydrate::{
-    HydrationError, from_output, from_str, hydrate_graph_geometry_from_output_with_diagram,
-    hydrate_routed_geometry_from_output,
-};
-pub use mermaid::{GenerationError, generate_mermaid, generate_mermaid_from_str};
-pub use output::to_json_typed_with_routing;
+#[doc(hidden)]
+#[allow(deprecated)]
+pub use document::Output;
+#[doc(hidden)]
+#[allow(deprecated)]
+pub use document::to_json_typed_with_routing;
 // Schema types (public adapter contract).
-pub use output::{
-    Bounds, Defaults, Edge, EdgeDefaults, Metadata, Node, NodeDefaults, Output, Port, Position,
+pub use document::{
+    Bounds, Defaults, Document, Edge, EdgeDefaults, Metadata, Node, NodeDefaults, Port, Position,
     Rect, Size, Subgraph,
 };
 // Profile vocabulary constants.
-pub use output::{
+pub use document::{
     CORE_PROFILE, NODE_STYLE_EXTENSION_NAMESPACE, NODE_STYLE_PROFILE, SUPPORTED_PROFILES,
     SVG_PROFILE, TEXT_EXTENSION_NAMESPACE, TEXT_PROFILE,
 };
+pub use hydrate::{
+    HydrationError, from_document, from_str, hydrate_graph_geometry_from_document_with_diagram,
+    hydrate_routed_geometry_from_document,
+};
+#[doc(hidden)]
+#[allow(deprecated)]
+pub use hydrate::{
+    from_output, hydrate_graph_geometry_from_output_with_diagram,
+    hydrate_routed_geometry_from_output,
+};
+pub use mermaid::{GenerationError, generate_mermaid, generate_mermaid_from_str};
 pub use parse::{parse_with_profiles, validate_input};
 use serde_json::{Map, Value};
 
@@ -75,18 +86,36 @@ pub struct ProfileNegotiation {
     pub unknown: Vec<String>,
 }
 
-/// Parse MMDS JSON input into the typed output envelope.
+/// Parse graph-family MMDS JSON input into the typed document envelope.
 ///
 /// Unlike a plain deserialize, this expands omitted node/edge fields using
-/// the top-level `defaults` block before constructing [`Output`].
-pub fn parse_input(input: &str) -> Result<Output, ParseError> {
+/// the top-level `defaults` block before constructing [`Document`]. Callers
+/// that prefer trait syntax can also use `input.parse::<Document>()` or
+/// `Document::try_from(input)`.
+pub fn parse_input(input: &str) -> Result<Document, ParseError> {
     let mut value: Value = serde_json::from_str(input)
         .map_err(|err| ParseError::new(format!("MMDS parse error: {err}")))?;
 
     expand_defaults_in_value(&mut value)?;
 
-    serde_json::from_value::<Output>(value)
+    serde_json::from_value::<Document>(value)
         .map_err(|err| ParseError::new(format!("MMDS parse error: {err}")))
+}
+
+impl std::str::FromStr for Document {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        parse_input(input)
+    }
+}
+
+impl TryFrom<&str> for Document {
+    type Error = ParseError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        parse_input(input)
+    }
 }
 
 /// Evaluate declared profiles against runtime-known profile vocabulary.
@@ -94,11 +123,11 @@ pub fn parse_input(input: &str) -> Result<Output, ParseError> {
 /// This helper is advisory. Hydration remains permissive with unknown profiles.
 pub fn evaluate_profiles(input: &str) -> Result<ProfileNegotiation, ParseError> {
     let output = parse_input(input)?;
-    Ok(evaluate_profiles_for_output(&output))
+    Ok(evaluate_profiles_for_document(&output))
 }
 
 /// Evaluate declared profiles for an already-parsed MMDS payload.
-pub fn evaluate_profiles_for_output(output: &Output) -> ProfileNegotiation {
+pub fn evaluate_profiles_for_document(output: &Document) -> ProfileNegotiation {
     let mut supported = Vec::new();
     let mut unknown = Vec::new();
     let mut seen_supported = std::collections::HashSet::new();
@@ -118,6 +147,13 @@ pub fn evaluate_profiles_for_output(output: &Output) -> ProfileNegotiation {
     }
 
     ProfileNegotiation { supported, unknown }
+}
+
+/// Evaluate declared profiles for an already-parsed MMDS payload.
+#[doc(hidden)]
+#[deprecated(note = "use evaluate_profiles_for_document instead")]
+pub fn evaluate_profiles_for_output(document: &Document) -> ProfileNegotiation {
+    evaluate_profiles_for_document(document)
 }
 
 fn expand_defaults_in_value(value: &mut Value) -> Result<(), ParseError> {

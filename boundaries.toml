@@ -28,6 +28,7 @@ registry = {}
 diagrams = {}
 builtins = { tags = { role = "runtime-facade" } }
 mmds = {}
+views = {}
 frontends = { tags = { role = "runtime-facade" } }
 runtime = {}
 
@@ -155,6 +156,13 @@ source = "mmds"
 allowed = ["errors", "format", "graph", "simplification", "timeline"]
 
 [[rules]]
+id = "allow-views"
+type = "allow"
+[rules.config]
+source = "views"
+allowed = ["mmds"]
+
+[[rules]]
 id = "allow-frontends"
 type = "allow"
 [rules.config]
@@ -169,7 +177,7 @@ source = "runtime"
 allowed = [
     "builtins", "engines", "errors",
     "format", "frontends", "graph", "mermaid", "mmds",
-    "payload", "registry", "render", "simplification", "timeline",
+    "payload", "registry", "render", "simplification", "timeline", "views",
 ]
 
 # --- Layers rule (pipeline spine ordering) ---

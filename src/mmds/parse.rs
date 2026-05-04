@@ -3,13 +3,13 @@
 use super::detect::resolve_logical_diagram_id;
 use crate::errors::RenderError;
 use crate::mmds::{
-    Output, ParseError, ProfileNegotiation, evaluate_profiles_for_output, parse_input,
+    Document, ParseError, ProfileNegotiation, evaluate_profiles_for_document, parse_input,
 };
 
 /// Parse MMDS input, returning the payload and profile negotiation result.
-pub fn parse_with_profiles(input: &str) -> Result<(Output, ProfileNegotiation), ParseError> {
+pub fn parse_with_profiles(input: &str) -> Result<(Document, ProfileNegotiation), ParseError> {
     let payload = parse_input(input)?;
-    let negotiation = evaluate_profiles_for_output(&payload);
+    let negotiation = evaluate_profiles_for_document(&payload);
     Ok((payload, negotiation))
 }
 

@@ -207,8 +207,8 @@ pub(crate) enum ShiftConfidence {
 
 pub(crate) fn compare_layout_mmds(
     pair: &mutations::MutationPair,
-    before: &mmds::Output,
-    after: &mmds::Output,
+    before: &mmds::Document,
+    after: &mmds::Document,
 ) -> LayoutMmdsMetrics {
     let before_nodes = nodes_by_id(before);
     let after_nodes = nodes_by_id(after);
@@ -254,8 +254,8 @@ pub(crate) fn compare_layout_mmds(
 
 pub(crate) fn compare_routed_mmds(
     pair: &mutations::MutationPair,
-    before: &mmds::Output,
-    after: &mmds::Output,
+    before: &mmds::Document,
+    after: &mmds::Document,
 ) -> RoutedMmdsMetrics {
     let before_edges = edges_by_id(before);
     let after_edges = edges_by_id(after);
@@ -309,8 +309,8 @@ pub(crate) fn compare_routed_mmds(
 
 pub(crate) fn collect_quality_oracle_metrics(
     pair: &mutations::MutationPair,
-    before: &mmds::Output,
-    after: &mmds::Output,
+    before: &mmds::Document,
+    after: &mmds::Document,
 ) -> QualityOracleMetrics {
     let routed = compare_routed_mmds(pair, before, after);
 
@@ -330,7 +330,7 @@ pub(crate) fn collect_quality_oracle_metrics(
     }
 }
 
-fn nodes_by_id(output: &mmds::Output) -> BTreeMap<String, &mmds::Node> {
+fn nodes_by_id(output: &mmds::Document) -> BTreeMap<String, &mmds::Node> {
     output
         .nodes
         .iter()
@@ -411,8 +411,8 @@ fn bounds_delta(before: &mmds::Bounds, after: &mmds::Bounds) -> BoundsDelta {
 }
 
 fn subgraph_membership_changes(
-    before: &mmds::Output,
-    after: &mmds::Output,
+    before: &mmds::Document,
+    after: &mmds::Document,
 ) -> Vec<SubgraphMembershipDelta> {
     let before_subgraphs = subgraphs_by_id(before);
     let after_subgraphs = subgraphs_by_id(after);
@@ -456,7 +456,7 @@ fn subgraph_membership_changes(
     changes
 }
 
-fn subgraphs_by_id(output: &mmds::Output) -> BTreeMap<String, &mmds::Subgraph> {
+fn subgraphs_by_id(output: &mmds::Document) -> BTreeMap<String, &mmds::Subgraph> {
     output
         .subgraphs
         .iter()
@@ -470,7 +470,7 @@ fn sorted_children(children: &[String]) -> Vec<String> {
     sorted
 }
 
-fn label_side_changes(before: &mmds::Output, after: &mmds::Output) -> Vec<LabelSideDelta> {
+fn label_side_changes(before: &mmds::Document, after: &mmds::Document) -> Vec<LabelSideDelta> {
     let before_edges = edges_by_id(before);
     let after_edges = edges_by_id(after);
     let mut changes = Vec::new();
@@ -491,7 +491,7 @@ fn label_side_changes(before: &mmds::Output, after: &mmds::Output) -> Vec<LabelS
     changes
 }
 
-fn edges_by_id(output: &mmds::Output) -> BTreeMap<String, &mmds::Edge> {
+fn edges_by_id(output: &mmds::Document) -> BTreeMap<String, &mmds::Edge> {
     output
         .edges
         .iter()
@@ -601,7 +601,7 @@ fn rect_center(rect: &mmds::Rect) -> (f64, f64) {
     (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
 }
 
-fn label_rect_overlaps(output: &mmds::Output) -> Vec<LabelRectOverlap> {
+fn label_rect_overlaps(output: &mmds::Document) -> Vec<LabelRectOverlap> {
     let rects = output
         .edges
         .iter()
@@ -627,7 +627,7 @@ fn label_rect_overlaps(output: &mmds::Output) -> Vec<LabelRectOverlap> {
     overlaps
 }
 
-fn label_path_drift(output: &mmds::Output) -> Vec<LabelPathDrift> {
+fn label_path_drift(output: &mmds::Document) -> Vec<LabelPathDrift> {
     output
         .edges
         .iter()

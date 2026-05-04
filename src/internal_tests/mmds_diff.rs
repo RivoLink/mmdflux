@@ -325,7 +325,7 @@ fn mmds_diff_edge_matching_tier_a_controls_stay_calibrated() {
     assert!(summaries["M10"].has_kind(MmdsDiffKind::SubgraphDirectionChanged));
 }
 
-fn parse_layout(source: &str) -> crate::mmds::Output {
+fn parse_layout(source: &str) -> crate::mmds::Document {
     let config = RenderConfig {
         geometry_level: GeometryLevel::Layout,
         ..RenderConfig::default()
@@ -336,11 +336,11 @@ fn parse_layout(source: &str) -> crate::mmds::Output {
 }
 
 fn output_with_node_shift(
-    output: &crate::mmds::Output,
+    output: &crate::mmds::Document,
     node_id: &str,
     dx: f64,
     dy: f64,
-) -> crate::mmds::Output {
+) -> crate::mmds::Document {
     let mut shifted = output.clone();
     let node = shifted
         .nodes
@@ -390,7 +390,7 @@ fn mutation_input_source(
     }
 }
 
-fn render_pair_before_routed(pair_id: &str) -> crate::mmds::Output {
+fn render_pair_before_routed(pair_id: &str) -> crate::mmds::Document {
     match pair_id {
         "M14" => parse_routed(include_str!(
             "../../tests/fixtures/flowchart/inline_label_flowchart.mmd"
@@ -399,7 +399,7 @@ fn render_pair_before_routed(pair_id: &str) -> crate::mmds::Output {
     }
 }
 
-fn render_pair_after_routed(pair_id: &str) -> crate::mmds::Output {
+fn render_pair_after_routed(pair_id: &str) -> crate::mmds::Document {
     match pair_id {
         "M14" => parse_routed(M14_AFTER),
         _ => panic!("unsupported pair id {pair_id}"),
@@ -444,7 +444,7 @@ const M14_AFTER: &str = "flowchart TD
   metrics --> End((Done))
 ";
 
-fn parse_routed(source: &str) -> crate::mmds::Output {
+fn parse_routed(source: &str) -> crate::mmds::Document {
     let config = RenderConfig {
         geometry_level: GeometryLevel::Routed,
         ..RenderConfig::default()

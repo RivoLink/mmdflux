@@ -9,8 +9,8 @@ use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::GeometryLevel;
 use crate::mmds::{
-    Output, from_output, generate_mermaid, hydrate_graph_geometry_from_output_with_diagram,
-    hydrate_routed_geometry_from_output, parse_input, resolve_logical_diagram_id,
+    Document, from_document, generate_mermaid, hydrate_graph_geometry_from_document_with_diagram,
+    hydrate_routed_geometry_from_document, parse_input, resolve_logical_diagram_id,
 };
 use crate::render::graph::{
     SvgRenderOptions, TextRenderOptions, edge_routing_from_style,
@@ -18,9 +18,10 @@ use crate::render::graph::{
     render_text_from_geometry,
 };
 use crate::render::svg::theme::ResolvedSvgTheme;
+use crate::views::VIEW_EXTENSION_NAMESPACE;
 
 /// Render MMDS input through the MMDS replay path.
-pub fn render_input(
+pub(crate) fn render_input(
     input: &str,
     format: OutputFormat,
     geometry_level: GeometryLevel,
@@ -30,7 +31,7 @@ pub fn render_input(
 ) -> Result<String, RenderError> {
     let payload =
         parse_input(input).map_err(|error| prefixed_display_error("parse error", error))?;
-    render_output(
+    render_document(
         &payload,
         format,
         geometry_level,
@@ -40,9 +41,9 @@ pub fn render_input(
     )
 }
 
-/// Render a parsed MMDS payload through the MMDS replay path.
-pub fn render_output(
-    payload: &Output,
+/// Render a parsed MMDS document through the MMDS replay path.
+pub(crate) fn render_document(
+    payload: &Document,
     format: OutputFormat,
     geometry_level: GeometryLevel,
     text_options: &TextRenderOptions,
@@ -75,7 +76,7 @@ pub fn render_output(
         return generate_mermaid(payload).map_err(display_error);
     }
 
-    let mut diagram = from_output(payload).map_err(display_error)?;
+    let mut diagram = from_document(payload).map_err(display_error)?;
 
     // Plan 0147 Task 1.6 / 1.7: MMDS replay path runs the wrap pass so the
     // hydrated graph's edge labels carry the same `wrapped_label_lines`
@@ -94,10 +95,10 @@ pub fn render_output(
         wrap_max_width,
     );
 
-    let geometry = hydrate_graph_geometry_from_output_with_diagram(payload, &diagram)
+    let geometry = hydrate_graph_geometry_from_document_with_diagram(payload, &diagram)
         .map_err(display_error)?;
     let routed = has_routed_geometry
-        .then(|| hydrate_routed_geometry_from_output(payload))
+        .then(|| hydrate_routed_geometry_from_document(payload))
         .transpose()
         .map_err(display_error)?;
 
@@ -105,6 +106,8 @@ pub fn render_output(
         OutputFormat::Text | OutputFormat::Ascii => {
             let mut options = text_options.clone();
             options.output_format = format;
+            options.use_pinned_ranks =
+                options.use_pinned_ranks || is_shared_coordinates_view(payload);
             Ok(render_text_from_geometry(
                 &diagram,
                 &geometry,
@@ -130,6 +133,15 @@ pub fn render_output(
     }
 }
 
+fn is_shared_coordinates_view(payload: &Document) -> bool {
+    payload
+        .extensions
+        .get(VIEW_EXTENSION_NAMESPACE)
+        .and_then(|extension| extension.get("layout_mode"))
+        .and_then(serde_json::Value::as_str)
+        == Some("shared_coordinates")
+}
+
 fn display_error(error: impl Display) -> RenderError {
     RenderError {
         message: error.to_string(),
@@ -142,7 +154,7 @@ fn prefixed_display_error(prefix: &str, error: impl Display) -> RenderError {
     }
 }
 
-fn strip_routed_fields(payload: &Output) -> Output {
+fn strip_routed_fields(payload: &Document) -> Document {
     let mut output = payload.clone();
     output.geometry_level = "layout".to_string();
     for edge in &mut output.edges {

@@ -1,6 +1,6 @@
-//! MMDS output serialization tests that require engine-produced geometry.
+//! MMDS document serialization tests that require engine-produced geometry.
 //!
-//! Moved from `mmds/output.rs` to respect the mmds→engines boundary:
+//! Moved from `mmds/document.rs` to respect the mmds→engines boundary:
 //! mmds must not import from engines, even in tests.
 
 use crate::engines::graph::EngineConfig;
@@ -10,7 +10,7 @@ use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::{GeometryLevel, Graph};
-use crate::mmds::output::{Output, to_json, to_layout, to_routed};
+use crate::mmds::document::{Document, to_json, to_layout, to_routed};
 use crate::simplification::PathSimplification;
 
 fn layout_geometry(input: &str) -> (Graph, GraphGeometry) {
@@ -38,7 +38,7 @@ fn routed_geometry(diagram: &Graph, geometry: &GraphGeometry) -> RoutedGraphGeom
 fn layout_json_has_version_and_level() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.version, 1);
     assert_eq!(output.geometry_level, "layout");
 }
@@ -47,7 +47,7 @@ fn layout_json_has_version_and_level() {
 fn layout_json_has_metadata() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.defaults.node.shape, "rectangle");
     assert_eq!(output.defaults.edge.stroke, "solid");
     assert_eq!(output.defaults.edge.arrow_start, "none");
@@ -63,7 +63,7 @@ fn layout_json_has_metadata() {
 fn layout_json_has_nodes_with_positions() {
     let (diagram, geom) = layout_geometry("graph TD\nA[Start]-->B[End]");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     assert_eq!(output.nodes.len(), 2);
     let node_a = output.nodes.iter().find(|n| n.id == "A").unwrap();
@@ -83,7 +83,7 @@ fn layout_json_edges_have_no_paths() {
     assert!(!json.contains("\"label_position\""));
     assert!(!json.contains("\"is_backward\""));
 
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.edges.len(), 1);
     assert_eq!(output.edges[0].source, "A");
     assert_eq!(output.edges[0].target, "B");
@@ -94,7 +94,7 @@ fn layout_json_edges_have_no_paths() {
 fn layout_json_edge_semantics() {
     let (diagram, geom) = layout_geometry("graph TD\nA-.label.->B");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     let edge = &output.edges[0];
     assert_eq!(edge.id, "e0");
@@ -189,7 +189,7 @@ fn layout_deserializes_with_defaults() {
         None,
     )
     .unwrap();
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.nodes[0].shape, "rectangle");
     assert_eq!(output.edges[0].stroke, "solid");
     assert_eq!(output.edges[0].arrow_start, "none");
@@ -202,7 +202,7 @@ fn layout_deserializes_with_defaults() {
 fn layout_json_subgraphs() {
     let (diagram, geom) = layout_geometry("graph TD\nsubgraph sg1[Group]\nA-->B\nend");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     assert_eq!(output.subgraphs.len(), 1);
     assert_eq!(output.subgraphs[0].id, "sg1");
@@ -216,7 +216,7 @@ fn layout_json_subgraph_direction_override() {
     let (diagram, geom) =
         layout_geometry("graph TD\nsubgraph sg1[Group]\ndirection LR\nA-->B\nend");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.subgraphs[0].direction.as_deref(), Some("LR"));
 }
 
@@ -224,7 +224,7 @@ fn layout_json_subgraph_direction_override() {
 fn layout_json_nodes_sorted_by_id() {
     let (diagram, geom) = layout_geometry("graph TD\nC-->B\nB-->A");
     let json = to_layout(&diagram, &geom);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     let ids: Vec<&str> = output.nodes.iter().map(|n| n.id.as_str()).collect();
     assert_eq!(ids, vec!["A", "B", "C"]);
@@ -236,7 +236,7 @@ fn layout_json_direction_variants() {
         let input = format!("graph {dir_str}\nA-->B");
         let (diagram, geom) = layout_geometry(&input);
         let json = to_layout(&diagram, &geom);
-        let output: Output = serde_json::from_str(&json).unwrap();
+        let output: Document = serde_json::from_str(&json).unwrap();
         assert_eq!(output.metadata.direction, expected);
     }
 }
@@ -246,7 +246,7 @@ fn routed_json_has_version_and_level() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let routed = routed_geometry(&diagram, &geom);
     let json = to_routed(&diagram, &geom, &routed);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.version, 1);
     assert_eq!(output.geometry_level, "routed");
 }
@@ -259,7 +259,7 @@ fn routed_json_includes_edge_paths() {
 
     assert!(json.contains("\"path\""));
 
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     let edge = &output.edges[0];
     assert!(edge.path.is_some());
     assert!(edge.path.as_ref().unwrap().len() >= 2);
@@ -271,7 +271,7 @@ fn routed_json_includes_metadata_bounds() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let routed = routed_geometry(&diagram, &geom);
     let json = to_routed(&diagram, &geom, &routed);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     let bounds = &output.metadata.bounds;
     assert!(bounds.width > 0.0);
@@ -283,7 +283,7 @@ fn routed_json_subgraph_bounds() {
     let (diagram, geom) = layout_geometry("graph TD\nsubgraph sg1[Group]\nA-->B\nend");
     let routed = routed_geometry(&diagram, &geom);
     let json = to_routed(&diagram, &geom, &routed);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
 
     let sg = &output.subgraphs[0];
     assert!(sg.bounds.is_some());
@@ -324,7 +324,7 @@ fn routed_json_includes_port_metadata() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let routed = routed_geometry(&diagram, &geom);
     let json = to_routed(&diagram, &geom, &routed);
-    let output: Output = serde_json::from_str(&json).unwrap();
+    let output: Document = serde_json::from_str(&json).unwrap();
     let edge = &output.edges[0];
     // A simple TD A-->B should have port metadata at routed level
     assert!(edge.source_port.is_some());
@@ -357,7 +357,8 @@ fn routed_mmds_metadata_uses_routed_bounds_not_layout_bounds() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B\nB-->C\nC-->A");
     let routed = routed_geometry(&diagram, &geom);
 
-    let routed_output: Output = serde_json::from_str(&to_routed(&diagram, &geom, &routed)).unwrap();
+    let routed_output: Document =
+        serde_json::from_str(&to_routed(&diagram, &geom, &routed)).unwrap();
 
     // The MMDS routed bounds must always match the routed geometry bounds.
     assert!(

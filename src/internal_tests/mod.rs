@@ -8,7 +8,7 @@ mod layered_adapter_pipeline;
 mod layout_stability;
 mod mmds_commands;
 mod mmds_diff;
-mod mmds_output_serialization;
+mod mmds_document_serialization;
 mod mmds_roundtrip;
 mod port_attachment_observation;
 mod singleton_centering_observation;

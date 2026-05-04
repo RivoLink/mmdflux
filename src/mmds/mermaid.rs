@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 
-use super::{Edge, Node, Output, Subgraph, parse_input};
+use super::{Document, Edge, Node, Subgraph, parse_input};
 
 /// Error produced when MMDS-to-Mermaid regeneration fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +35,7 @@ struct IdentifierMaps {
 }
 
 /// Generate canonical Mermaid text from parsed MMDS output.
-pub fn generate_mermaid(output: &Output) -> Result<String, GenerationError> {
+pub fn generate_mermaid(output: &Document) -> Result<String, GenerationError> {
     validate_mermaid_generation_scope(output)?;
 
     let identifiers = build_identifier_maps(output);
@@ -56,7 +56,7 @@ pub fn generate_mermaid_from_str(input: &str) -> Result<String, GenerationError>
     generate_mermaid(&output)
 }
 
-fn build_identifier_maps(output: &Output) -> IdentifierMaps {
+fn build_identifier_maps(output: &Document) -> IdentifierMaps {
     IdentifierMaps {
         node_ids: build_identifier_map(output.nodes.iter().map(|node| node.id.as_str()), "node"),
         subgraph_ids: build_identifier_map(
@@ -66,7 +66,7 @@ fn build_identifier_maps(output: &Output) -> IdentifierMaps {
     }
 }
 
-fn validate_mermaid_generation_scope(output: &Output) -> Result<(), GenerationError> {
+fn validate_mermaid_generation_scope(output: &Document) -> Result<(), GenerationError> {
     match output.metadata.diagram_type.as_str() {
         "flowchart" | "class" => Ok(()),
         value => Err(GenerationError::new(format!(
@@ -133,7 +133,7 @@ fn normalize_identifier(raw: &str, fallback_prefix: &str) -> String {
 }
 
 fn emit_nodes(
-    output: &Output,
+    output: &Document,
     identifiers: &IdentifierMaps,
     lines: &mut Vec<String>,
 ) -> Result<(), GenerationError> {
@@ -248,7 +248,7 @@ fn render_subgraph_header(
 }
 
 fn emit_edges(
-    output: &Output,
+    output: &Document,
     identifiers: &IdentifierMaps,
     lines: &mut Vec<String>,
 ) -> Result<(), GenerationError> {

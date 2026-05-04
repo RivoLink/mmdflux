@@ -114,6 +114,67 @@ fn expand_canvas_bounds(
     }
 }
 
+fn coordinate_layers(layer_coords: &[(String, f64, f64)]) -> Vec<Vec<String>> {
+    let mut layers: Vec<Vec<String>> = Vec::new();
+    let mut current_layer: Vec<String> = Vec::new();
+    let mut last_primary: Option<f64> = None;
+    for (id, primary, _) in layer_coords {
+        if let Some(last) = last_primary
+            && (*primary - last).abs() > 25.0
+            && !current_layer.is_empty()
+        {
+            layers.push(std::mem::take(&mut current_layer));
+        }
+        current_layer.push(id.clone());
+        last_primary = Some(*primary);
+    }
+    if !current_layer.is_empty() {
+        layers.push(current_layer);
+    }
+    layers
+}
+
+fn pinned_rank_layers(
+    layer_coords: &[(String, f64, f64)],
+    geometry: &GraphGeometry,
+) -> Option<Vec<Vec<String>>> {
+    let projection = geometry.grid_projection.as_ref()?;
+    if projection.node_ranks.is_empty() {
+        return None;
+    }
+
+    let mut ranked_nodes = Vec::with_capacity(layer_coords.len());
+    for (id, _, _) in layer_coords {
+        let rank = *projection.node_ranks.get(id)?;
+        let rank = usize::try_from(rank).ok()?;
+        ranked_nodes.push((id.clone(), rank));
+    }
+
+    let max_rank = ranked_nodes.iter().map(|(_, rank)| *rank).max()?;
+    let mut layers = vec![Vec::new(); max_rank + 1];
+    for (id, rank) in ranked_nodes {
+        layers[rank].push(id);
+    }
+    Some(layers)
+}
+
+fn sort_layers_by_secondary(
+    layers: &mut [Vec<String>],
+    geometry: &GraphGeometry,
+    is_vertical: bool,
+) {
+    let secondary_coord = |id: &String| -> f64 {
+        geometry
+            .nodes
+            .get(id)
+            .map(|n| if is_vertical { n.rect.x } else { n.rect.y })
+            .unwrap_or(0.0)
+    };
+    for layer in layers {
+        layer.sort_by(|a, b| secondary_coord(a).total_cmp(&secondary_coord(b)));
+    }
+}
+
 /// Convert engine-produced `GraphGeometry` (with optional routed edge paths)
 /// to an integer-coordinate `GridLayout`.
 pub fn geometry_to_grid_layout_with_routed(
@@ -149,33 +210,13 @@ pub fn geometry_to_grid_layout_with_routed(
         .collect();
     layer_coords.sort_by(|a, b| a.1.total_cmp(&b.1));
 
-    let mut layers: Vec<Vec<String>> = Vec::new();
-    let mut current_layer: Vec<String> = Vec::new();
-    let mut last_primary: Option<f64> = None;
-    for (id, primary, _) in &layer_coords {
-        if let Some(last) = last_primary
-            && (*primary - last).abs() > 25.0
-            && !current_layer.is_empty()
-        {
-            layers.push(std::mem::take(&mut current_layer));
-        }
-        current_layer.push(id.clone());
-        last_primary = Some(*primary);
-    }
-    if !current_layer.is_empty() {
-        layers.push(current_layer);
-    }
-
-    let secondary_coord = |id: &String| -> f64 {
-        geometry
-            .nodes
-            .get(id)
-            .map(|n| if is_vertical { n.rect.x } else { n.rect.y })
-            .unwrap_or(0.0)
+    let mut layers = if config.use_pinned_ranks {
+        pinned_rank_layers(&layer_coords, geometry)
+            .unwrap_or_else(|| coordinate_layers(&layer_coords))
+    } else {
+        coordinate_layers(&layer_coords)
     };
-    for layer in &mut layers {
-        layer.sort_by(|a, b| secondary_coord(a).total_cmp(&secondary_coord(b)));
-    }
+    sort_layers_by_secondary(&mut layers, geometry, is_vertical);
 
     let grid_positions = compute_grid_positions(&layers);
 

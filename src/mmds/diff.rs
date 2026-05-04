@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use super::output::NODE_STYLE_EXTENSION_NAMESPACE;
-use super::{Bounds, Edge, Node, Output, Port, Position, Rect, Subgraph};
+use super::document::NODE_STYLE_EXTENSION_NAMESPACE;
+use super::{Bounds, Document, Edge, Node, Port, Position, Rect, Subgraph};
 
 const COORD_EPS: f64 = 0.01;
 const DISPLAY_EPS: f64 = 1.0;
@@ -96,7 +96,7 @@ pub(crate) enum MmdsDiffSubject {
     Subgraph(String),
 }
 
-pub(crate) fn diff_outputs(before: &Output, after: &Output) -> MmdsDiff {
+pub(crate) fn diff_outputs(before: &Document, after: &Document) -> MmdsDiff {
     let mut events = Vec::new();
 
     if before.geometry_level != after.geometry_level {
@@ -218,7 +218,7 @@ fn document_event_with_evidence(kind: MmdsDiffKind, evidence: Vec<String>) -> Mm
     }
 }
 
-fn nodes_by_id(output: &Output) -> BTreeMap<String, &Node> {
+fn nodes_by_id(output: &Document) -> BTreeMap<String, &Node> {
     output
         .nodes
         .iter()
@@ -226,7 +226,7 @@ fn nodes_by_id(output: &Output) -> BTreeMap<String, &Node> {
         .collect()
 }
 
-fn edges_by_id(output: &Output) -> BTreeMap<String, &Edge> {
+fn edges_by_id(output: &Document) -> BTreeMap<String, &Edge> {
     output
         .edges
         .iter()
@@ -234,7 +234,7 @@ fn edges_by_id(output: &Output) -> BTreeMap<String, &Edge> {
         .collect()
 }
 
-fn subgraphs_by_id(output: &Output) -> BTreeMap<String, &Subgraph> {
+fn subgraphs_by_id(output: &Document) -> BTreeMap<String, &Subgraph> {
     output
         .subgraphs
         .iter()
@@ -624,8 +624,8 @@ fn edge_match_evidence(edge_match: &EdgeMatch<'_>) -> Vec<String> {
 
 fn push_node_semantic_events(
     events: &mut Vec<MmdsDiffEvent>,
-    before_output: &Output,
-    after_output: &Output,
+    before_output: &Document,
+    after_output: &Document,
     before: &BTreeMap<String, &Node>,
     after: &BTreeMap<String, &Node>,
 ) {
@@ -729,8 +729,8 @@ fn push_node_geometry_events(
 
 fn push_global_reflow_event(
     events: &mut Vec<MmdsDiffEvent>,
-    before_output: &Output,
-    after_output: &Output,
+    before_output: &Document,
+    after_output: &Document,
     before: &BTreeMap<String, &Node>,
     after: &BTreeMap<String, &Node>,
 ) {
@@ -767,8 +767,8 @@ fn push_global_reflow_event(
 }
 
 fn node_semantics_same(
-    before_output: &Output,
-    after_output: &Output,
+    before_output: &Document,
+    after_output: &Document,
     id: &str,
     before: &Node,
     after: &Node,
@@ -1318,7 +1318,7 @@ fn link_related_geometry(events: &mut [MmdsDiffEvent]) {
     }
 }
 
-fn node_style_payload<'a>(output: &'a Output, node_id: &str) -> Option<&'a Value> {
+fn node_style_payload<'a>(output: &'a Document, node_id: &str) -> Option<&'a Value> {
     output
         .extensions
         .get(NODE_STYLE_EXTENSION_NAMESPACE)?

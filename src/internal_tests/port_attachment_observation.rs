@@ -13,7 +13,7 @@ use crate::graph::grid::{
 };
 use crate::graph::{Edge, GeometryLevel, Graph};
 use crate::mermaid::parse_flowchart;
-use crate::mmds::{Edge as MmdsEdge, Node as MmdsNode, Output, Port};
+use crate::mmds::{Document, Edge as MmdsEdge, Node as MmdsNode, Port};
 use crate::{OutputFormat, RenderConfig};
 
 #[allow(dead_code)]
@@ -239,7 +239,7 @@ fn observe_fixture_edges(fixture: &str, edges: &[(&str, &str)]) -> Vec<PortObser
 
 fn observe_output_edge(
     fixture: &str,
-    output: &Output,
+    output: &Document,
     text_context: &TextContext,
     from: &str,
     to: &str,
@@ -299,7 +299,7 @@ fn load_flowchart_fixture(name: &str) -> String {
         .unwrap_or_else(|err| panic!("failed to read fixture {}: {err}", path.display()))
 }
 
-fn render_routed_mmds(input: &str) -> Output {
+fn render_routed_mmds(input: &str) -> Document {
     let config = RenderConfig {
         geometry_level: GeometryLevel::Routed,
         ..RenderConfig::default()
@@ -423,7 +423,7 @@ fn target_face_from_entry(entry: AttachDirection) -> &'static str {
     }
 }
 
-fn find_edge<'a>(output: &'a Output, from: &str, to: &str) -> &'a MmdsEdge {
+fn find_edge<'a>(output: &'a Document, from: &str, to: &str) -> &'a MmdsEdge {
     let mut matches = output
         .edges
         .iter()
@@ -438,7 +438,7 @@ fn find_edge<'a>(output: &'a Output, from: &str, to: &str) -> &'a MmdsEdge {
     edge
 }
 
-fn find_node<'a>(output: &'a Output, id: &str) -> &'a MmdsNode {
+fn find_node<'a>(output: &'a Document, id: &str) -> &'a MmdsNode {
     output
         .nodes
         .iter()

@@ -38,6 +38,7 @@ pub struct TextRenderOptions {
     pub routing_style: RoutingStyle,
     pub cluster_ranksep: Option<f64>,
     pub padding: Option<usize>,
+    pub use_pinned_ranks: bool,
     #[allow(dead_code)]
     pub path_simplification: PathSimplification,
 }
@@ -50,6 +51,7 @@ impl Default for TextRenderOptions {
             routing_style: RoutingStyle::Orthogonal,
             cluster_ranksep: None,
             padding: None,
+            use_pinned_ranks: false,
             path_simplification: PathSimplification::default(),
         }
     }
@@ -354,6 +356,7 @@ pub(crate) fn layout_config_for_diagram(
     if let Some(padding) = options.padding {
         config.padding = padding;
     }
+    config.use_pinned_ranks = options.use_pinned_ranks;
 
     config
 }

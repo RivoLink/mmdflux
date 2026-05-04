@@ -2,7 +2,7 @@
 
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
-use crate::mmds::{Output, ParseError, parse_input};
+use crate::mmds::{Document, ParseError, parse_input};
 
 pub const SUPPORTED_OUTPUT_FORMATS: &[OutputFormat] = &[
     OutputFormat::Text,
@@ -34,7 +34,7 @@ fn contains_json_key(input: &str, key: &str) -> bool {
 }
 
 /// Resolve the logical diagram ID carried by an MMDS payload.
-pub fn resolve_logical_diagram_id(output: &Output) -> Result<&'static str, RenderError> {
+pub fn resolve_logical_diagram_id(output: &Document) -> Result<&'static str, RenderError> {
     match output.metadata.diagram_type.as_str() {
         "flowchart" => Ok("flowchart"),
         "class" => Ok("class"),

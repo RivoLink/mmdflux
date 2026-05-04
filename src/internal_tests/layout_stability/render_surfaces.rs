@@ -13,8 +13,8 @@ pub(crate) struct RenderedDiagram {
     pub(crate) source: String,
     pub(crate) text: String,
     pub(crate) svg: String,
-    pub(crate) layout_mmds: mmds::Output,
-    pub(crate) routed_mmds: mmds::Output,
+    pub(crate) layout_mmds: mmds::Document,
+    pub(crate) routed_mmds: mmds::Document,
     pub(crate) phase_trace: LayeredPhaseTrace,
     pub(crate) route_trace: RoutingTrace,
 }
@@ -96,7 +96,7 @@ pub(crate) fn render_pair(
 
 pub(crate) fn render_lossless_routed_mmds(
     source: &str,
-) -> Result<(String, mmds::Output), RenderSurfaceError> {
+) -> Result<(String, mmds::Document), RenderSurfaceError> {
     render_mmds_with_simplification(
         "<direct>",
         "input",
@@ -164,7 +164,7 @@ fn render_mmds_with_simplification(
     source: &str,
     geometry_level: GeometryLevel,
     path_simplification: PathSimplification,
-) -> Result<(String, mmds::Output), RenderSurfaceError> {
+) -> Result<(String, mmds::Document), RenderSurfaceError> {
     let config = RenderConfig {
         geometry_level,
         path_simplification,

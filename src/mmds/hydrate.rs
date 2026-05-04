@@ -19,7 +19,7 @@ use crate::graph::space::{FPoint, FRect};
 use crate::graph::style::{ColorToken, NodeStyle};
 use crate::graph::{Arrow, Direction, Edge as GraphEdge, Graph, Node, Shape, Stroke, Subgraph};
 use crate::mmds::{
-    Edge, NODE_STYLE_EXTENSION_NAMESPACE, Output, TEXT_EXTENSION_NAMESPACE, parse_input,
+    Document, Edge, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE, parse_input,
 };
 
 /// Hydrate a graph `Diagram` from MMDS JSON text.
@@ -27,11 +27,11 @@ pub fn from_str(input: &str) -> Result<Graph, HydrationError> {
     let output = parse_input(input).map_err(|err| HydrationError::Parse {
         message: err.to_string(),
     })?;
-    from_output(&output)
+    from_document(&output)
 }
 
-/// Hydrate a graph `Diagram` from a parsed MMDS envelope.
-pub fn from_output(output: &Output) -> Result<Graph, HydrationError> {
+/// Hydrate a graph `Diagram` from a parsed MMDS document.
+pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
     validate_output(output)?;
 
     let direction = parse_direction(&output.metadata.direction).ok_or_else(|| {
@@ -217,6 +217,13 @@ pub fn from_output(output: &Output) -> Result<Graph, HydrationError> {
     Ok(diagram)
 }
 
+/// Hydrate a graph `Diagram` from a parsed MMDS document.
+#[doc(hidden)]
+#[deprecated(note = "use from_document instead")]
+pub fn from_output(output: &Document) -> Result<Graph, HydrationError> {
+    from_document(output)
+}
+
 fn hydrate_node_style_extension(
     diagram: &mut Graph,
     extensions: &std::collections::BTreeMap<String, Map<String, Value>>,
@@ -309,25 +316,35 @@ pub(crate) fn hydrate_graph_geometry_from_mmds(
     let output = parse_input(input).map_err(|err| HydrationError::Parse {
         message: err.to_string(),
     })?;
-    hydrate_graph_geometry_from_output(&output)
+    hydrate_graph_geometry_from_document(&output)
 }
 
-/// Hydrate graph geometry IR from parsed MMDS output.
+/// Hydrate graph geometry IR from a parsed MMDS document.
 #[cfg(test)]
-pub(crate) fn hydrate_graph_geometry_from_output(
-    output: &Output,
+pub(crate) fn hydrate_graph_geometry_from_document(
+    output: &Document,
 ) -> Result<GraphGeometry, HydrationError> {
     let (_, geometry) = hydrate_geometry_parts(output)?;
     Ok(geometry)
 }
 
-/// Hydrate graph geometry IR from parsed MMDS output, using a pre-built diagram.
-pub fn hydrate_graph_geometry_from_output_with_diagram(
-    output: &Output,
+/// Hydrate graph geometry IR from a parsed MMDS document, using a pre-built diagram.
+pub fn hydrate_graph_geometry_from_document_with_diagram(
+    output: &Document,
     diagram: &Graph,
 ) -> Result<GraphGeometry, HydrationError> {
     validate_output(output)?;
     build_graph_geometry(output, diagram)
+}
+
+/// Hydrate graph geometry IR from a parsed MMDS document, using a pre-built diagram.
+#[doc(hidden)]
+#[deprecated(note = "use hydrate_graph_geometry_from_document_with_diagram instead")]
+pub fn hydrate_graph_geometry_from_output_with_diagram(
+    output: &Document,
+    diagram: &Graph,
+) -> Result<GraphGeometry, HydrationError> {
+    hydrate_graph_geometry_from_document_with_diagram(output, diagram)
 }
 
 /// Hydrate routed geometry IR from MMDS JSON text.
@@ -338,12 +355,12 @@ pub(crate) fn hydrate_routed_geometry_from_mmds(
     let output = parse_input(input).map_err(|err| HydrationError::Parse {
         message: err.to_string(),
     })?;
-    hydrate_routed_geometry_from_output(&output)
+    hydrate_routed_geometry_from_document(&output)
 }
 
-/// Hydrate routed geometry IR from parsed MMDS output.
-pub fn hydrate_routed_geometry_from_output(
-    output: &Output,
+/// Hydrate routed geometry IR from a parsed MMDS document.
+pub fn hydrate_routed_geometry_from_document(
+    output: &Document,
 ) -> Result<RoutedGraphGeometry, HydrationError> {
     let (diagram, geometry) = hydrate_geometry_parts(output)?;
     let edge_routing = if output.geometry_level == "routed" {
@@ -370,12 +387,21 @@ pub fn hydrate_routed_geometry_from_output(
     Ok(routed)
 }
 
+/// Hydrate routed geometry IR from a parsed MMDS document.
+#[doc(hidden)]
+#[deprecated(note = "use hydrate_routed_geometry_from_document instead")]
+pub fn hydrate_routed_geometry_from_output(
+    output: &Document,
+) -> Result<RoutedGraphGeometry, HydrationError> {
+    hydrate_routed_geometry_from_document(output)
+}
+
 /// Replace synthesized `label_geometry` on routed edges with an
 /// authoritative version derived from the MMDS payload's `label_rect`
 /// and `label_side`.
 fn overlay_authoritative_label_geometry(
     routed: &mut RoutedGraphGeometry,
-    output: &Output,
+    output: &Document,
     metrics: &crate::graph::measure::ProportionalTextMetrics,
 ) {
     let edges = sorted_output_edges(output);
@@ -425,13 +451,16 @@ fn parse_mmds_label_side(value: Option<&str>) -> Option<EdgeLabelSide> {
     }
 }
 
-fn hydrate_geometry_parts(output: &Output) -> Result<(Graph, GraphGeometry), HydrationError> {
-    let diagram = from_output(output)?;
+fn hydrate_geometry_parts(output: &Document) -> Result<(Graph, GraphGeometry), HydrationError> {
+    let diagram = from_document(output)?;
     let geometry = build_graph_geometry(output, &diagram)?;
     Ok((diagram, geometry))
 }
 
-fn build_graph_geometry(output: &Output, diagram: &Graph) -> Result<GraphGeometry, HydrationError> {
+fn build_graph_geometry(
+    output: &Document,
+    diagram: &Graph,
+) -> Result<GraphGeometry, HydrationError> {
     let nodes = build_positioned_nodes(output, diagram)?;
     let (edges, self_edges, reversed_edges) = build_layout_edges(output);
     let subgraphs = build_subgraph_geometry(output, diagram, &nodes);
@@ -458,7 +487,7 @@ fn build_graph_geometry(output: &Output, diagram: &Graph) -> Result<GraphGeometr
     })
 }
 
-fn hydrate_grid_projection(output: &Output) -> Option<GridProjection> {
+fn hydrate_grid_projection(output: &Document) -> Option<GridProjection> {
     let projection = output
         .extensions
         .get(TEXT_EXTENSION_NAMESPACE)?
@@ -578,7 +607,7 @@ fn parse_override_subgraphs(value: Option<&Value>) -> HashMap<String, OverrideSu
 }
 
 fn build_positioned_nodes(
-    output: &Output,
+    output: &Document,
     diagram: &Graph,
 ) -> Result<HashMap<String, PositionedNode>, HydrationError> {
     output
@@ -609,7 +638,7 @@ fn build_positioned_nodes(
         .collect()
 }
 
-fn build_layout_edges(output: &Output) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry>, Vec<usize>) {
+fn build_layout_edges(output: &Document) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry>, Vec<usize>) {
     let routed_level = output.geometry_level == "routed";
     let edges = sorted_output_edges(output);
 
@@ -663,7 +692,7 @@ fn build_layout_edges(output: &Output) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry
     (layout_edges, self_edges, reversed_edges)
 }
 
-fn sorted_output_edges(output: &Output) -> Vec<(usize, &Edge)> {
+fn sorted_output_edges(output: &Document) -> Vec<(usize, &Edge)> {
     let mut edges: Vec<(usize, &Edge)> = output.edges.iter().enumerate().collect();
     edges.sort_by(|(left_index, left), (right_index, right)| {
         compare_edge_ids(&left.id, &right.id).then(left_index.cmp(right_index))
@@ -676,7 +705,7 @@ fn parse_path_points(path: Option<&[[f64; 2]]>) -> Option<Vec<FPoint>> {
 }
 
 fn build_subgraph_geometry(
-    output: &Output,
+    output: &Document,
     diagram: &Graph,
     nodes: &HashMap<String, PositionedNode>,
 ) -> HashMap<String, SubgraphGeometry> {
@@ -761,7 +790,7 @@ fn node_is_within_subgraph(node: &Node, subgraph_id: &str, diagram: &Graph) -> b
     false
 }
 
-fn validate_output(output: &Output) -> Result<(), HydrationError> {
+fn validate_output(output: &Document) -> Result<(), HydrationError> {
     if output.version != 1 {
         return Err(HydrationError::UnsupportedVersion {
             version: output.version,

@@ -4,6 +4,7 @@ use super::graph_family;
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::measure;
+use crate::mmds::Document;
 use crate::payload::Diagram;
 use crate::render::text::CharSet;
 use crate::render::timeline;
@@ -17,11 +18,7 @@ pub(in crate::runtime) fn render_payload(
 ) -> Result<String, RenderError> {
     // Apply show_ids annotation to graph-family payloads before rendering.
     // This is a presentation concern owned by runtime, not diagrams.
-    let payload = if config.show_ids {
-        annotate_graph_payload_ids(payload)
-    } else {
-        payload
-    };
+    let payload = prepare_payload_for_render(payload, config);
 
     match payload {
         Diagram::Flowchart(mut graph) => {
@@ -58,6 +55,37 @@ pub(in crate::runtime) fn render_payload(
                 Ok(timeline::render(&seq_layout, &charset))
             }
         },
+    }
+}
+
+pub(in crate::runtime) fn materialize_payload(
+    payload: Diagram,
+    config: &RenderConfig,
+) -> Result<Document, RenderError> {
+    let payload = prepare_payload_for_render(payload, config);
+
+    match payload {
+        Diagram::Flowchart(mut graph) => {
+            graph_family::materialize_graph_family("flowchart", &mut graph, config)
+        }
+        Diagram::Class(mut graph) => {
+            graph_family::materialize_graph_family("class", &mut graph, config)
+        }
+        Diagram::State(mut graph) => {
+            graph_family::materialize_graph_family("state", &mut graph, config)
+        }
+        Diagram::Sequence(_) => Err(RenderError {
+            message: "sequence diagrams do not support graph-family MMDS Document materialization"
+                .to_string(),
+        }),
+    }
+}
+
+fn prepare_payload_for_render(payload: Diagram, config: &RenderConfig) -> Diagram {
+    if config.show_ids {
+        annotate_graph_payload_ids(payload)
+    } else {
+        payload
     }
 }
 

@@ -6,9 +6,11 @@
 //!
 //! # High-Level API
 //!
-//! Most consumers only need three functions and two config types:
+//! Most consumers only need the facade functions and two config types:
 //!
 //! - [`render_diagram`] — detect, parse, and render in one call
+//! - [`materialize_diagram`] — materialize a graph-family [`mmds::Document`]
+//! - [`render_mmds_document`] — render an already-parsed graph-family MMDS document
 //! - [`detect_diagram`] — detect the diagram type without rendering
 //! - [`validate_diagram`] — parse and return structured JSON diagnostics
 //! - [`OutputFormat`] — `Text`, `Ascii`, `Svg`, or `Mmds`
@@ -87,6 +89,8 @@
 //!   ([`Sequence`](timeline::Sequence))
 //! - [`mmds`] — MMDS parsing, hydration to [`graph::Graph`],
 //!   profile negotiation, and Mermaid regeneration
+//! - [`views`] — materialized read-side views over canonical
+//!   [`mmds::Document`] payloads
 //!
 //! ```no_run
 //! use mmdflux::builtins::default_registry;
@@ -162,6 +166,46 @@
 //! let mermaid = generate_mermaid_from_str(mmds_json).unwrap();
 //! assert!(mermaid.contains("flowchart TD"));
 //! ```
+//!
+//! ## Materialized MMDS views
+//!
+//! Use [`views`] when an adapter needs a focused read model over a canonical
+//! MMDS payload. V1 views preserve shared coordinates, keep surviving edge IDs
+//! sparse and stable, and return [`views::ViewEvent`] values for omitted
+//! elements:
+//!
+//! ```
+//! use mmdflux::mmds::Document;
+//! use mmdflux::views::{
+//!     AnchorRef, Selector, TraversalDirection, ViewSpec, ViewStatement, apply_view,
+//! };
+//! use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_mmds_document};
+//!
+//! let source = "\
+//! graph TD
+//! A[Gateway] --> B[Auth]
+//! B --> C[Database]
+//! A --> D[Audit]
+//! ";
+//! let canonical: Document = materialize_diagram(source, &RenderConfig::default()).unwrap();
+//! let spec = ViewSpec {
+//!     statements: vec![ViewStatement::Include(Selector::Traversal {
+//!         anchor: AnchorRef::Node("A".to_string()),
+//!         direction: TraversalDirection::Downstream,
+//!         hops: 1,
+//!     })],
+//!     ..ViewSpec::default()
+//! };
+//!
+//! let (view, events) = apply_view(&canonical, &spec).unwrap();
+//! let text = render_mmds_document(&view, OutputFormat::Text, &RenderConfig::default()).unwrap();
+//! assert!(text.contains("Gateway"));
+//! assert_eq!(view.nodes.len(), 3);
+//! assert!(events.iter().any(|event| matches!(
+//!     event,
+//!     mmdflux::views::ViewEvent::NodeLeftView { id, .. } if id == "C"
+//! )));
+//! ```
 
 pub mod builtins;
 mod diagrams;
@@ -179,6 +223,7 @@ mod render;
 pub(crate) mod runtime;
 pub mod simplification;
 pub mod timeline;
+pub mod views;
 
 // Public re-exports from public modules (convenience aliases).
 // Re-exports from public modules for convenience at crate root.
@@ -205,8 +250,12 @@ pub use runtime::config_input::RuntimeConfigInput;
 pub use runtime::config_input::apply_svg_surface_defaults;
 /// Detect the diagram type from input text.
 pub use runtime::detect_diagram;
+/// Detect, parse, solve, and materialize a graph-family diagram as MMDS.
+pub use runtime::materialize_diagram;
 /// Detect, parse, and render a diagram in one call.
 pub use runtime::render_diagram;
+/// Render a parsed graph-family MMDS document.
+pub use runtime::render_mmds_document;
 /// Validate input and return structured JSON diagnostics.
 pub use runtime::validate_diagram;
 

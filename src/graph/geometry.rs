@@ -277,9 +277,8 @@ pub struct RoutedGraphGeometry {
     /// Plan 0146 Task 2.1: this field is populated unconditionally in **all**
     /// builds (no `cfg(test)`, no env-var gating). Consumers may inspect it
     /// to surface a warning. Not serialized in MMDS layout output (it is a
-    /// routing diagnostic, not part of the layout contract); MMDS adds it
-    /// under a separate optional `diagnostics` object — see
-    /// `mmds::output::serialize_routed_graph_with_diagnostics` (Task 2.3).
+    /// routing diagnostic, not part of the layout contract); MMDS can carry
+    /// it under a separate optional `diagnostics` object.
     pub unfit_label_overlaps: Vec<UnfitOverlap>,
 }
 

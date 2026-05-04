@@ -35,6 +35,9 @@
       "properties": {
         "org.mmdflux.node-style.v1": {
           "$ref": "#/$defs/NodeStyleExtension"
+        },
+        "org.mmdflux.view.v1": {
+          "$ref": "#/$defs/ViewExtension"
         }
       },
       "additionalProperties": {
@@ -404,6 +407,22 @@
           }
         }
       }
+    },
+    "ViewExtension": {
+      "type": "object",
+      "required": ["layout_mode", "boundary_policy"],
+      "properties": {
+        "layout_mode": {
+          "const": "shared_coordinates",
+          "description": "Materialized view layout policy. V1 preserves canonical shared coordinates."
+        },
+        "boundary_policy": {
+          "const": "omit",
+          "description": "Materialized view boundary policy. V1 omits edges connected to nodes outside the view."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Marker for MMDS payloads materialized by the Rust views API."
     },
     "NodeStyle": {
       "type": "object",

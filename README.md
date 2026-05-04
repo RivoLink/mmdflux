@@ -90,6 +90,10 @@ Specification) outputs positioned graph data — node coordinates, routed edge
 paths, subgraph bounds — so downstream tools can consume diagram geometry
 without parsing SVG or scraping pixels.
 
+**Materialized diagram views.** Rust adapters can filter canonical MMDS payloads
+into read-side views for focused rendering, traversal, or event correlation
+without inventing a separate graph query language.
+
 **Compound graph layout.** Subgraphs are laid out as part of a single
 compound graph, not rendered recursively. This produces globally optimized
 positioning and consistent cross-boundary edge routing.
@@ -282,6 +286,8 @@ SVG `<defs>` blocks are also pruned to the markers each diagram actually uses, s
 Most Rust integrations should stay on the high-level runtime facade:
 
 - `render_diagram`
+- `materialize_diagram`
+- `render_mmds_document`
 - `detect_diagram`
 - `validate_diagram`
 
@@ -292,11 +298,13 @@ The low-level API is smaller and adapter-focused:
 
 - `mmdflux::builtins::default_registry()` for the builtin diagram registry
 - `registry` and `payload` for explicit detect/parse/payload flows
-- `mmds` for MMDS parsing, replay, and Mermaid generation
+- `graph` and `timeline` for family-specific IR inspection
+- `mmds` for MMDS `Document` parsing, replay, and Mermaid generation
+- `views` for materializing filtered read-side MMDS payloads
 
-The rest of the crate tree (`diagrams`, `engines`, `graph`, `render`,
-`mermaid`, and `timeline`) consists of internal implementation modules and is
-not part of the supported public contract.
+The rest of the crate tree (`diagrams`, `engines`, `render`, and `mermaid`)
+consists of internal implementation modules and is not part of the supported
+public contract.
 
 ### Examples
 
@@ -306,6 +314,8 @@ not part of the supported public contract.
   registry-driven detection and preparation
 - [`examples/mmds_replay.rs`](examples/mmds_replay.rs) — MMDS profile
   negotiation, replay, and Mermaid regeneration
+- [`examples/materialized_view.rs`](examples/materialized_view.rs) —
+  materialize a focused MMDS view and replay it as text
 
 Verify the examples compile with `cargo test --examples`.
 

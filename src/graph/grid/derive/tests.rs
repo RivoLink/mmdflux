@@ -1,8 +1,57 @@
 use super::waypoints::transform_label_positions_direct;
 use super::*;
+use crate::graph::geometry::PositionedNode;
 use crate::graph::grid::GridLayoutConfig;
+use crate::graph::projection::GridProjection;
 use crate::graph::space::FPoint;
-use crate::graph::{Direction, Graph, Subgraph};
+use crate::graph::{Direction, Graph, Node, Shape, Subgraph};
+
+fn pinned_rank_fixture(node_ranks: HashMap<String, i32>) -> (Graph, GraphGeometry) {
+    let mut diagram = Graph::new(Direction::TopDown);
+    for id in ["A", "B", "C"] {
+        diagram.add_node(Node::new(id));
+    }
+
+    let nodes = HashMap::from([
+        ("A".to_string(), positioned_node("A", 0.0, 0.0)),
+        ("B".to_string(), positioned_node("B", 20.0, 10.0)),
+        ("C".to_string(), positioned_node("C", 40.0, 20.0)),
+    ]);
+
+    let geometry = GraphGeometry {
+        nodes,
+        edges: Vec::new(),
+        subgraphs: HashMap::new(),
+        self_edges: Vec::new(),
+        direction: Direction::TopDown,
+        node_directions: HashMap::from([
+            ("A".to_string(), Direction::TopDown),
+            ("B".to_string(), Direction::TopDown),
+            ("C".to_string(), Direction::TopDown),
+        ]),
+        bounds: FRect::new(0.0, 0.0, 80.0, 40.0),
+        reversed_edges: Vec::new(),
+        engine_hints: None,
+        grid_projection: Some(GridProjection {
+            node_ranks,
+            ..GridProjection::default()
+        }),
+        rerouted_edges: HashSet::new(),
+        enhanced_backward_routing: false,
+    };
+
+    (diagram, geometry)
+}
+
+fn positioned_node(id: &str, x: f64, y: f64) -> PositionedNode {
+    PositionedNode {
+        id: id.to_string(),
+        rect: FRect::new(x, y, 10.0, 10.0),
+        shape: Shape::Rectangle,
+        label: id.to_string(),
+        parent: None,
+    }
+}
 
 fn test_node_bounds(x: usize, y: usize, width: usize, height: usize) -> NodeBounds {
     NodeBounds {
@@ -163,6 +212,61 @@ fn effective_rank_sep_adds_cluster_spacing_for_subgraphs() {
 
     let config = GridLayoutConfig::default();
     assert_eq!(effective_rank_sep(&diagram, &config), 75.0);
+}
+
+#[test]
+fn pinned_ranks_preserve_sparse_layers_when_requested() {
+    let (diagram, geometry) = pinned_rank_fixture(HashMap::from([
+        ("A".to_string(), 0),
+        ("B".to_string(), 2),
+        ("C".to_string(), 4),
+    ]));
+    let config = GridLayoutConfig {
+        use_pinned_ranks: true,
+        ..GridLayoutConfig::default()
+    };
+
+    let layout = geometry_to_grid_layout_with_routed(&diagram, &geometry, None, &config);
+
+    assert_eq!(layout.grid_positions["A"].layer, 0);
+    assert_eq!(layout.grid_positions["B"].layer, 2);
+    assert_eq!(layout.grid_positions["C"].layer, 4);
+}
+
+#[test]
+fn pinned_ranks_fall_back_to_coordinate_binning_when_disabled() {
+    let (diagram, geometry) = pinned_rank_fixture(HashMap::from([
+        ("A".to_string(), 0),
+        ("B".to_string(), 2),
+        ("C".to_string(), 4),
+    ]));
+
+    let layout = geometry_to_grid_layout_with_routed(
+        &diagram,
+        &geometry,
+        None,
+        &GridLayoutConfig::default(),
+    );
+
+    assert_eq!(layout.grid_positions["A"].layer, 0);
+    assert_eq!(layout.grid_positions["B"].layer, 0);
+    assert_eq!(layout.grid_positions["C"].layer, 0);
+}
+
+#[test]
+fn pinned_ranks_ignore_missing_projection_entries() {
+    let (diagram, geometry) =
+        pinned_rank_fixture(HashMap::from([("A".to_string(), 0), ("C".to_string(), 4)]));
+    let config = GridLayoutConfig {
+        use_pinned_ranks: true,
+        ..GridLayoutConfig::default()
+    };
+
+    let layout = geometry_to_grid_layout_with_routed(&diagram, &geometry, None, &config);
+
+    assert_eq!(layout.grid_positions["A"].layer, 0);
+    assert_eq!(layout.grid_positions["B"].layer, 0);
+    assert_eq!(layout.grid_positions["C"].layer, 0);
 }
 
 // =========================================================================

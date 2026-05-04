@@ -18,7 +18,7 @@ use std::path::Path;
 use mmdflux::builtins::default_registry;
 use mmdflux::graph::Graph;
 use mmdflux::mmds::{
-    Bounds, Edge, Node, Output, Port, Position, Subgraph, from_str, generate_mermaid_from_str,
+    Bounds, Document, Edge, Node, Port, Position, Subgraph, from_str, generate_mermaid_from_str,
     parse_input,
 };
 use mmdflux::payload::Diagram as Payload;
@@ -287,7 +287,7 @@ fn floats_eq(a: f64, b: f64) -> bool {
 /// Compare layout geometry for equivalence.
 ///
 /// Compares direct routed MMDS output against MMDS regenerated Mermaid rerender.
-fn check_layout(direct: &Output, roundtrip: &Output) -> TierResult {
+fn check_layout(direct: &Document, roundtrip: &Document) -> TierResult {
     let mismatches = compare_layout_payloads(direct, roundtrip);
 
     TierResult {
@@ -300,7 +300,7 @@ fn check_layout(direct: &Output, roundtrip: &Output) -> TierResult {
     }
 }
 
-fn compare_layout_payloads(direct: &Output, roundtrip: &Output) -> Vec<String> {
+fn compare_layout_payloads(direct: &Document, roundtrip: &Document) -> Vec<String> {
     let mut mismatches = Vec::new();
 
     if direct.metadata.direction != roundtrip.metadata.direction {
@@ -534,19 +534,19 @@ fn normalize_roundtrip_identifier(value: &str) -> String {
     value.replace('-', "_")
 }
 
-fn sorted_nodes(output: &Output) -> Vec<&Node> {
+fn sorted_nodes(output: &Document) -> Vec<&Node> {
     let mut nodes: Vec<_> = output.nodes.iter().collect();
     nodes.sort_by(|left, right| left.id.cmp(&right.id));
     nodes
 }
 
-fn sorted_edges(output: &Output) -> Vec<&Edge> {
+fn sorted_edges(output: &Document) -> Vec<&Edge> {
     let mut edges: Vec<_> = output.edges.iter().collect();
     edges.sort_by(|left, right| left.id.cmp(&right.id));
     edges
 }
 
-fn sorted_subgraphs(output: &Output) -> Vec<&Subgraph> {
+fn sorted_subgraphs(output: &Document) -> Vec<&Subgraph> {
     let mut subgraphs: Vec<_> = output.subgraphs.iter().collect();
     subgraphs.sort_by(|left, right| {
         left.title.cmp(&right.title).then(
@@ -578,14 +578,14 @@ fn prepare_graph_diagram(diagram_id: &str, input: &str) -> Graph {
     }
 }
 
-fn render_mmds_output(input: &str, config: &RenderConfig) -> (String, Output) {
+fn render_mmds_json_and_document(input: &str, config: &RenderConfig) -> (String, Document) {
     let json =
         render_diagram(input, OutputFormat::Mmds, config).expect("MMDS render should succeed");
-    let output = parse_input(&json).expect("MMDS output should parse");
+    let output = parse_input(&json).expect("MMDS document should parse");
     (json, output)
 }
 
-fn rerender_mmds_output_from_generated_mermaid(mmds_json: &str, config: &RenderConfig) -> Output {
+fn rerender_mmds_json_from_generated_mermaid(mmds_json: &str, config: &RenderConfig) -> Document {
     let generated =
         generate_mermaid_from_str(mmds_json).expect("MMDS Mermaid generation should succeed");
     let rerendered = render_diagram(&generated, OutputFormat::Mmds, config)
@@ -599,10 +599,10 @@ fn run_flowchart_conformance(name: &str) -> ConformanceReport {
     let mmds_config = RenderConfig::default();
 
     let direct_diagram = prepare_graph_diagram("flowchart", &input);
-    let (mmds_json, direct_output) = render_mmds_output(&input, &mmds_config);
+    let (mmds_json, direct_output) = render_mmds_json_and_document(&input, &mmds_config);
     let generated = generate_mermaid_from_str(&mmds_json).unwrap();
     let roundtrip_diagram = from_str(&mmds_json).unwrap();
-    let roundtrip_output = rerender_mmds_output_from_generated_mermaid(&mmds_json, &mmds_config);
+    let roundtrip_output = rerender_mmds_json_from_generated_mermaid(&mmds_json, &mmds_config);
 
     ConformanceReport {
         fixture_path: format!("flowchart/{name}"),
@@ -621,7 +621,7 @@ fn run_class_conformance(name: &str) -> ConformanceReport {
     let input = fixture_input("class", name);
 
     let direct_diagram = prepare_graph_diagram("class", &input);
-    let (mmds_json, _) = render_mmds_output(&input, &RenderConfig::default());
+    let (mmds_json, _) = render_mmds_json_and_document(&input, &RenderConfig::default());
     let roundtrip_diagram = from_str(&mmds_json).unwrap();
 
     ConformanceReport {

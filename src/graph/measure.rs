@@ -109,9 +109,8 @@ impl ProportionalTextMetrics {
 /// splits when a single word exceeds `max_width`.
 ///
 /// **Sequencing contract:** callers MUST normalize `<br>`/`<br/>`/`<br />`
-/// variants to `'\n'` before calling this function (see
-/// [`crate::diagrams::flowchart::compiler::normalize_br_tags`]). `wrap_lines`
-/// does not inspect the raw Mermaid source.
+/// variants to `'\n'` before calling this function. `wrap_lines` does not
+/// inspect the raw Mermaid source.
 pub fn wrap_lines(metrics: &ProportionalTextMetrics, text: &str, max_width: f64) -> Vec<String> {
     let space_w = metrics.char_width_ratio(' ') * metrics.font_size * TEXT_WIDTH_SCALE;
     let mut out = Vec::new();
