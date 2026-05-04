@@ -97,8 +97,16 @@ signature = "Kevin Swiber"
 username = "kevinswiber"
 
 [[changelog.authors]]
+signature = "Avinash Thakur"
+username = "80avin"
+
+[[changelog.authors]]
 signature = "RivoLink"
 username = "RivoLink"
+
+[[changelog.authors]]
+signature = "fukata"
+username = "fukata"
 
 # --- Monorepo packages ---
 # Only public packages are listed. Internal crates (mmdflux-wasm, xtask) are
