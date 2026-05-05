@@ -169,7 +169,7 @@ pub(crate) fn to_document_typed(
 
 /// Serialize a graph-family diagram to MMDS JSON with fallback routing.
 #[deprecated(
-    note = "use materialize_diagram plus serde_json serialization for JSON output, or render_mmds_document for replay"
+    note = "use materialize_diagram plus serde_json serialization for JSON output, or render_document for replay"
 )]
 pub fn to_json_typed_with_routing(
     diagram_type: &str,

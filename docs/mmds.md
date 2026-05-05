@@ -22,7 +22,7 @@ Most Rust callers should produce MMDS through the high-level runtime facade:
   (`render_diagram` auto-detects MMDS input and dispatches to the replay path)
 - `materialize_diagram(input, &config)` for materializing a graph-family
   `mmds::Document` directly from Mermaid or MMDS input
-- `render_mmds_document(&document, output_format, &config)` for rendering an
+- `render_document(&document, output_format, &config)` for rendering an
   already-parsed graph-family `mmds::Document` without a JSON round trip
 
 Adapter-oriented workflows can use the low-level API:
@@ -67,7 +67,7 @@ small materialization API, not a general graph query language.
 
 The primary entry point is:
 
-- `mmdflux::views::apply_view(canonical: &mmdflux::mmds::Document, spec: &ViewSpec) -> Result<(Document, Vec<ViewEvent>), ViewError>`
+- `mmdflux::views::project(canonical: &mmdflux::mmds::Document, spec: &ViewSpec) -> Result<(Document, Vec<ViewEvent>), ViewError>`
 
 `ViewSpec` v1 supports:
 
@@ -94,7 +94,7 @@ falling back silently.
 
 ### View Payload Contract
 
-`apply_view` returns a normal MMDS `Document` with retained nodes, retained
+`project` returns a normal MMDS `Document` with retained nodes, retained
 subgraphs, surviving edges, and a `Vec<ViewEvent>` describing omitted canonical
 elements. Surviving edge IDs are preserved verbatim from the canonical payload;
 filtered views may therefore contain sparse IDs such as `["e0", "e2", "e4"]`.
@@ -123,9 +123,9 @@ To render a materialized view, pass the returned `Document` through the typed
 runtime replay helper:
 
 ```rust
-use mmdflux::{OutputFormat, RenderConfig, render_mmds_document};
+use mmdflux::{OutputFormat, RenderConfig, render_document};
 
-let text = render_mmds_document(&view_payload, OutputFormat::Text, &RenderConfig::default())?;
+let text = render_document(&view_payload, OutputFormat::Text, &RenderConfig::default())?;
 println!("{text}");
 ```
 

@@ -9,6 +9,7 @@ contributors:
 - `diagrams/` own compilation and instance behavior
 - `payload/` owns the runtime payload contract
 - `builtins/` owns default registry wiring for the supported low-level API
+- `commands.rs` owns synchronous command application over MMDS documents
 - `graph/` owns graph-family IR, float-space geometry, and shared policy/measurement helpers
 - `engines/` own engine adapters and internal algorithm boundaries such as `algorithms::layered::kernel`
 - `render/` owns output production
@@ -44,9 +45,9 @@ contributors do not need any extra socket setup.
   `validate_diagram`, plus the flat config/format/error types re-exported from
   `lib.rs`.
 - The supported low-level API is `builtins`, `registry`, `payload`, `graph`,
-  `timeline`, `mmds`, and `views` for adapter-oriented workflows that need
-  explicit payload construction, graph IR inspection, MMDS replay control, or
-  materialized read-side diagram views.
+  `timeline`, `mmds`, `commands`, and `views` for adapter-oriented workflows
+  that need explicit payload construction, graph IR inspection, MMDS command
+  application, MMDS replay control, or materialized read-side diagram views.
 - `diagrams`, `engines`, `render`, and `mermaid` are internal implementation modules.
   They are intentionally documented here for contributors, but they are not part
   of the supported low-level contract.
@@ -125,7 +126,7 @@ collapsed back into singleton roots:
     in the logical diagram registry.
 
 11. **views/ owns read-side materialized diagram views** — `src/views/` owns
-    the `ViewSpec`, selector, `ViewEvent`, and `apply_view` contracts for
+    the `ViewSpec`, selector, `ViewEvent`, and `project` contracts for
     filtering canonical `mmds::Document` payloads into materialized view
     payloads. In the v1 view slice, `views` depends on `mmds` only and derives
     any adjacency directly from `Document.edges`; it must not import `graph`,
@@ -133,7 +134,23 @@ collapsed back into singleton roots:
     machinery. Runtime may consume `views` for replay hooks, but `views` does
     not own rendering or orchestration.
 
-12. **engines do not know about diagram types or output formats** — Engine
+12. **commands.rs owns MMDS command application orchestration** —
+    `src/commands.rs` owns the public `Command`, `EdgeSelector`,
+    `CommandApplyError`, `apply`, and `apply_with_config` contracts. It may
+    depend on `mmds` for the document and diff vocabulary, and on `runtime` for
+    full relayout fallback. `mmds/` stays a pure interchange layer; command
+    application is a separate supported low-level API surface rather than a
+    child of `mmds/`.
+
+    The split between `mmds::events` and top-level `commands` / `views` is
+    intentional: `mmds/` owns the canonical document plus the portable
+    vocabulary that describes it (`Subject`, model events, and snapshot diff
+    changes), while top-level operation surfaces own functions that act on
+    those documents. This keeps MMDS vocabulary reusable by adapters and future
+    bindings without pulling in command processing, projection, runtime,
+    engine, or render infrastructure.
+
+13. **engines do not know about diagram types or output formats** — Engine
     implementations (`src/engines/`) solve generic graph layout problems and
     own layout building / measurement adapters. They may use shared
     graph-family helpers, but they never reference flowchart, class, sequence,
@@ -149,7 +166,7 @@ collapsed back into singleton roots:
     and float routing. `layered::kernel` stays internal; it is a contributor
     boundary, not a supported public contract.
 
-13. **flat top-level contract modules own the stable public contract** —
+14. **flat top-level contract modules own the stable public contract** —
     Stable public format and error vocabulary live in `src/format.rs` and
     `src/errors.rs`. `RenderConfig` lives in `src/runtime/config.rs`
     (re-exported from `lib.rs`). Diagnostics live in `errors`, family
@@ -158,33 +175,33 @@ collapsed back into singleton roots:
     from `lib.rs`. Other namespaces are either part of the supported
     low-level API or internal implementation modules.
 
-14. **runtime/ is orchestration only** — The runtime layer detects input
+15. **runtime/ is orchestration only** — The runtime layer detects input
     frontends, resolves logical diagram types, manages the registry, consumes
     runtime payloads, and wires the pipeline. Graph-family runtime
     dispatch lives under `src/runtime/`; runtime itself does not own Mermaid
     grammars, layout algorithms, or renderer implementations.
 
-15. **registry is contract-only infrastructure** — `src/registry.rs` defines
+16. **registry is contract-only infrastructure** — `src/registry.rs` defines
     reusable registry contracts (`DiagramRegistry`, `DiagramDefinition`,
     `DiagramInstance`) and does not import concrete diagram modules. Built-in
     diagram wiring lives in the separate public `builtins` namespace.
 
-16. **timeline::sequence owns shared sequence runtime types** — Shared
+17. **timeline::sequence owns shared sequence runtime types** — Shared
     sequence-family model and layout types live under `src/timeline/sequence/`
     so the final text renderer can depend on a neutral timeline namespace
     instead of importing `diagrams::sequence`.
 
 ## Adapter Rules
 
-17. **web main.ts is composition only** — The web playground's `main.ts` is a
+18. **web main.ts is composition only** — The web playground's `main.ts` is a
     composition root that wires stores, services, and controllers. It does not
     contain application logic, state management, or rendering orchestration.
 
-18. **wasm adapter is a thin boundary** — `crates/mmdflux-wasm` deserializes JS
+19. **wasm adapter is a thin boundary** — `crates/mmdflux-wasm` deserializes JS
     requests, calls the Rust facade, and serializes responses. It does not
     duplicate config parsing, registry logic, or format selection.
 
-19. **CLI adapter is a thin boundary** — `src/main.rs` maps CLI flags to the
+20. **CLI adapter is a thin boundary** — `src/main.rs` maps CLI flags to the
     Rust facade contract and formats output. It does not contain business logic
     beyond argument mapping.
 

@@ -1,8 +1,8 @@
 use mmdflux::mmds::Document;
 use mmdflux::views::{
-    AnchorRef, Selector, TraversalDirection, ViewEvent, ViewSpec, ViewStatement, apply_view,
+    AnchorRef, Selector, TraversalDirection, ViewEvent, ViewSpec, ViewStatement, project,
 };
-use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_mmds_document};
+use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_document};
 
 const SOURCE: &str = r#"graph TD
 service_a[Service A] --> service_b[Service B]
@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..ViewSpec::default()
     };
 
-    let (view, events) = apply_view(&canonical, &spec)?;
-    let text = render_mmds_document(&view, OutputFormat::Text, &RenderConfig::default())?;
+    let (view, events) = project(&canonical, &spec)?;
+    let text = render_document(&view, OutputFormat::Text, &RenderConfig::default())?;
 
     println!("retained nodes:");
     for node in &view.nodes {

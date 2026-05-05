@@ -6,9 +6,9 @@ use mmdflux::mmds::{
 };
 use mmdflux::views::{
     AnchorRef, ElisionReason, LayoutMode, NodePredicate, Selector, TraversalDirection,
-    VIEW_EXTENSION_NAMESPACE, ViewError, ViewEvent, ViewSpec, ViewStatement, apply_view,
+    VIEW_EXTENSION_NAMESPACE, ViewError, ViewEvent, ViewSpec, ViewStatement, project,
 };
-use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_mmds_document};
+use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_document};
 use serde_json::{Map, Value, json};
 
 const LEGACY_TEXT_EXTENSION_NAMESPACE: &str = "org.mmdflux.text.v1.projection";
@@ -167,7 +167,7 @@ fn view_replay_payloads() -> (Document, Document, Document) {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
     let mut plain_payload = view_payload.clone();
     plain_payload.extensions.remove(VIEW_EXTENSION_NAMESPACE);
     let mut no_projection_payload = plain_payload.clone();
@@ -186,7 +186,7 @@ fn canary_view_replay_payloads() -> (Document, Document) {
 }
 
 fn render_mmds_payload(payload: &Document, format: OutputFormat) -> String {
-    render_mmds_document(payload, format, &RenderConfig::default()).expect("payload should render")
+    render_document(payload, format, &RenderConfig::default()).expect("payload should render")
 }
 
 fn canary_canonical_output() -> Document {
@@ -204,7 +204,7 @@ fn canary_view_spec() -> ViewSpec {
 
 fn canary_view_payload() -> Document {
     let canonical = canary_canonical_output();
-    apply_view(&canonical, &canary_view_spec())
+    project(&canonical, &canary_view_spec())
         .expect("canary view should materialize")
         .0
 }
@@ -251,7 +251,7 @@ fn view_selector_downstream_hops_include_anchor() {
         hops: 2,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(node_ids(&view_payload), ids(&["gateway", "auth", "db"]));
     assert!(view_payload.subgraphs.is_empty());
@@ -279,7 +279,7 @@ fn view_selector_upstream_hops_follow_incoming_edges() {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(
         node_ids(&view_payload),
@@ -309,7 +309,7 @@ fn view_selector_neighbors_combines_directions() {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(
         node_ids(&view_payload),
@@ -336,7 +336,7 @@ fn view_selector_subgraph_descendants_recurse() {
         "root".to_string(),
     ))]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(node_ids(&view_payload), ids(&["auth", "charge", "gateway"]));
     assert_eq!(subgraph_ids(&view_payload), ids(&["payments", "root"]));
@@ -356,7 +356,7 @@ fn view_selector_subgraph_anchor_keeps_container_without_descendants() {
         AnchorRef::Subgraph("payments".to_string()),
     ))]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert!(view_payload.nodes.is_empty());
     assert_eq!(view_payload.subgraphs.len(), 1);
@@ -387,7 +387,7 @@ fn view_selector_parent_and_shape_predicates_filter_nodes() {
         ))),
     ]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(node_ids(&view_payload), ids(&["db"]));
 }
@@ -401,7 +401,7 @@ fn view_selector_unknown_anchor_returns_error() {
         hops: 1,
     })]);
 
-    let error = apply_view(&payload, &spec).expect_err("missing anchor should fail");
+    let error = project(&payload, &spec).expect_err("missing anchor should fail");
 
     assert_eq!(
         error,
@@ -432,7 +432,7 @@ fn view_apply_keeps_node_positions_and_canonical_bounds() {
         AnchorRef::Node("gateway".to_string()),
     ))]);
 
-    let (view_payload, events) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, events) = project(&payload, &spec).expect("view should materialize");
 
     assert_eq!(
         view_payload.metadata.bounds.width,
@@ -476,7 +476,7 @@ fn view_apply_preserves_sparse_surviving_edge_ids() {
         hops: 2,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     let edge_ids: Vec<&str> = view_payload
         .edges
@@ -501,7 +501,7 @@ fn view_apply_drops_edges_with_elided_endpoints() {
         AnchorRef::Node("gateway".to_string()),
     ))]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert!(view_payload.edges.is_empty());
 }
@@ -525,7 +525,7 @@ fn view_apply_emits_node_and_edge_elision_events() {
         AnchorRef::Node("gateway".to_string()),
     ))]);
 
-    let (_, events) = apply_view(&payload, &spec).expect("view should materialize");
+    let (_, events) = project(&payload, &spec).expect("view should materialize");
 
     assert!(events.contains(&ViewEvent::NodeLeftView {
         id: "auth".to_string(),
@@ -572,7 +572,7 @@ fn view_apply_preserves_ancestor_subgraph_containers() {
         ViewStatement::Exclude(Selector::Anchor(AnchorRef::Node("charge".to_string()))),
     ]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     let node_ids: Vec<&str> = view_payload
         .nodes
@@ -602,7 +602,7 @@ fn view_apply_rejects_unimplemented_layout_modes() {
         ..ViewSpec::default()
     };
 
-    let error = apply_view(&payload, &spec).expect_err("compact mode is deferred");
+    let error = project(&payload, &spec).expect_err("compact mode is deferred");
 
     assert_eq!(
         error,
@@ -619,7 +619,7 @@ fn view_apply_marks_shared_coordinates_view_payload() {
         AnchorRef::Node("gateway".to_string()),
     ))]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     let marker = view_payload
         .extensions
@@ -655,7 +655,7 @@ fn view_apply_preserves_text_projection_under_render_namespace() {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert!(
         view_payload
@@ -688,7 +688,7 @@ fn view_apply_prunes_node_ranks_to_retained_nodes() {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     let node_ranks = projection(&view_payload, TEXT_EXTENSION_NAMESPACE)
         .get("node_ranks")
@@ -711,7 +711,7 @@ fn view_apply_does_not_emit_legacy_text_namespace() {
         AnchorRef::Node("gateway".to_string()),
     ))]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     assert!(
         !view_payload
@@ -741,7 +741,7 @@ fn view_apply_drops_edge_indexed_text_projection_keys() {
         hops: 1,
     })]);
 
-    let (view_payload, _) = apply_view(&payload, &spec).expect("view should materialize");
+    let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
 
     let projection = projection(&view_payload, TEXT_EXTENSION_NAMESPACE);
     assert!(!projection.contains_key("edge_waypoints"));
@@ -924,7 +924,7 @@ fn view_canary_deferred_primitives_return_not_implemented() {
     ];
 
     for (spec, feature) in cases {
-        let error = apply_view(&payload, &spec).expect_err("deferred feature should fail");
+        let error = project(&payload, &spec).expect_err("deferred feature should fail");
         assert_eq!(
             error,
             ViewError::NotImplementedYet {

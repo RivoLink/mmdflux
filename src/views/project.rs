@@ -19,7 +19,7 @@ const NODE_RANKS_KEY: &str = "node_ranks";
 const EDGE_WAYPOINTS_KEY: &str = "edge_waypoints";
 const LABEL_POSITIONS_KEY: &str = "label_positions";
 
-/// Apply a materialized view specification to a canonical MMDS payload.
+/// Project a materialized view specification over a canonical MMDS payload.
 ///
 /// The returned [`Document`] is a cloned and pruned payload:
 ///
@@ -32,7 +32,7 @@ const LABEL_POSITIONS_KEY: &str = "label_positions";
 /// The returned [`ViewEvent`] list describes canonical nodes, subgraphs, and
 /// edges that did not survive materialization. Unsupported v1 features return
 /// [`ViewError::NotImplementedYet`] before payload cloning.
-pub fn apply_view(
+pub fn project(
     canonical: &Document,
     spec: &ViewSpec,
 ) -> Result<(Document, Vec<ViewEvent>), ViewError> {
@@ -70,13 +70,13 @@ pub fn apply_view(
             subgraph
         })
         .collect();
-    apply_view_extensions(&mut output, &evaluation.nodes);
+    project_extensions(&mut output, &evaluation.nodes);
 
     let events = view_events(canonical, &evaluation.nodes, &retained_subgraphs);
     Ok((output, events))
 }
 
-fn apply_view_extensions(output: &mut Document, retained_nodes: &BTreeSet<String>) {
+fn project_extensions(output: &mut Document, retained_nodes: &BTreeSet<String>) {
     output.extensions.insert(
         VIEW_EXTENSION_NAMESPACE.to_string(),
         shared_coordinates_view_extension(),

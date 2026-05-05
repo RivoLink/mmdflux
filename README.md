@@ -287,7 +287,7 @@ Most Rust integrations should stay on the high-level runtime facade:
 
 - `render_diagram`
 - `materialize_diagram`
-- `render_mmds_document`
+- `render_document`
 - `detect_diagram`
 - `validate_diagram`
 

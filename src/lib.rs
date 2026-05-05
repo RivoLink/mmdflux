@@ -8,13 +8,20 @@
 //!
 //! Most consumers only need the facade functions and two config types:
 //!
-//! - [`render_diagram`] — detect, parse, and render in one call
-//! - [`materialize_diagram`] — materialize a graph-family [`mmds::Document`]
-//! - [`render_mmds_document`] — render an already-parsed graph-family MMDS document
+//! - [`render_diagram`] — render Mermaid source or MMDS JSON in one call
+//! - [`materialize_diagram`] — materialize Mermaid source or MMDS JSON as a
+//!   graph-family [`mmds::Document`]
+//! - [`render_document`] — render an already-parsed [`mmds::Document`]
 //! - [`detect_diagram`] — detect the diagram type without rendering
 //! - [`validate_diagram`] — parse and return structured JSON diagnostics
 //! - [`OutputFormat`] — `Text`, `Ascii`, `Svg`, or `Mmds`
 //! - [`RenderConfig`] — layout engine, routing, padding, color, and more
+//!
+//! Use [`render_diagram`] when you have text input. It auto-detects Mermaid
+//! source vs MMDS JSON because both represent the same abstract diagram. Use
+//! [`materialize_diagram`] when you want the typed [`mmds::Document`], and use
+//! [`render_document`] when you already have one, such as after
+//! [`views::project`].
 //!
 //! ```
 //! use mmdflux::{OutputFormat, RenderConfig, render_diagram};
@@ -32,6 +39,10 @@
 //! // Render as MMDS JSON (structured interchange format)
 //! let json = render_diagram(input, OutputFormat::Mmds, &RenderConfig::default()).unwrap();
 //! assert!(json.contains("\"diagram_type\""));
+//!
+//! // MMDS JSON is also accepted as text input.
+//! let replayed = render_diagram(&json, OutputFormat::Text, &RenderConfig::default()).unwrap();
+//! assert!(!replayed.trim().is_empty());
 //! ```
 //!
 //! ## Customizing output
@@ -167,6 +178,85 @@
 //! assert!(mermaid.contains("flowchart TD"));
 //! ```
 //!
+//! ## Commands, Diffs, and Views
+//!
+//! Public MMDS commands emit model events, while [`mmds::diff::diff_documents`]
+//! reports a snapshot diff between two document states. Model events and diff
+//! changes are related, but they are not interchangeable:
+//!
+//! ```
+//! use mmdflux::commands::{Command, apply};
+//! use mmdflux::mmds::Subject;
+//! use mmdflux::mmds::diff::{ChangeKind, diff_documents};
+//! use mmdflux::mmds::events::ModelEventKind;
+//! use mmdflux::views::{Selector, ViewSpec, ViewStatement, project};
+//! use mmdflux::{RenderConfig, materialize_diagram};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let initial = materialize_diagram(
+//!     "graph TD\n    A[Gateway] --> B[Billing]",
+//!     &RenderConfig::default(),
+//! )?;
+//! let mut current = initial.clone();
+//!
+//! apply(
+//!     &Command::AddNode {
+//!         id: "C".to_string(),
+//!         label: "Auth".to_string(),
+//!         shape: "rectangle".to_string(),
+//!         parent: None,
+//!     },
+//!     &mut current,
+//! )?;
+//! apply(
+//!     &Command::AddEdge {
+//!         id: None,
+//!         source: "A".to_string(),
+//!         target: "C".to_string(),
+//!         from_subgraph: None,
+//!         to_subgraph: None,
+//!         label: Some("routes".to_string()),
+//!         stroke: "solid".to_string(),
+//!         arrow_start: "none".to_string(),
+//!         arrow_end: "normal".to_string(),
+//!         minlen: 1,
+//!     },
+//!     &mut current,
+//! )?;
+//! let model_events = apply(
+//!     &Command::ChangeNodeLabel {
+//!         node: "C".to_string(),
+//!         label: "Auth Service".to_string(),
+//!     },
+//!     &mut current,
+//! )?;
+//!
+//! let snapshot_diff = diff_documents(&initial, &current);
+//! let (view, _view_events) = project(
+//!     &current,
+//!     &ViewSpec {
+//!         statements: vec![ViewStatement::Include(Selector::All)],
+//!         ..ViewSpec::default()
+//!     },
+//! )?;
+//!
+//! assert!(model_events.iter().any(|event| {
+//!     event.kind == ModelEventKind::NodeLabelChanged
+//!         && matches!(&event.subject, Subject::Node(id) if id == "C")
+//! }));
+//! assert!(snapshot_diff.changes.iter().any(|event| {
+//!     event.kind == ChangeKind::NodeAdded
+//!         && matches!(&event.subject, Subject::Node(id) if id == "C")
+//! }));
+//! assert!(!snapshot_diff.changes.iter().any(|event| {
+//!     event.kind == ChangeKind::NodeLabelChanged
+//!         && matches!(&event.subject, Subject::Node(id) if id == "C")
+//! }));
+//! assert_eq!(view.nodes.len(), current.nodes.len());
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! ## Materialized MMDS views
 //!
 //! Use [`views`] when an adapter needs a focused read model over a canonical
@@ -177,9 +267,9 @@
 //! ```
 //! use mmdflux::mmds::Document;
 //! use mmdflux::views::{
-//!     AnchorRef, Selector, TraversalDirection, ViewSpec, ViewStatement, apply_view,
+//!     AnchorRef, Selector, TraversalDirection, ViewSpec, ViewStatement, project,
 //! };
-//! use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_mmds_document};
+//! use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_document};
 //!
 //! let source = "\
 //! graph TD
@@ -197,8 +287,8 @@
 //!     ..ViewSpec::default()
 //! };
 //!
-//! let (view, events) = apply_view(&canonical, &spec).unwrap();
-//! let text = render_mmds_document(&view, OutputFormat::Text, &RenderConfig::default()).unwrap();
+//! let (view, events) = project(&canonical, &spec).unwrap();
+//! let text = render_document(&view, OutputFormat::Text, &RenderConfig::default()).unwrap();
 //! assert!(text.contains("Gateway"));
 //! assert_eq!(view.nodes.len(), 3);
 //! assert!(events.iter().any(|event| matches!(
@@ -208,6 +298,7 @@
 //! ```
 
 pub mod builtins;
+pub mod commands;
 mod diagrams;
 mod engines;
 pub mod errors;
@@ -250,12 +341,12 @@ pub use runtime::config_input::RuntimeConfigInput;
 pub use runtime::config_input::apply_svg_surface_defaults;
 /// Detect the diagram type from input text.
 pub use runtime::detect_diagram;
-/// Detect, parse, solve, and materialize a graph-family diagram as MMDS.
+/// Detect, parse, solve, and materialize Mermaid source or MMDS JSON as MMDS.
 pub use runtime::materialize_diagram;
-/// Detect, parse, and render a diagram in one call.
+/// Detect, parse, and render Mermaid source or MMDS JSON in one call.
 pub use runtime::render_diagram;
 /// Render a parsed graph-family MMDS document.
-pub use runtime::render_mmds_document;
+pub use runtime::render_document;
 /// Validate input and return structured JSON diagnostics.
 pub use runtime::validate_diagram;
 

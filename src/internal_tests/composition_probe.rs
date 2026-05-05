@@ -1,9 +1,11 @@
 use serde_json::json;
 
-use crate::mmds::Document;
-use crate::mmds::commands::{Command, apply};
-use crate::mmds::diff::{MmdsDiffEvent, MmdsDiffKind, MmdsDiffSubject, diff_outputs};
-use crate::views::{Selector, ViewEvent, ViewSpec, ViewStatement, apply_view};
+use super::event_change_mapping::model_event_kind_to_change_kind;
+use crate::commands::{Command, apply};
+use crate::mmds::diff::{Change, ChangeKind, diff_documents};
+use crate::mmds::events::{ModelEvent, ModelEventKind};
+use crate::mmds::{Document, Subject};
+use crate::views::{Selector, ViewEvent, ViewSpec, ViewStatement, project};
 use crate::{RenderConfig, materialize_diagram};
 
 #[derive(Debug)]
@@ -17,8 +19,8 @@ struct ProbeScenario {
 struct ProbeCommandStep {
     name: &'static str,
     command: Command,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ModelEventKind,
+    expected_subject: Subject,
 }
 
 #[derive(Debug)]
@@ -37,7 +39,7 @@ struct CommandProbeResult {
 #[derive(Debug)]
 struct CommandObservation {
     command_name: &'static str,
-    returned_event_pairs: Vec<(MmdsDiffKind, MmdsDiffSubject)>,
+    returned_event_pairs: Vec<(ModelEventKind, Subject)>,
     returned_expected_primary: bool,
     error: Option<String>,
 }
@@ -72,8 +74,8 @@ impl ViewObservation {
 #[derive(Debug)]
 struct CompositionObservations {
     unexpected_command_failures: Vec<String>,
-    unexpected_missing_semantic_events: Vec<&'static str>,
-    temporal_collapses: Vec<&'static str>,
+    unexpected_missing_semantic_changes: Vec<&'static str>,
+    snapshot_diff_collapses: Vec<&'static str>,
     view_materialization_failures: Vec<String>,
     private_internal_requirements: Vec<String>,
     gating_notes: Vec<GatingNote>,
@@ -82,7 +84,7 @@ struct CompositionObservations {
 impl CompositionObservations {
     fn no_unexpected_failures(&self) -> bool {
         self.unexpected_command_failures.is_empty()
-            && self.unexpected_missing_semantic_events.is_empty()
+            && self.unexpected_missing_semantic_changes.is_empty()
             && self.view_materialization_failures.is_empty()
     }
 }
@@ -95,17 +97,17 @@ struct GatingNote {
 
 #[derive(Debug)]
 struct DiffObservations {
-    raw_diff_event_pairs: Vec<(MmdsDiffKind, MmdsDiffSubject)>,
+    raw_diff_change_pairs: Vec<(ChangeKind, Subject)>,
     command_classifications: Vec<CommandDiffClassification>,
-    unexpected_extra_semantic_events: Vec<(MmdsDiffKind, MmdsDiffSubject)>,
+    unexpected_extra_semantic_changes: Vec<(ChangeKind, Subject)>,
     has_expected_stable_headlines: bool,
 }
 
 #[derive(Debug)]
 struct CommandDiffClassification {
     command_name: &'static str,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ModelEventKind,
+    expected_subject: Subject,
     classification: CommandDiffClassificationKind,
 }
 
@@ -113,7 +115,7 @@ struct CommandDiffClassification {
 enum CommandDiffClassificationKind {
     PresentInBoth,
     GeometryOnlySideEffect,
-    TemporalCollapse,
+    CollapsedInSnapshotDiff,
     UnexpectedMissing,
 }
 
@@ -140,8 +142,8 @@ fn build_probe_scenario() -> ProbeScenario {
                     concurrent_regions: Vec::new(),
                     invisible: false,
                 },
-                expected_kind: MmdsDiffKind::SubgraphAdded,
-                expected_subject: MmdsDiffSubject::Subgraph("auth".to_string()),
+                expected_kind: ModelEventKind::SubgraphAdded,
+                expected_subject: Subject::Subgraph("auth".to_string()),
             },
             ProbeCommandStep {
                 name: "add-login",
@@ -151,8 +153,8 @@ fn build_probe_scenario() -> ProbeScenario {
                     shape: "rectangle".to_string(),
                     parent: Some("auth".to_string()),
                 },
-                expected_kind: MmdsDiffKind::NodeAdded,
-                expected_subject: MmdsDiffSubject::Node("login".to_string()),
+                expected_kind: ModelEventKind::NodeAdded,
+                expected_subject: Subject::Node("login".to_string()),
             },
             ProbeCommandStep {
                 name: "move-users-into-auth",
@@ -163,8 +165,8 @@ fn build_probe_scenario() -> ProbeScenario {
                     added_concurrent_regions: Vec::new(),
                     removed_concurrent_regions: Vec::new(),
                 },
-                expected_kind: MmdsDiffKind::SubgraphMembershipChanged,
-                expected_subject: MmdsDiffSubject::Subgraph("auth".to_string()),
+                expected_kind: ModelEventKind::SubgraphMembershipChanged,
+                expected_subject: Subject::Subgraph("auth".to_string()),
             },
             ProbeCommandStep {
                 name: "add-login-db-edge",
@@ -180,8 +182,8 @@ fn build_probe_scenario() -> ProbeScenario {
                     arrow_end: "normal".to_string(),
                     minlen: 1,
                 },
-                expected_kind: MmdsDiffKind::EdgeAdded,
-                expected_subject: MmdsDiffSubject::Edge("e5".to_string()),
+                expected_kind: ModelEventKind::EdgeAdded,
+                expected_subject: Subject::Edge("e5".to_string()),
             },
             ProbeCommandStep {
                 name: "change-login-label",
@@ -189,16 +191,16 @@ fn build_probe_scenario() -> ProbeScenario {
                     node: "login".to_string(),
                     label: "Login Service :8443".to_string(),
                 },
-                expected_kind: MmdsDiffKind::NodeLabelChanged,
-                expected_subject: MmdsDiffSubject::Node("login".to_string()),
+                expected_kind: ModelEventKind::NodeLabelChanged,
+                expected_subject: Subject::Node("login".to_string()),
             },
             ProbeCommandStep {
                 name: "set-review-profile",
                 command: Command::SetProfiles {
                     profiles: vec!["composition-probe".to_string()],
                 },
-                expected_kind: MmdsDiffKind::ProfileChanged,
-                expected_subject: MmdsDiffSubject::Document,
+                expected_kind: ModelEventKind::ProfileChanged,
+                expected_subject: Subject::Document,
             },
             ProbeCommandStep {
                 name: "style-login",
@@ -209,8 +211,8 @@ fn build_probe_scenario() -> ProbeScenario {
                         "stroke": "#586e75",
                     }),
                 },
-                expected_kind: MmdsDiffKind::NodeStyleChanged,
-                expected_subject: MmdsDiffSubject::Node("login".to_string()),
+                expected_kind: ModelEventKind::NodeStyleChanged,
+                expected_subject: Subject::Node("login".to_string()),
             },
         ],
         view_specs: vec![
@@ -255,10 +257,10 @@ fn run_command_probe(scenario: &ProbeScenario) -> CommandProbeResult {
         match apply(&step.command, &mut document) {
             Ok(events) => {
                 let returned_expected_primary =
-                    has_event_pair(&events, step.expected_kind, &step.expected_subject);
+                    has_model_event_pair(&events, step.expected_kind, &step.expected_subject);
                 command_observations.push(CommandObservation {
                     command_name: step.name,
-                    returned_event_pairs: event_pairs(&events),
+                    returned_event_pairs: model_event_pairs(&events),
                     returned_expected_primary,
                     error: None,
                 });
@@ -285,13 +287,18 @@ fn run_command_probe(scenario: &ProbeScenario) -> CommandProbeResult {
 
 fn run_composed_probe(scenario: &ProbeScenario) -> CompositionProbeResult {
     let command_result = run_command_probe(scenario);
-    let diff = diff_outputs(&scenario.initial, &command_result.final_document);
-    let raw_diff_event_pairs = event_pairs(&diff.events);
-    let semantic_diff_event_pairs = semantic_event_pairs(&diff.events);
+    let diff = diff_documents(&scenario.initial, &command_result.final_document);
+    let raw_diff_change_pairs = change_pairs(&diff.changes);
+    let semantic_diff_change_pairs = semantic_change_pairs(&diff.changes);
     let command_expected_pairs: Vec<_> = scenario
         .commands
         .iter()
-        .map(|step| (step.expected_kind, step.expected_subject.clone()))
+        .map(|step| {
+            (
+                model_event_kind_to_change_kind(step.expected_kind),
+                step.expected_subject.clone(),
+            )
+        })
         .collect();
     let mut created_subjects = Vec::new();
     let mut command_classifications = Vec::new();
@@ -299,14 +306,14 @@ fn run_composed_probe(scenario: &ProbeScenario) -> CompositionProbeResult {
     for step in &scenario.commands {
         let classification = classify_command_diff_relationship(
             step,
-            &semantic_diff_event_pairs,
-            &diff.events,
+            &semantic_diff_change_pairs,
+            &diff.changes,
             &created_subjects,
         );
 
         if matches!(
-            step.expected_kind,
-            MmdsDiffKind::NodeAdded | MmdsDiffKind::EdgeAdded | MmdsDiffKind::SubgraphAdded
+            model_event_kind_to_change_kind(step.expected_kind),
+            ChangeKind::NodeAdded | ChangeKind::EdgeAdded | ChangeKind::SubgraphAdded
         ) {
             created_subjects.push(step.expected_subject.clone());
         }
@@ -319,7 +326,7 @@ fn run_composed_probe(scenario: &ProbeScenario) -> CompositionProbeResult {
         });
     }
 
-    let unexpected_extra_semantic_events = semantic_diff_event_pairs
+    let unexpected_extra_semantic_changes = semantic_diff_change_pairs
         .iter()
         .filter(|(kind, subject)| {
             !command_expected_pairs
@@ -338,9 +345,9 @@ fn run_composed_probe(scenario: &ProbeScenario) -> CompositionProbeResult {
     });
 
     let diff_observations = DiffObservations {
-        raw_diff_event_pairs,
+        raw_diff_change_pairs,
         command_classifications,
-        unexpected_extra_semantic_events,
+        unexpected_extra_semantic_changes,
         has_expected_stable_headlines,
     };
     let view_observations = collect_view_observations(&command_result.final_document, scenario);
@@ -362,7 +369,7 @@ fn summarize_composition(
 ) -> CompositionObservations {
     CompositionObservations {
         unexpected_command_failures: command_result.unexpected_failures.clone(),
-        unexpected_missing_semantic_events: diff_observations
+        unexpected_missing_semantic_changes: diff_observations
             .command_classifications
             .iter()
             .filter(|classification| {
@@ -373,13 +380,13 @@ fn summarize_composition(
             })
             .map(|classification| classification.command_name)
             .collect(),
-        temporal_collapses: diff_observations
+        snapshot_diff_collapses: diff_observations
             .command_classifications
             .iter()
             .filter(|classification| {
                 matches!(
                     classification.classification,
-                    CommandDiffClassificationKind::TemporalCollapse
+                    CommandDiffClassificationKind::CollapsedInSnapshotDiff
                 )
             })
             .map(|classification| classification.command_name)
@@ -393,10 +400,7 @@ fn summarize_composition(
                     .map(|error| format!("{} failed: {error}", observation.name))
             })
             .collect(),
-        private_internal_requirements: vec![
-            "diff_outputs is crate-internal and test-gated".to_string(),
-            "commands::apply is crate-internal and test-gated".to_string(),
-        ],
+        private_internal_requirements: Vec::new(),
         gating_notes: vec![
             GatingNote {
                 primitive: "views",
@@ -404,11 +408,11 @@ fn summarize_composition(
             },
             GatingNote {
                 primitive: "diff",
-                surface: "test-gated",
+                surface: "public",
             },
             GatingNote {
                 primitive: "commands",
-                surface: "test-gated",
+                surface: "public",
             },
         ],
     }
@@ -422,7 +426,7 @@ fn collect_view_observations(
         .view_specs
         .iter()
         .map(
-            |probe_view| match apply_view(final_document, &probe_view.spec) {
+            |probe_view| match project(final_document, &probe_view.spec) {
                 Ok((view, events)) => {
                     let canonical_edge_ids = edge_ids(final_document);
                     let retained_edge_ids = edge_ids(&view);
@@ -462,13 +466,13 @@ fn collect_view_observations(
 
 fn classify_command_diff_relationship(
     step: &ProbeCommandStep,
-    semantic_diff_event_pairs: &[(MmdsDiffKind, MmdsDiffSubject)],
-    raw_diff_events: &[MmdsDiffEvent],
-    created_subjects: &[MmdsDiffSubject],
+    semantic_diff_change_pairs: &[(ChangeKind, Subject)],
+    raw_diff_events: &[Change],
+    created_subjects: &[Subject],
 ) -> CommandDiffClassificationKind {
     if event_pair_is_present(
-        semantic_diff_event_pairs,
-        step.expected_kind,
+        semantic_diff_change_pairs,
+        model_event_kind_to_change_kind(step.expected_kind),
         &step.expected_subject,
     ) {
         return CommandDiffClassificationKind::PresentInBoth;
@@ -476,7 +480,7 @@ fn classify_command_diff_relationship(
 
     if raw_diff_events
         .iter()
-        .any(|event| event.kind.is_geometry_effect() && event.subject == step.expected_subject)
+        .any(|event| event.kind.is_geometry() && event.subject == step.expected_subject)
     {
         return CommandDiffClassificationKind::GeometryOnlySideEffect;
     }
@@ -485,36 +489,43 @@ fn classify_command_diff_relationship(
         .iter()
         .any(|subject| subject == &step.expected_subject)
     {
-        return CommandDiffClassificationKind::TemporalCollapse;
+        return CommandDiffClassificationKind::CollapsedInSnapshotDiff;
     }
 
     CommandDiffClassificationKind::UnexpectedMissing
 }
 
-fn has_event_pair(events: &[MmdsDiffEvent], kind: MmdsDiffKind, subject: &MmdsDiffSubject) -> bool {
+fn has_model_event_pair(events: &[ModelEvent], kind: ModelEventKind, subject: &Subject) -> bool {
     events
         .iter()
         .any(|event| event.kind == kind && &event.subject == subject)
 }
 
-fn event_pairs(events: &[MmdsDiffEvent]) -> Vec<(MmdsDiffKind, MmdsDiffSubject)> {
+fn model_event_pairs(events: &[ModelEvent]) -> Vec<(ModelEventKind, Subject)> {
     events
         .iter()
         .map(|event| (event.kind, event.subject.clone()))
         .collect()
 }
 
-fn semantic_event_pairs(events: &[MmdsDiffEvent]) -> Vec<(MmdsDiffKind, MmdsDiffSubject)> {
-    event_pairs(events)
+fn change_pairs(changes: &[Change]) -> Vec<(ChangeKind, Subject)> {
+    changes
+        .iter()
+        .map(|change| (change.kind, change.subject.clone()))
+        .collect()
+}
+
+fn semantic_change_pairs(changes: &[Change]) -> Vec<(ChangeKind, Subject)> {
+    change_pairs(changes)
         .into_iter()
-        .filter(|(kind, _)| !kind.is_geometry_effect())
+        .filter(|(kind, _)| !kind.is_geometry())
         .collect()
 }
 
 fn event_pair_is_present(
-    pairs: &[(MmdsDiffKind, MmdsDiffSubject)],
-    kind: MmdsDiffKind,
-    subject: &MmdsDiffSubject,
+    pairs: &[(ChangeKind, Subject)],
+    kind: ChangeKind,
+    subject: &Subject,
 ) -> bool {
     pairs
         .iter()
@@ -591,10 +602,10 @@ fn composition_probe_scenario_covers_required_surfaces() {
         .iter()
         .find(|step| step.name == "add-login")
         .expect("add-login command exists");
-    assert_eq!(add_login.expected_kind, MmdsDiffKind::NodeAdded);
+    assert_eq!(add_login.expected_kind, ModelEventKind::NodeAdded);
     assert_eq!(
         add_login.expected_subject,
-        MmdsDiffSubject::Node("login".to_string())
+        Subject::Node("login".to_string())
     );
 }
 
@@ -620,7 +631,7 @@ fn composition_probe_command_log_records_expected_primary_events() {
 }
 
 #[test]
-fn composition_probe_diff_cumulative_classifies_command_log_relationship() {
+fn composition_probe_snapshot_diff_classifies_command_log_relationship() {
     let scenario = build_probe_scenario();
     let result = run_composed_probe(&scenario);
 
@@ -628,14 +639,14 @@ fn composition_probe_diff_cumulative_classifies_command_log_relationship() {
         result.diff_observations.has_expected_stable_headlines,
         "{result:#?}"
     );
-    assert!(!result.diff_observations.raw_diff_event_pairs.is_empty());
+    assert!(!result.diff_observations.raw_diff_change_pairs.is_empty());
     assert!(
         result
             .diff_observations
-            .unexpected_extra_semantic_events
+            .unexpected_extra_semantic_changes
             .iter()
             .any(|(kind, subject)| {
-                *kind == MmdsDiffKind::ExtensionChanged && *subject == MmdsDiffSubject::Document
+                *kind == ChangeKind::ExtensionChanged && *subject == Subject::Document
             })
     );
     assert!(
@@ -654,11 +665,11 @@ fn composition_probe_diff_cumulative_classifies_command_log_relationship() {
         .expect("change-login-label classification exists");
     assert_eq!(
         label_classification.expected_kind,
-        MmdsDiffKind::NodeLabelChanged
+        ModelEventKind::NodeLabelChanged
     );
     assert_eq!(
         label_classification.expected_subject,
-        MmdsDiffSubject::Node("login".to_string())
+        Subject::Node("login".to_string())
     );
 }
 
@@ -692,7 +703,7 @@ fn composition_probe_view_materializes_filtered_and_full_views() {
 }
 
 #[test]
-fn composition_probe_observations_include_gating_asymmetry() {
+fn composition_probe_observations_reflect_public_surfaces() {
     let scenario = build_probe_scenario();
     let result = run_composed_probe(&scenario);
 
@@ -712,27 +723,26 @@ fn composition_probe_observations_include_gating_asymmetry() {
             .composition_observations
             .gating_notes
             .iter()
-            .any(|note| note.primitive == "diff" && note.surface == "test-gated")
+            .any(|note| note.primitive == "diff" && note.surface == "public")
     );
     assert!(
         result
             .composition_observations
             .gating_notes
             .iter()
-            .any(|note| note.primitive == "commands" && note.surface == "test-gated")
+            .any(|note| note.primitive == "commands" && note.surface == "public")
     );
     assert!(
         result
             .composition_observations
-            .temporal_collapses
+            .snapshot_diff_collapses
             .contains(&"change-login-label")
     );
     assert!(
         result
             .composition_observations
             .private_internal_requirements
-            .iter()
-            .any(|requirement| requirement.contains("diff_outputs"))
+            .is_empty()
     );
 
     eprintln!("{result:#?}");

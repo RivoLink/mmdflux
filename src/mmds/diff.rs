@@ -1,31 +1,63 @@
+//! Snapshot diff for MMDS documents.
+//!
+//! [`diff_documents`] compares two fully materialized MMDS [`Document`] values and returns a
+//! snapshot diff: the changes describe what differs between the two states, regardless of
+//! the command sequence or editing path that produced them.
+//!
+//! This is intentionally different from the model events returned by
+//! `mmdflux::commands::apply` and `mmdflux::commands::apply_with_config`. Model events
+//! describe accepted model mutations; a snapshot diff may collapse, reorder, or expand
+//! those headlines based only on the compared document states.
+//!
+//! The secondary semantic effects are returned as ordinary flat changes in [`Diff::changes`].
+//! For example, changing subgraph membership can also change a node's parent, and changing
+//! node style extensions can also change the document extension map. Geometry changes are
+//! not filtered out; callers can use [`ChangeKind::is_model`] and
+//! [`ChangeKind::is_geometry`] to separate model changes from geometry changes.
+//!
+//! [`Change::related_change_ids`] links geometry effects back to related semantic
+//! changes by index within the same [`Diff::changes`] vector. [`Change::evidence`]
+//! contains diagnostic and not format-stable strings intended for debugging and test output,
+//! not for long-lived parsing contracts.
+//!
+//! The diff is an output comparison. It can say that a route moved, a label moved, or a
+//! fallback edge match was used; it does not provide causal route attribution.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
 use super::document::NODE_STYLE_EXTENSION_NAMESPACE;
-use super::{Bounds, Document, Edge, Node, Port, Position, Rect, Subgraph};
+use super::{Bounds, Document, Edge, Node, Port, Position, Rect, Subgraph, Subject};
 
 const COORD_EPS: f64 = 0.01;
 const DISPLAY_EPS: f64 = 1.0;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MmdsDiff {
-    pub(crate) before_geometry_level: String,
-    pub(crate) after_geometry_level: String,
-    pub(crate) events: Vec<MmdsDiffEvent>,
+pub struct Diff {
+    /// Geometry level recorded on the `before` document.
+    pub before_geometry_level: String,
+    /// Geometry level recorded on the `after` document.
+    pub after_geometry_level: String,
+    /// Flat change list describing differences between the two documents.
+    pub changes: Vec<Change>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MmdsDiffEvent {
-    pub(crate) kind: MmdsDiffKind,
-    pub(crate) subject: MmdsDiffSubject,
-    // Semantic events are the headlines; geometry events can be linked back as evidence.
-    pub(crate) evidence: Vec<String>,
-    pub(crate) related_event_ids: Vec<usize>,
+pub struct Change {
+    /// Change classification.
+    pub kind: ChangeKind,
+    /// Entity the change is about.
+    pub subject: Subject,
+    /// Diagnostic, not format-stable evidence strings.
+    pub evidence: Vec<String>,
+    /// Change indexes in the same `Diff::changes` vector that are related to this change.
+    pub related_change_ids: Vec<usize>,
 }
 
+/// Kind of change observed in an MMDS snapshot diff.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MmdsDiffKind {
+pub enum ChangeKind {
     GeometryLevelChanged,
     DirectionChanged,
     EngineChanged,
@@ -64,8 +96,9 @@ pub(crate) enum MmdsDiffKind {
     GlobalReflowDetected,
 }
 
-impl MmdsDiffKind {
-    pub(crate) fn is_geometry_effect(self) -> bool {
+impl ChangeKind {
+    /// Returns true when this change describes geometry or routed output.
+    pub fn is_geometry(self) -> bool {
         matches!(
             self,
             Self::NodeMoved
@@ -83,34 +116,31 @@ impl MmdsDiffKind {
         )
     }
 
+    /// Returns true when this change describes model state rather than geometry.
+    pub fn is_model(self) -> bool {
+        !self.is_geometry()
+    }
+
     fn can_have_related_geometry(self) -> bool {
-        !self.is_geometry_effect()
+        !self.is_geometry()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum MmdsDiffSubject {
-    Document,
-    Node(String),
-    Edge(String),
-    Subgraph(String),
-}
-
-pub(crate) fn diff_outputs(before: &Document, after: &Document) -> MmdsDiff {
-    let mut events = Vec::new();
+pub fn diff_documents(before: &Document, after: &Document) -> Diff {
+    let mut changes = Vec::new();
 
     if before.geometry_level != after.geometry_level {
-        events.push(document_event(MmdsDiffKind::GeometryLevelChanged));
+        changes.push(document_change(ChangeKind::GeometryLevelChanged));
     }
     if before.metadata.direction != after.metadata.direction {
-        events.push(document_event(MmdsDiffKind::DirectionChanged));
+        changes.push(document_change(ChangeKind::DirectionChanged));
     }
     if before.metadata.engine != after.metadata.engine {
-        events.push(document_event(MmdsDiffKind::EngineChanged));
+        changes.push(document_change(ChangeKind::EngineChanged));
     }
     if bounds_changed(&before.metadata.bounds, &after.metadata.bounds) {
-        events.push(document_event_with_evidence(
-            MmdsDiffKind::CanvasResized,
+        changes.push(document_change_with_evidence(
+            ChangeKind::CanvasResized,
             vec![bounds_evidence(
                 "canvas",
                 &before.metadata.bounds,
@@ -119,76 +149,78 @@ pub(crate) fn diff_outputs(before: &Document, after: &Document) -> MmdsDiff {
         ));
     }
     if before.profiles != after.profiles {
-        events.push(document_event(MmdsDiffKind::ProfileChanged));
+        changes.push(document_change(ChangeKind::ProfileChanged));
     }
     if before.extensions != after.extensions {
-        events.push(document_event(MmdsDiffKind::ExtensionChanged));
+        changes.push(document_change(ChangeKind::ExtensionChanged));
     }
 
     let before_nodes = nodes_by_id(before);
     let after_nodes = nodes_by_id(after);
     push_removed_added(
-        &mut events,
+        &mut changes,
         &before_nodes,
         &after_nodes,
-        MmdsDiffKind::NodeRemoved,
-        MmdsDiffKind::NodeAdded,
-        MmdsDiffSubject::Node,
+        ChangeKind::NodeRemoved,
+        ChangeKind::NodeAdded,
+        Subject::Node,
     );
-    push_node_semantic_events(&mut events, before, after, &before_nodes, &after_nodes);
-    push_node_geometry_events(&mut events, &before_nodes, &after_nodes);
-    push_global_reflow_event(&mut events, before, after, &before_nodes, &after_nodes);
+    push_node_semantic_events(&mut changes, before, after, &before_nodes, &after_nodes);
+    push_node_geometry_events(&mut changes, &before_nodes, &after_nodes);
+    push_global_reflow_event(&mut changes, before, after, &before_nodes, &after_nodes);
 
     let before_edges = edges_by_id(before);
     let after_edges = edges_by_id(after);
     let edge_matches =
         edge_correspondences(&before_edges, &after_edges, &before_nodes, &after_nodes);
-    push_edge_removed_added(&mut events, &edge_matches);
-    push_edge_semantic_events(&mut events, &edge_matches);
-    push_edge_geometry_events(&mut events, &edge_matches, &before_nodes, &after_nodes);
+    push_edge_removed_added(&mut changes, &edge_matches);
+    push_edge_semantic_events(&mut changes, &edge_matches);
+    push_edge_geometry_events(&mut changes, &edge_matches, &before_nodes, &after_nodes);
 
     let before_subgraphs = subgraphs_by_id(before);
     let after_subgraphs = subgraphs_by_id(after);
     push_removed_added(
-        &mut events,
+        &mut changes,
         &before_subgraphs,
         &after_subgraphs,
-        MmdsDiffKind::SubgraphRemoved,
-        MmdsDiffKind::SubgraphAdded,
-        MmdsDiffSubject::Subgraph,
+        ChangeKind::SubgraphRemoved,
+        ChangeKind::SubgraphAdded,
+        Subject::Subgraph,
     );
-    push_subgraph_semantic_events(&mut events, &before_subgraphs, &after_subgraphs);
-    push_subgraph_geometry_events(&mut events, &before_subgraphs, &after_subgraphs);
+    push_subgraph_semantic_events(&mut changes, &before_subgraphs, &after_subgraphs);
+    push_subgraph_geometry_events(&mut changes, &before_subgraphs, &after_subgraphs);
 
-    link_related_geometry(&mut events);
+    link_related_geometry(&mut changes);
 
-    MmdsDiff {
+    Diff {
         before_geometry_level: before.geometry_level.clone(),
         after_geometry_level: after.geometry_level.clone(),
-        events,
+        changes,
     }
 }
 
-impl MmdsDiff {
-    pub(crate) fn has_event(&self, kind: MmdsDiffKind, subject_id: &str) -> bool {
-        self.events
+#[cfg(test)]
+impl Diff {
+    pub(crate) fn has_change(&self, kind: ChangeKind, subject_id: &str) -> bool {
+        self.changes
             .iter()
-            .any(|event| event.kind == kind && event.subject.matches_id(subject_id))
+            .any(|change| change.kind == kind && change.subject.matches_id(subject_id))
     }
 
-    pub(crate) fn has_kind(&self, kind: MmdsDiffKind) -> bool {
-        self.events.iter().any(|event| event.kind == kind)
+    pub(crate) fn has_change_kind(&self, kind: ChangeKind) -> bool {
+        self.changes.iter().any(|change| change.kind == kind)
     }
 
     pub(crate) fn has_related_geometry_for(&self, subject_id: &str) -> bool {
-        self.events.iter().any(|event| {
-            event.subject.matches_id(subject_id)
-                && (event.kind.is_geometry_effect() || !event.related_event_ids.is_empty())
+        self.changes.iter().any(|change| {
+            change.subject.matches_id(subject_id)
+                && (change.kind.is_geometry() || !change.related_change_ids.is_empty())
         })
     }
 }
 
-impl MmdsDiffEvent {
+#[cfg(test)]
+impl Change {
     pub(crate) fn evidence_mentions(&self, needle: &str) -> bool {
         self.evidence
             .iter()
@@ -196,25 +228,16 @@ impl MmdsDiffEvent {
     }
 }
 
-impl MmdsDiffSubject {
-    fn matches_id(&self, subject_id: &str) -> bool {
-        match self {
-            Self::Document => subject_id.is_empty(),
-            Self::Node(id) | Self::Edge(id) | Self::Subgraph(id) => id == subject_id,
-        }
-    }
+fn document_change(kind: ChangeKind) -> Change {
+    document_change_with_evidence(kind, Vec::new())
 }
 
-fn document_event(kind: MmdsDiffKind) -> MmdsDiffEvent {
-    document_event_with_evidence(kind, Vec::new())
-}
-
-fn document_event_with_evidence(kind: MmdsDiffKind, evidence: Vec<String>) -> MmdsDiffEvent {
-    MmdsDiffEvent {
+fn document_change_with_evidence(kind: ChangeKind, evidence: Vec<String>) -> Change {
+    Change {
         kind,
-        subject: MmdsDiffSubject::Document,
+        subject: Subject::Document,
         evidence,
-        related_event_ids: Vec::new(),
+        related_change_ids: Vec::new(),
     }
 }
 
@@ -243,28 +266,28 @@ fn subgraphs_by_id(output: &Document) -> BTreeMap<String, &Subgraph> {
 }
 
 fn push_removed_added<T>(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before: &BTreeMap<String, T>,
     after: &BTreeMap<String, T>,
-    removed_kind: MmdsDiffKind,
-    added_kind: MmdsDiffKind,
-    subject: fn(String) -> MmdsDiffSubject,
+    removed_kind: ChangeKind,
+    added_kind: ChangeKind,
+    subject: fn(String) -> Subject,
 ) {
     for id in before.keys().filter(|id| !after.contains_key(*id)) {
-        events.push(MmdsDiffEvent {
+        events.push(Change {
             kind: removed_kind,
             subject: subject(id.clone()),
             evidence: Vec::new(),
-            related_event_ids: Vec::new(),
+            related_change_ids: Vec::new(),
         });
     }
 
     for id in after.keys().filter(|id| !before.contains_key(*id)) {
-        events.push(MmdsDiffEvent {
+        events.push(Change {
             kind: added_kind,
             subject: subject(id.clone()),
             evidence: Vec::new(),
-            related_event_ids: Vec::new(),
+            related_change_ids: Vec::new(),
         });
     }
 }
@@ -592,16 +615,13 @@ fn edge_endpoints_exist_in_both_outputs(
     .all(|id| before_nodes.contains_key(id) && after_nodes.contains_key(id))
 }
 
-fn push_edge_removed_added(
-    events: &mut Vec<MmdsDiffEvent>,
-    correspondences: &EdgeCorrespondences<'_>,
-) {
+fn push_edge_removed_added(events: &mut Vec<Change>, correspondences: &EdgeCorrespondences<'_>) {
     for (id, _) in &correspondences.removed {
-        events.push(edge_event(MmdsDiffKind::EdgeRemoved, id));
+        events.push(edge_change(ChangeKind::EdgeRemoved, id));
     }
 
     for (id, _) in &correspondences.added {
-        events.push(edge_event(MmdsDiffKind::EdgeAdded, id));
+        events.push(edge_change(ChangeKind::EdgeAdded, id));
     }
 }
 
@@ -623,7 +643,7 @@ fn edge_match_evidence(edge_match: &EdgeMatch<'_>) -> Vec<String> {
 }
 
 fn push_node_semantic_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before_output: &Document,
     after_output: &Document,
     before: &BTreeMap<String, &Node>,
@@ -635,31 +655,28 @@ fn push_node_semantic_events(
         };
 
         if before_node.label != after_node.label {
-            events.push(node_event(MmdsDiffKind::NodeLabelChanged, id));
+            events.push(node_change(ChangeKind::NodeLabelChanged, id));
         }
         if before_node.shape != after_node.shape {
-            events.push(node_event(MmdsDiffKind::NodeShapeChanged, id));
+            events.push(node_change(ChangeKind::NodeShapeChanged, id));
         }
         if before_node.parent != after_node.parent {
-            events.push(node_event(MmdsDiffKind::NodeParentChanged, id));
+            events.push(node_change(ChangeKind::NodeParentChanged, id));
         }
         if node_style_payload(before_output, id) != node_style_payload(after_output, id) {
-            events.push(node_event(MmdsDiffKind::NodeStyleChanged, id));
+            events.push(node_change(ChangeKind::NodeStyleChanged, id));
         }
     }
 }
 
-fn push_edge_semantic_events(
-    events: &mut Vec<MmdsDiffEvent>,
-    correspondences: &EdgeCorrespondences<'_>,
-) {
+fn push_edge_semantic_events(events: &mut Vec<Change>, correspondences: &EdgeCorrespondences<'_>) {
     for edge_match in &correspondences.matches {
         let before_edge = edge_match.before;
         let after_edge = edge_match.after;
 
         if before_edge.source != after_edge.source || before_edge.target != after_edge.target {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::EdgeReconnected,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::EdgeReconnected,
                 edge_match,
                 Vec::new(),
             ));
@@ -667,22 +684,22 @@ fn push_edge_semantic_events(
         if before_edge.from_subgraph != after_edge.from_subgraph
             || before_edge.to_subgraph != after_edge.to_subgraph
         {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::EdgeEndpointIntentChanged,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::EdgeEndpointIntentChanged,
                 edge_match,
                 Vec::new(),
             ));
         }
         if before_edge.label != after_edge.label {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::EdgeLabelChanged,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::EdgeLabelChanged,
                 edge_match,
                 Vec::new(),
             ));
         }
         if edge_style_changed(before_edge, after_edge) {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::EdgeStyleChanged,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::EdgeStyleChanged,
                 edge_match,
                 Vec::new(),
             ));
@@ -691,7 +708,7 @@ fn push_edge_semantic_events(
 }
 
 fn push_node_geometry_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before: &BTreeMap<String, &Node>,
     after: &BTreeMap<String, &Node>,
 ) {
@@ -704,8 +721,8 @@ fn push_node_geometry_events(
         let dy = after_node.position.y - before_node.position.y;
         let distance = dx.hypot(dy);
         if distance > DISPLAY_EPS {
-            events.push(node_event_with_evidence(
-                MmdsDiffKind::NodeMoved,
+            events.push(node_change_with_evidence(
+                ChangeKind::NodeMoved,
                 id,
                 vec![format!(
                     "displacement dx={dx:.2}; dy={dy:.2}; distance={distance:.2}"
@@ -716,8 +733,8 @@ fn push_node_geometry_events(
         let width_delta = after_node.size.width - before_node.size.width;
         let height_delta = after_node.size.height - before_node.size.height;
         if width_delta.abs() > DISPLAY_EPS || height_delta.abs() > DISPLAY_EPS {
-            events.push(node_event_with_evidence(
-                MmdsDiffKind::NodeResized,
+            events.push(node_change_with_evidence(
+                ChangeKind::NodeResized,
                 id,
                 vec![format!(
                     "size width_delta={width_delta:.2}; height_delta={height_delta:.2}"
@@ -728,7 +745,7 @@ fn push_node_geometry_events(
 }
 
 fn push_global_reflow_event(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before_output: &Document,
     after_output: &Document,
     before: &BTreeMap<String, &Node>,
@@ -754,8 +771,8 @@ fn push_global_reflow_event(
     }
 
     if moved_ids.len() >= 3 && moved_ids.len() * 5 >= unchanged_count.max(1) {
-        events.push(document_event_with_evidence(
-            MmdsDiffKind::GlobalReflowDetected,
+        events.push(document_change_with_evidence(
+            ChangeKind::GlobalReflowDetected,
             vec![format!(
                 "unchanged_nodes_moved={}/{}; threshold=min(3 nodes, 20 percent); sample={:?}",
                 moved_ids.len(),
@@ -780,7 +797,7 @@ fn node_semantics_same(
 }
 
 fn push_edge_geometry_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     correspondences: &EdgeCorrespondences<'_>,
     before_nodes: &BTreeMap<String, &Node>,
     after_nodes: &BTreeMap<String, &Node>,
@@ -791,8 +808,8 @@ fn push_edge_geometry_events(
 
         let path = path_delta(before_edge, after_edge);
         if path.changed {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::EdgeRerouted,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::EdgeRerouted,
                 edge_match,
                 vec![format!(
                     "path point_count_delta={}; bend_count_delta={}; length_delta={:.2}; envelope_changed={}",
@@ -814,8 +831,8 @@ fn push_edge_geometry_events(
             ),
         ] {
             if before_face != after_face {
-                events.push(edge_event_for_match_with_evidence(
-                    MmdsDiffKind::EndpointFaceChanged,
+                events.push(edge_change_for_match_with_evidence(
+                    ChangeKind::EndpointFaceChanged,
                     edge_match,
                     vec![format!(
                         "visible {endpoint} endpoint face {before_face}->{after_face}"
@@ -837,8 +854,8 @@ fn push_edge_geometry_events(
             ),
         ] {
             if !same_port_intent(before_port, after_port) {
-                events.push(edge_event_for_match_with_evidence(
-                    MmdsDiffKind::PortIntentChanged,
+                events.push(edge_change_for_match_with_evidence(
+                    ChangeKind::PortIntentChanged,
                     edge_match,
                     vec![format!(
                         "logical {endpoint}_port {}->{}",
@@ -862,7 +879,7 @@ fn push_edge_geometry_events(
 }
 
 fn push_subgraph_semantic_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before: &BTreeMap<String, &Subgraph>,
     after: &BTreeMap<String, &Subgraph>,
 ) {
@@ -872,28 +889,28 @@ fn push_subgraph_semantic_events(
         };
 
         if before_subgraph.title != after_subgraph.title {
-            events.push(subgraph_event(MmdsDiffKind::SubgraphTitleChanged, id));
+            events.push(subgraph_change(ChangeKind::SubgraphTitleChanged, id));
         }
         if before_subgraph.direction != after_subgraph.direction {
-            events.push(subgraph_event(MmdsDiffKind::SubgraphDirectionChanged, id));
+            events.push(subgraph_change(ChangeKind::SubgraphDirectionChanged, id));
         }
         if before_subgraph.parent != after_subgraph.parent {
-            events.push(subgraph_event(MmdsDiffKind::SubgraphParentChanged, id));
+            events.push(subgraph_change(ChangeKind::SubgraphParentChanged, id));
         }
         if string_set(&before_subgraph.children) != string_set(&after_subgraph.children)
             || string_set(&before_subgraph.concurrent_regions)
                 != string_set(&after_subgraph.concurrent_regions)
         {
-            events.push(subgraph_event(MmdsDiffKind::SubgraphMembershipChanged, id));
+            events.push(subgraph_change(ChangeKind::SubgraphMembershipChanged, id));
         }
         if before_subgraph.invisible != after_subgraph.invisible {
-            events.push(subgraph_event(MmdsDiffKind::SubgraphVisibilityChanged, id));
+            events.push(subgraph_change(ChangeKind::SubgraphVisibilityChanged, id));
         }
     }
 }
 
 fn push_subgraph_geometry_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     before: &BTreeMap<String, &Subgraph>,
     after: &BTreeMap<String, &Subgraph>,
 ) {
@@ -906,8 +923,8 @@ fn push_subgraph_geometry_events(
             before_subgraph.bounds.as_ref(),
             after_subgraph.bounds.as_ref(),
         ) {
-            events.push(subgraph_event_with_evidence(
-                MmdsDiffKind::SubgraphBoundsChanged,
+            events.push(subgraph_change_with_evidence(
+                ChangeKind::SubgraphBoundsChanged,
                 id,
                 vec![option_bounds_evidence(
                     "subgraph_bounds",
@@ -920,14 +937,14 @@ fn push_subgraph_geometry_events(
 }
 
 fn push_label_geometry_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     edge_match: &EdgeMatch<'_>,
     before: &Edge,
     after: &Edge,
 ) {
     if before.label_side != after.label_side {
-        events.push(edge_event_for_match_with_evidence(
-            MmdsDiffKind::LabelSideChanged,
+        events.push(edge_change_for_match_with_evidence(
+            ChangeKind::LabelSideChanged,
             edge_match,
             vec![format!(
                 "label_side {:?}->{:?}",
@@ -946,15 +963,15 @@ fn push_label_geometry_events(
             let height_delta = after_rect.height - before_rect.height;
 
             if dx.hypot(dy) > DISPLAY_EPS {
-                events.push(edge_event_for_match_with_evidence(
-                    MmdsDiffKind::LabelMoved,
+                events.push(edge_change_for_match_with_evidence(
+                    ChangeKind::LabelMoved,
                     edge_match,
                     vec![format!("label_rect center_dx={dx:.2}; center_dy={dy:.2}")],
                 ));
             }
             if width_delta.abs() > DISPLAY_EPS || height_delta.abs() > DISPLAY_EPS {
-                events.push(edge_event_for_match_with_evidence(
-                    MmdsDiffKind::LabelResized,
+                events.push(edge_change_for_match_with_evidence(
+                    ChangeKind::LabelResized,
                     edge_match,
                     vec![format!(
                         "label_rect width_delta={width_delta:.2}; height_delta={height_delta:.2}"
@@ -963,13 +980,13 @@ fn push_label_geometry_events(
             }
         }
         (None, Some(_)) | (Some(_), None) => {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::LabelMoved,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::LabelMoved,
                 edge_match,
                 vec!["label_rect presence changed".to_string()],
             ));
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::LabelResized,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::LabelResized,
                 edge_match,
                 vec!["label_rect presence changed".to_string()],
             ));
@@ -978,8 +995,8 @@ fn push_label_geometry_events(
             let before_pos = before.label_position.as_ref();
             let after_pos = after.label_position.as_ref();
             if option_position_moved(before_pos, after_pos) {
-                events.push(edge_event_for_match_with_evidence(
-                    MmdsDiffKind::LabelMoved,
+                events.push(edge_change_for_match_with_evidence(
+                    ChangeKind::LabelMoved,
                     edge_match,
                     vec!["label_position changed without label_rect".to_string()],
                 ));
@@ -989,7 +1006,7 @@ fn push_label_geometry_events(
 }
 
 fn push_path_port_divergence_events(
-    events: &mut Vec<MmdsDiffEvent>,
+    events: &mut Vec<Change>,
     edge_match: &EdgeMatch<'_>,
     before_edge: &Edge,
     after_edge: &Edge,
@@ -1027,8 +1044,8 @@ fn push_path_port_divergence_events(
         let before_diverged = path_port_diverged(before_path_face.as_str(), before_port_face);
         let after_diverged = path_port_diverged(after_path_face.as_str(), after_port_face);
         if before_diverged != after_diverged {
-            events.push(edge_event_for_match_with_evidence(
-                MmdsDiffKind::PathPortDivergenceChanged,
+            events.push(edge_change_for_match_with_evidence(
+                ChangeKind::PathPortDivergenceChanged,
                 edge_match,
                 vec![format!(
                     "path_port_divergence {endpoint} {before_diverged}->{after_diverged}; visible {before_path_face}->{after_path_face}; logical {endpoint}_port {:?}->{:?}",
@@ -1294,11 +1311,11 @@ fn option_bounds_evidence(label: &str, before: Option<&Bounds>, after: Option<&B
     }
 }
 
-fn link_related_geometry(events: &mut [MmdsDiffEvent]) {
+fn link_related_geometry(events: &mut [Change]) {
     let geometry_events = events
         .iter()
         .enumerate()
-        .filter(|(_, event)| event.kind.is_geometry_effect())
+        .filter(|(_, event)| event.kind.is_geometry())
         .map(|(index, event)| (index, event.subject.clone(), event.kind))
         .collect::<Vec<_>>();
 
@@ -1309,10 +1326,10 @@ fn link_related_geometry(events: &mut [MmdsDiffEvent]) {
 
         for (index, subject, kind) in &geometry_events {
             if *subject == event.subject {
-                event.related_event_ids.push(*index);
+                event.related_change_ids.push(*index);
                 event
                     .evidence
-                    .push(format!("related_geometry event_id={index}; kind={kind:?}"));
+                    .push(format!("related_geometry change_id={index}; kind={kind:?}"));
             }
         }
     }
@@ -1338,54 +1355,50 @@ fn string_set(values: &[String]) -> BTreeSet<&str> {
     values.iter().map(String::as_str).collect()
 }
 
-fn node_event(kind: MmdsDiffKind, id: &str) -> MmdsDiffEvent {
-    node_event_with_evidence(kind, id, Vec::new())
+fn node_change(kind: ChangeKind, id: &str) -> Change {
+    node_change_with_evidence(kind, id, Vec::new())
 }
 
-fn node_event_with_evidence(kind: MmdsDiffKind, id: &str, evidence: Vec<String>) -> MmdsDiffEvent {
-    MmdsDiffEvent {
+fn node_change_with_evidence(kind: ChangeKind, id: &str, evidence: Vec<String>) -> Change {
+    Change {
         kind,
-        subject: MmdsDiffSubject::Node(id.to_string()),
+        subject: Subject::Node(id.to_string()),
         evidence,
-        related_event_ids: Vec::new(),
+        related_change_ids: Vec::new(),
     }
 }
 
-fn edge_event(kind: MmdsDiffKind, id: &str) -> MmdsDiffEvent {
-    edge_event_with_evidence(kind, id, Vec::new())
+fn edge_change(kind: ChangeKind, id: &str) -> Change {
+    edge_change_with_evidence(kind, id, Vec::new())
 }
 
-fn edge_event_with_evidence(kind: MmdsDiffKind, id: &str, evidence: Vec<String>) -> MmdsDiffEvent {
-    MmdsDiffEvent {
+fn edge_change_with_evidence(kind: ChangeKind, id: &str, evidence: Vec<String>) -> Change {
+    Change {
         kind,
-        subject: MmdsDiffSubject::Edge(id.to_string()),
+        subject: Subject::Edge(id.to_string()),
         evidence,
-        related_event_ids: Vec::new(),
+        related_change_ids: Vec::new(),
     }
 }
 
-fn edge_event_for_match_with_evidence(
-    kind: MmdsDiffKind,
+fn edge_change_for_match_with_evidence(
+    kind: ChangeKind,
     edge_match: &EdgeMatch<'_>,
     mut evidence: Vec<String>,
-) -> MmdsDiffEvent {
+) -> Change {
     evidence.extend(edge_match_evidence(edge_match));
-    edge_event_with_evidence(kind, edge_match.after_id.as_str(), evidence)
+    edge_change_with_evidence(kind, edge_match.after_id.as_str(), evidence)
 }
 
-fn subgraph_event(kind: MmdsDiffKind, id: &str) -> MmdsDiffEvent {
-    subgraph_event_with_evidence(kind, id, Vec::new())
+fn subgraph_change(kind: ChangeKind, id: &str) -> Change {
+    subgraph_change_with_evidence(kind, id, Vec::new())
 }
 
-fn subgraph_event_with_evidence(
-    kind: MmdsDiffKind,
-    id: &str,
-    evidence: Vec<String>,
-) -> MmdsDiffEvent {
-    MmdsDiffEvent {
+fn subgraph_change_with_evidence(kind: ChangeKind, id: &str, evidence: Vec<String>) -> Change {
+    Change {
         kind,
-        subject: MmdsDiffSubject::Subgraph(id.to_string()),
+        subject: Subject::Subgraph(id.to_string()),
         evidence,
-        related_event_ids: Vec::new(),
+        related_change_ids: Vec::new(),
     }
 }

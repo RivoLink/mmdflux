@@ -4,12 +4,10 @@
 //! Mermaid regeneration helpers, validation, and hydration to `Diagram` for
 //! adapter workflows. Replay rendering lives in `runtime::mmds`.
 
-#[cfg(test)]
-pub(crate) mod commands;
 pub(crate) mod detect;
-#[cfg(test)]
-pub(crate) mod diff;
+pub mod diff;
 pub(crate) mod document;
+pub mod events;
 pub(crate) mod hydrate;
 mod mermaid;
 pub(crate) mod parse;
@@ -54,6 +52,25 @@ use serde_json::{Map, Value};
 
 #[cfg(test)]
 mod regression_tests;
+
+/// Subject associated with an MMDS model event or snapshot diff change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Subject {
+    Document,
+    Node(String),
+    Edge(String),
+    Subgraph(String),
+}
+
+impl Subject {
+    #[cfg(test)]
+    pub(crate) fn matches_id(&self, subject_id: &str) -> bool {
+        match self {
+            Self::Document => subject_id.is_empty(),
+            Self::Node(id) | Self::Edge(id) | Self::Subgraph(id) => id == subject_id,
+        }
+    }
+}
 
 /// Parse-time error for MMDS input.
 #[derive(Debug, Clone)]

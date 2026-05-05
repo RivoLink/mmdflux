@@ -1168,7 +1168,7 @@ fn docs_and_schema_reference_view_extension_contract() {
     let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
     assert!(docs.contains("mmdflux::views"));
     assert!(docs.contains("ViewSpec"));
-    assert!(docs.contains("apply_view"));
+    assert!(docs.contains("project"));
     assert!(docs.contains("ViewEvent"));
     assert!(docs.contains("org.mmdflux.view.v1"));
     assert!(docs.contains("[\"e0\", \"e2\", \"e4\"]"));

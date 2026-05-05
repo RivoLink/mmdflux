@@ -45,8 +45,7 @@ const MMDS_INPUT: &str = r#"{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let payload: Document = MMDS_INPUT.parse()?;
     let negotiation = evaluate_profiles_for_document(&payload);
-    let text =
-        mmdflux::render_mmds_document(&payload, OutputFormat::Text, &RenderConfig::default())?;
+    let text = mmdflux::render_document(&payload, OutputFormat::Text, &RenderConfig::default())?;
     let mermaid = generate_mermaid(&payload)?;
 
     println!("supported profiles: {:?}", negotiation.supported);

@@ -34,11 +34,15 @@ pub fn detect_diagram(input: &str) -> Option<&'static str> {
     }
 }
 
-/// Detect, parse, and render a diagram in one call.
+/// Detect, parse, and render a diagram from text input in one call.
 ///
-/// This is the primary entrypoint for both CLI and WASM adapters.
-/// Adapter-specific policy (format defaults, color resolution) should be
-/// applied to `config` before calling this function.
+/// The input can be Mermaid source or MMDS JSON. The frontend is auto-detected
+/// before dispatch, so adapters can pass user-provided diagram text without
+/// pre-selecting the wire format.
+///
+/// Use [`render_document`] when you already hold a parsed [`crate::mmds::Document`],
+/// for example after [`materialize_diagram`] or [`crate::views::project`].
+/// Use [`render_diagram`] when you have text input.
 pub fn render_diagram(
     input: &str,
     format: OutputFormat,
@@ -104,13 +108,13 @@ pub fn render_diagram(
     payload::render_payload(payload, format, &effective_config)
 }
 
-/// Detect, parse, solve, and materialize a graph-family diagram as MMDS.
+/// Detect, parse, solve, and materialize graph-family text input as MMDS.
 ///
-/// This is the typed counterpart to `render_diagram(input,
-/// OutputFormat::Mmds, config)`. It returns a graph-family
-/// [`crate::mmds::Document`] directly instead of serializing to JSON first.
-/// For MMDS input, this is equivalent to [`crate::mmds::Document::try_from`]
-/// and `config` is unused.
+/// The input can be Mermaid source or MMDS JSON. This is the typed counterpart
+/// to `render_diagram(input, OutputFormat::Mmds, config)`: it returns a
+/// graph-family [`crate::mmds::Document`] directly instead of serializing to
+/// JSON first. For MMDS JSON input, this is equivalent to parsing the
+/// [`crate::mmds::Document`] and `config` is unused.
 pub fn materialize_diagram(
     input: &str,
     config: &RenderConfig,
@@ -147,11 +151,12 @@ pub fn materialize_diagram(
 
 /// Render a parsed graph-family MMDS document.
 ///
-/// This is the typed replay path for consumers that already hold
-/// [`crate::mmds::Document`], such as materialized view pipelines. It avoids
-/// serializing the document to JSON just to feed it back through
-/// [`render_diagram`].
-pub fn render_mmds_document(
+/// Use this when you already have a [`crate::mmds::Document`], for example
+/// after [`materialize_diagram`] or [`crate::views::project`]. Use
+/// [`render_diagram`] when you have text input, either Mermaid source or MMDS
+/// JSON. Rendering a document directly avoids serializing it to JSON just to
+/// feed it back through the text-input facade.
+pub fn render_document(
     document: &crate::mmds::Document,
     format: OutputFormat,
     config: &RenderConfig,

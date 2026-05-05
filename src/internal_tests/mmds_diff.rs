@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::layout_stability::mutations;
 use crate::graph::GeometryLevel;
-use crate::mmds::diff::{MmdsDiff, MmdsDiffKind};
+use crate::mmds::diff::{ChangeKind, Diff};
 use crate::{OutputFormat, RenderConfig};
 
 #[test]
@@ -12,13 +12,13 @@ fn mmds_diff_model_identical_outputs_have_no_events() {
     let before = parse_routed("graph TD; A --> B");
     let after = parse_routed("graph TD; A --> B");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.events.is_empty(), "{diff:#?}");
+    assert!(diff.changes.is_empty(), "{diff:#?}");
     assert_eq!(diff.before_geometry_level, "routed");
     assert_eq!(diff.after_geometry_level, "routed");
 
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::GeometryLevelChanged, ""));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::GeometryLevelChanged, ""));
 }
 
 #[test]
@@ -26,10 +26,10 @@ fn mmds_diff_identity_reports_node_and_edge_additions() {
     let before = parse_routed("graph TD; A --> B");
     let after = parse_routed("graph TD; A --> B; B --> C");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeAdded, "C"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e1"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeAdded, "C"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e1"));
 }
 
 #[test]
@@ -37,10 +37,10 @@ fn mmds_diff_identity_treats_id_change_as_remove_add() {
     let before = parse_routed("graph TD; Lint --> Build");
     let after = parse_routed("graph TD; Audit --> Build");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeRemoved, "Lint"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeAdded, "Audit"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeRemoved, "Lint"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeAdded, "Audit"));
 }
 
 #[test]
@@ -48,10 +48,10 @@ fn mmds_diff_semantic_reports_node_label_and_shape_changes() {
     let before = parse_layout("graph TD; A[Build]");
     let after = parse_layout("graph TD; A{Deploy}");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeLabelChanged, "A"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeShapeChanged, "A"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeLabelChanged, "A"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeShapeChanged, "A"));
 }
 
 #[test]
@@ -59,10 +59,10 @@ fn mmds_diff_semantic_reports_edge_label_and_style_changes() {
     let before = parse_routed("graph TD; A -->|ok| B");
     let after = parse_routed("graph TD; A -.->|warn| B");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e0"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeStyleChanged, "e0"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeLabelChanged, "e0"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeStyleChanged, "e0"));
 }
 
 #[test]
@@ -75,16 +75,16 @@ fn mmds_diff_edge_matching_shifted_id_reports_label_change_not_remove_add() {
     after.edges[1].label = Some("new".to_string());
     after.edges[2].id = "e3".to_string();
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e2"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e1"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e2"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeLabelChanged, "e2"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeRemoved, "e1"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e2"));
     assert!(
-        diff.events.iter().any(|event| {
+        diff.changes.iter().any(|event| {
             matches!(
                 &event.subject,
-                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+                crate::mmds::Subject::Edge(id) if id == "e2"
             ) && event.evidence_mentions("matched_by=fallback")
                 && event.evidence_mentions("before_id=e1")
                 && event.evidence_mentions("after_id=e2")
@@ -102,14 +102,14 @@ fn mmds_diff_edge_matching_shifted_id_uses_after_id_for_routed_evidence() {
     after.edges[1].id = "e2".to_string();
     after.edges[1].path = Some(vec![[0.0, 0.0], [40.0, 0.0], [40.0, 20.0]]);
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRerouted, "e2"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeRerouted, "e2"));
     assert!(
-        diff.events.iter().any(|event| {
+        diff.changes.iter().any(|event| {
             matches!(
                 &event.subject,
-                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+                crate::mmds::Subject::Edge(id) if id == "e2"
             ) && event.evidence_mentions("matched_by=fallback")
                 && event.evidence_mentions("before_id=e1")
                 && event.evidence_mentions("after_id=e2")
@@ -127,13 +127,13 @@ fn mmds_diff_edge_matching_m01_preserves_split_and_matches_downstream_shift() {
 ",
     );
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::NodeAdded, "X"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e1"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e1"));
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e2"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e3"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::NodeAdded, "X"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeRemoved, "e1"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e1"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e2"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e3"));
 }
 
 #[test]
@@ -141,11 +141,11 @@ fn mmds_diff_edge_matching_keeps_existing_node_reconnect_as_reconnected() {
     let before = parse_routed("graph TD; A --> B; C[Alternative]");
     let after = parse_routed("graph TD; A --> C; B[Target]");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeReconnected, "e0"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRemoved, "e0"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeAdded, "e0"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeReconnected, "e0"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeRemoved, "e0"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeAdded, "e0"));
 }
 
 #[test]
@@ -158,15 +158,15 @@ fn mmds_diff_edge_matching_parallel_edges_prefers_label_tiebreaker() {
     after.edges[1].id = "e2".to_string();
     after.edges[1].label = Some("alpha changed".to_string());
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e2"));
-    assert!(!diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged, "e1"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeLabelChanged, "e2"));
+    assert!(!diff.has_change(crate::mmds::diff::ChangeKind::EdgeLabelChanged, "e1"));
     assert!(
-        diff.events.iter().any(|event| {
+        diff.changes.iter().any(|event| {
             matches!(
                 &event.subject,
-                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e2"
+                crate::mmds::Subject::Edge(id) if id == "e2"
             ) && event.evidence_mentions("matched_by=fallback")
                 && event.evidence_mentions("before_id=e0")
                 && event.evidence_mentions("after_id=e2")
@@ -184,14 +184,14 @@ fn mmds_diff_edge_matching_parallel_edges_falls_back_to_declaration_order() {
     after.edges[0].path = Some(vec![[0.0, 0.0], [40.0, 0.0], [40.0, 20.0]]);
     after.edges[1].id = "e2".to_string();
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::EdgeRerouted, "e1"));
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::EdgeRerouted, "e1"));
     assert!(
-        diff.events.iter().any(|event| {
+        diff.changes.iter().any(|event| {
             matches!(
                 &event.subject,
-                crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e1"
+                crate::mmds::Subject::Edge(id) if id == "e1"
             ) && event.evidence_mentions("matched_by=fallback")
                 && event.evidence_mentions("before_id=e0")
                 && event.evidence_mentions("after_id=e1")
@@ -218,15 +218,15 @@ fn mmds_diff_semantic_reports_subgraph_title_direction_and_membership_changes() 
         end",
     );
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_event(crate::mmds::diff::MmdsDiffKind::SubgraphTitleChanged, "sg"));
-    assert!(diff.has_event(
-        crate::mmds::diff::MmdsDiffKind::SubgraphDirectionChanged,
+    assert!(diff.has_change(crate::mmds::diff::ChangeKind::SubgraphTitleChanged, "sg"));
+    assert!(diff.has_change(
+        crate::mmds::diff::ChangeKind::SubgraphDirectionChanged,
         "sg"
     ));
-    assert!(diff.has_event(
-        crate::mmds::diff::MmdsDiffKind::SubgraphMembershipChanged,
+    assert!(diff.has_change(
+        crate::mmds::diff::ChangeKind::SubgraphMembershipChanged,
         "sg"
     ));
 }
@@ -236,12 +236,12 @@ fn mmds_diff_routed_separates_path_from_port_intent() {
     let before = parse_routed("graph TD; A --> B");
     let after = parse_routed("graph LR; A --> B");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_kind(crate::mmds::diff::MmdsDiffKind::EdgeRerouted));
-    assert!(diff.has_kind(crate::mmds::diff::MmdsDiffKind::EndpointFaceChanged));
-    assert!(diff.events.iter().all(|event| {
-        event.kind != crate::mmds::diff::MmdsDiffKind::PortIntentChanged
+    assert!(diff.has_change_kind(crate::mmds::diff::ChangeKind::EdgeRerouted));
+    assert!(diff.has_change_kind(crate::mmds::diff::ChangeKind::EndpointFaceChanged));
+    assert!(diff.changes.iter().all(|event| {
+        event.kind != crate::mmds::diff::ChangeKind::PortIntentChanged
             || event.evidence_mentions("logical")
     }));
 }
@@ -251,9 +251,9 @@ fn mmds_diff_geometry_reports_label_rect_change() {
     let before = render_pair_before_routed("M14");
     let after = render_pair_after_routed("M14");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_kind(crate::mmds::diff::MmdsDiffKind::LabelResized));
+    assert!(diff.has_change_kind(crate::mmds::diff::ChangeKind::LabelResized));
 }
 
 #[test]
@@ -261,10 +261,10 @@ fn mmds_diff_reflow_suppresses_tiny_unchanged_node_movement() {
     let before = parse_routed("graph TD; A --> B");
     let after = output_with_node_shift(&before, "A", 0.5, 0.0);
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(!diff.has_kind(crate::mmds::diff::MmdsDiffKind::NodeMoved));
-    assert!(!diff.has_kind(crate::mmds::diff::MmdsDiffKind::GlobalReflowDetected));
+    assert!(!diff.has_change_kind(crate::mmds::diff::ChangeKind::NodeMoved));
+    assert!(!diff.has_change_kind(crate::mmds::diff::ChangeKind::GlobalReflowDetected));
 }
 
 #[test]
@@ -272,12 +272,12 @@ fn mmds_diff_reflow_reports_many_unchanged_nodes_moving() {
     let before = render_pair_before_routed("M14");
     let after = render_pair_after_routed("M14");
 
-    let diff = crate::mmds::diff::diff_outputs(&before, &after);
+    let diff = crate::mmds::diff::diff_documents(&before, &after);
 
-    assert!(diff.has_kind(crate::mmds::diff::MmdsDiffKind::EdgeLabelChanged));
+    assert!(diff.has_change_kind(crate::mmds::diff::ChangeKind::EdgeLabelChanged));
     assert!(
         diff.has_related_geometry_for("e0")
-            || diff.has_kind(crate::mmds::diff::MmdsDiffKind::EdgeRerouted)
+            || diff.has_change_kind(crate::mmds::diff::ChangeKind::EdgeRerouted)
     );
 }
 
@@ -285,44 +285,44 @@ fn mmds_diff_reflow_reports_many_unchanged_nodes_moving() {
 fn mmds_diff_tier_a_reports_expected_event_families() {
     let summaries = run_tier_a_diff_summaries();
 
-    assert!(summaries["M01"].has_kind(MmdsDiffKind::NodeAdded));
-    assert!(summaries["M05"].has_kind(MmdsDiffKind::NodeLabelChanged));
-    assert!(summaries["M07"].has_kind(MmdsDiffKind::EdgeStyleChanged));
-    assert!(!summaries["M07"].has_kind(MmdsDiffKind::EdgeRerouted));
-    assert!(summaries["M10"].has_kind(MmdsDiffKind::SubgraphDirectionChanged));
+    assert!(summaries["M01"].has_change_kind(ChangeKind::NodeAdded));
+    assert!(summaries["M05"].has_change_kind(ChangeKind::NodeLabelChanged));
+    assert!(summaries["M07"].has_change_kind(ChangeKind::EdgeStyleChanged));
+    assert!(!summaries["M07"].has_change_kind(ChangeKind::EdgeRerouted));
+    assert!(summaries["M10"].has_change_kind(ChangeKind::SubgraphDirectionChanged));
 }
 
 #[test]
 fn mmds_diff_edge_matching_tier_a_controls_stay_calibrated() {
     let summaries = run_tier_a_diff_summaries();
 
-    assert!(summaries["M01"].has_event(MmdsDiffKind::NodeAdded, "X"));
-    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeRemoved, "e1"));
-    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeAdded, "e1"));
-    assert!(summaries["M01"].has_event(MmdsDiffKind::EdgeAdded, "e2"));
+    assert!(summaries["M01"].has_change(ChangeKind::NodeAdded, "X"));
+    assert!(summaries["M01"].has_change(ChangeKind::EdgeRemoved, "e1"));
+    assert!(summaries["M01"].has_change(ChangeKind::EdgeAdded, "e1"));
+    assert!(summaries["M01"].has_change(ChangeKind::EdgeAdded, "e2"));
 
     for pair_id in ["M04", "M11", "M19", "M20", "M21"] {
         assert!(
-            summaries[pair_id].has_kind(MmdsDiffKind::EdgeAdded),
+            summaries[pair_id].has_change_kind(ChangeKind::EdgeAdded),
             "{pair_id} should stay an edge-addition control"
         );
         assert!(
-            !summaries[pair_id].has_kind(MmdsDiffKind::EdgeRemoved),
+            !summaries[pair_id].has_change_kind(ChangeKind::EdgeRemoved),
             "{pair_id} should not report fallback-induced edge removals"
         );
     }
 
-    assert!(summaries["M05"].has_kind(MmdsDiffKind::NodeLabelChanged));
-    assert!(summaries["M07"].has_kind(MmdsDiffKind::EdgeStyleChanged));
-    assert!(!summaries["M07"].has_kind(MmdsDiffKind::EdgeRerouted));
-    assert!(summaries["S02"].has_kind(MmdsDiffKind::EdgeLabelChanged));
-    assert!(!summaries["S02"].has_kind(MmdsDiffKind::EdgeRerouted));
-    assert!(summaries["S03"].has_kind(MmdsDiffKind::EdgeStyleChanged));
-    assert!(!summaries["S03"].has_kind(MmdsDiffKind::EdgeRerouted));
+    assert!(summaries["M05"].has_change_kind(ChangeKind::NodeLabelChanged));
+    assert!(summaries["M07"].has_change_kind(ChangeKind::EdgeStyleChanged));
+    assert!(!summaries["M07"].has_change_kind(ChangeKind::EdgeRerouted));
+    assert!(summaries["S02"].has_change_kind(ChangeKind::EdgeLabelChanged));
+    assert!(!summaries["S02"].has_change_kind(ChangeKind::EdgeRerouted));
+    assert!(summaries["S03"].has_change_kind(ChangeKind::EdgeStyleChanged));
+    assert!(!summaries["S03"].has_change_kind(ChangeKind::EdgeRerouted));
 
-    assert!(summaries["M08"].has_kind(MmdsDiffKind::SubgraphAdded));
-    assert!(summaries["M09"].has_kind(MmdsDiffKind::SubgraphMembershipChanged));
-    assert!(summaries["M10"].has_kind(MmdsDiffKind::SubgraphDirectionChanged));
+    assert!(summaries["M08"].has_change_kind(ChangeKind::SubgraphAdded));
+    assert!(summaries["M09"].has_change_kind(ChangeKind::SubgraphMembershipChanged));
+    assert!(summaries["M10"].has_change_kind(ChangeKind::SubgraphDirectionChanged));
 }
 
 fn parse_layout(source: &str) -> crate::mmds::Document {
@@ -352,7 +352,7 @@ fn output_with_node_shift(
     shifted
 }
 
-fn run_tier_a_diff_summaries() -> BTreeMap<&'static str, MmdsDiff> {
+fn run_tier_a_diff_summaries() -> BTreeMap<&'static str, Diff> {
     mutations::tier_a_pairs()
         .iter()
         .map(|pair| {
@@ -361,7 +361,7 @@ fn run_tier_a_diff_summaries() -> BTreeMap<&'static str, MmdsDiff> {
 
             (
                 pair.id,
-                crate::mmds::diff::diff_outputs(&parse_routed(&before), &parse_routed(&after)),
+                crate::mmds::diff::diff_documents(&parse_routed(&before), &parse_routed(&after)),
             )
         })
         .collect()

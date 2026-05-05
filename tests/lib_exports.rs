@@ -91,6 +91,7 @@ fn crate_root_only_exports_supported_public_modules() {
 
     for required in [
         "builtins",
+        "commands",
         "errors",
         "format",
         "graph",
@@ -138,7 +139,7 @@ fn views_module_is_public_low_level_api() {
 fn view_contract_types_compile() {
     use mmdflux::views::{
         AnchorRef, BoundaryPolicy, CompoundPolicy, EdgeAnchor, LayoutMode, NodePredicate, Selector,
-        TraversalDirection, ViewError, ViewEvent, ViewSpec, ViewStatement, apply_view,
+        TraversalDirection, ViewError, ViewEvent, ViewSpec, ViewStatement, project,
     };
 
     let spec = ViewSpec::default();
@@ -173,7 +174,7 @@ fn view_contract_types_compile() {
         ViewError::NotImplementedYet {
             feature: "edge anchors".to_string(),
         },
-        apply_view,
+        project,
     );
 }
 
@@ -317,6 +318,15 @@ fn mmds_module_keeps_supported_adapter_helpers_public() {
     let _ = std::any::type_name::<mmdflux::mmds::Document>();
     let _ = std::any::type_name::<mmdflux::mmds::HydrationError>();
     let _ = std::any::type_name::<mmdflux::mmds::GenerationError>();
+    let _ = std::any::type_name::<mmdflux::mmds::diff::Diff>();
+    let _ = std::any::type_name::<mmdflux::mmds::diff::Change>();
+    let _ = std::any::type_name::<mmdflux::mmds::diff::ChangeKind>();
+    let _ = std::any::type_name::<mmdflux::mmds::events::ModelEvent>();
+    let _ = std::any::type_name::<mmdflux::mmds::events::ModelEventKind>();
+    let _ = std::any::type_name::<mmdflux::mmds::Subject>();
+    let _ = std::any::type_name::<mmdflux::commands::Command>();
+    let _ = std::any::type_name::<mmdflux::commands::EdgeSelector>();
+    let _ = std::any::type_name::<mmdflux::commands::CommandApplyError>();
 
     let _parse_with_profiles: fn(
         &str,
@@ -340,11 +350,24 @@ fn mmds_module_keeps_supported_adapter_helpers_public() {
         &str,
         &mmdflux::RenderConfig,
     ) -> Result<mmdflux::mmds::Document, mmdflux::RenderError> = mmdflux::materialize_diagram;
-    let _render_mmds_document: fn(
+    let _render_document: fn(
         &mmdflux::mmds::Document,
         mmdflux::OutputFormat,
         &mmdflux::RenderConfig,
-    ) -> Result<String, mmdflux::RenderError> = mmdflux::render_mmds_document;
+    ) -> Result<String, mmdflux::RenderError> = mmdflux::render_document;
+    let _diff_documents: fn(
+        &mmdflux::mmds::Document,
+        &mmdflux::mmds::Document,
+    ) -> mmdflux::mmds::diff::Diff = mmdflux::mmds::diff::diff_documents;
+    assert!(mmdflux::mmds::diff::ChangeKind::NodeMoved.is_geometry());
+    assert!(!mmdflux::mmds::diff::ChangeKind::NodeMoved.is_model());
+    let _apply: fn(
+        &mmdflux::commands::Command,
+        &mut mmdflux::mmds::Document,
+    ) -> Result<
+        Vec<mmdflux::mmds::events::ModelEvent>,
+        mmdflux::commands::CommandApplyError,
+    > = mmdflux::commands::apply;
 }
 
 #[test]

@@ -6,7 +6,7 @@
 //! The v1 surface is intentionally small: materialize a filtered MMDS payload
 //! from a `ViewSpec` and emit events for elements that leave the view.
 //! Rendering remains a runtime concern; pass the returned document to
-//! [`crate::render_mmds_document`] when a text, SVG, or MMDS rendering is
+//! [`crate::render_document`] when a text, SVG, or MMDS rendering is
 //! needed.
 //!
 //! # Example
@@ -14,9 +14,9 @@
 //! ```no_run
 //! use mmdflux::mmds::Document;
 //! use mmdflux::views::{
-//!     AnchorRef, Selector, TraversalDirection, ViewSpec, ViewStatement, apply_view,
+//!     AnchorRef, Selector, TraversalDirection, ViewSpec, ViewStatement, project,
 //! };
-//! use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_mmds_document};
+//! use mmdflux::{OutputFormat, RenderConfig, materialize_diagram, render_document};
 //!
 //! let source = "\
 //! graph TD
@@ -37,27 +37,27 @@
 //!     ..ViewSpec::default()
 //! };
 //!
-//! let (view, events) = apply_view(&canonical, &spec)?;
+//! let (view, events) = project(&canonical, &spec)?;
 //! assert!(view.nodes.iter().any(|node| node.id == "service_c"));
 //! assert!(events.iter().any(|event| matches!(
 //!     event,
 //!     mmdflux::views::ViewEvent::NodeLeftView { id, .. } if id == "external"
 //! )));
 //!
-//! let text = render_mmds_document(&view, OutputFormat::Text, &RenderConfig::default())?;
+//! let text = render_document(&view, OutputFormat::Text, &RenderConfig::default())?;
 //! assert!(text.contains("Service A"));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
-mod apply;
 mod error;
 mod evaluate;
 mod events;
+mod project;
 mod spec;
 
-pub use apply::{VIEW_EXTENSION_NAMESPACE, apply_view};
 pub use error::ViewError;
 pub use events::{ElisionReason, ViewEvent};
+pub use project::{VIEW_EXTENSION_NAMESPACE, project};
 pub use spec::{
     AnchorRef, BoundaryPolicy, CompoundPolicy, EdgeAnchor, LayoutMode, NodePredicate, Selector,
     TraversalDirection, ViewSpec, ViewStatement,

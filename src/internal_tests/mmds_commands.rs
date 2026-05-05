@@ -3,15 +3,17 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use super::event_change_mapping::model_event_kind_to_change_kind;
 use super::layout_stability::mutations;
-use crate::graph::GeometryLevel;
-use crate::mmds::commands::{
-    Command, CommandApplyError, EdgeSelector, MmdsDiffKindRole, apply, commandable_diff_kinds,
-    diff_kind_for_command, diff_kind_role, geometry_effect_diff_kinds,
+use crate::commands::{
+    ChangeKindLayer, Command, CommandApplyError, EdgeSelector, apply, change_kind_layer,
+    commandable_model_event_kinds, geometry_effect_change_kinds, model_event_kind_for_command,
     relayout_output_for_command_apply,
 };
-use crate::mmds::diff::{MmdsDiffKind, MmdsDiffSubject};
-use crate::mmds::{NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE};
+use crate::graph::GeometryLevel;
+use crate::mmds::diff::ChangeKind;
+use crate::mmds::events::{ModelEvent, ModelEventKind};
+use crate::mmds::{NODE_STYLE_EXTENSION_NAMESPACE, Subject, TEXT_EXTENSION_NAMESPACE};
 use crate::{OutputFormat, RenderConfig};
 
 #[test]
@@ -116,11 +118,11 @@ fn mmds_command_apply_target_reconnect_diff_is_edge_reconnected() {
         .target = "C".into();
 
     let relaid = relayout_output_for_command_apply(&changed).expect("relayout should succeed");
-    let diff = crate::mmds::diff::diff_outputs(&before, &relaid);
+    let diff = crate::mmds::diff::diff_documents(&before, &relaid);
 
-    assert!(diff.has_event(MmdsDiffKind::EdgeReconnected, "e0"));
-    assert!(diff.events.iter().any(|event| {
-        event.kind == MmdsDiffKind::EdgeReconnected
+    assert!(diff.has_change(ChangeKind::EdgeReconnected, "e0"));
+    assert!(diff.changes.iter().any(|event| {
+        event.kind == ChangeKind::EdgeReconnected
             && event.evidence_mentions("matched_by=id_reconnected")
     }));
 }
@@ -139,10 +141,10 @@ fn mmds_command_apply_edge_selector_id_matches_exact_edge() {
     .expect("edge selector should resolve");
 
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, MmdsDiffKind::EdgeLabelChanged);
+    assert_eq!(events[0].kind, ModelEventKind::EdgeLabelChanged);
     assert!(matches!(
         &events[0].subject,
-        crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e0"
+        crate::mmds::Subject::Edge(id) if id == "e0"
     ));
 }
 
@@ -206,10 +208,10 @@ fn mmds_command_apply_add_edge_id_none_uses_next_dense_id() {
     let events = apply(&add_edge_command(None), &mut output).expect("add edge should apply");
 
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, MmdsDiffKind::EdgeAdded);
+    assert_eq!(events[0].kind, ModelEventKind::EdgeAdded);
     assert!(matches!(
         &events[0].subject,
-        crate::mmds::diff::MmdsDiffSubject::Edge(id) if id == "e1"
+        crate::mmds::Subject::Edge(id) if id == "e1"
     ));
     assert!(output.edges.iter().any(|edge| edge.id == "e1"));
 }
@@ -220,7 +222,7 @@ fn mmds_command_apply_add_edge_id_accepts_next_dense_id() {
 
     let events = apply(&add_edge_command(Some("e1")), &mut output).expect("add edge should apply");
 
-    assert_eq!(events[0].kind, MmdsDiffKind::EdgeAdded);
+    assert_eq!(events[0].kind, ModelEventKind::EdgeAdded);
     assert!(output.edges.iter().any(|edge| edge.id == "e1"));
 }
 
@@ -263,8 +265,8 @@ fn mmds_command_apply_in_place_sets_profiles_without_geometry_change() {
     .expect("set profiles should apply");
 
     assert_eq!(output.profiles, vec!["custom-profile".to_string()]);
-    assert_primary_event(&events, MmdsDiffKind::ProfileChanged, "");
-    assert_in_place_diff(&before, &output, MmdsDiffKind::ProfileChanged, "");
+    assert_primary_event(&events, ModelEventKind::ProfileChanged, "");
+    assert_in_place_diff(&before, &output, ChangeKind::ProfileChanged, "");
 }
 
 #[test]
@@ -282,8 +284,8 @@ fn mmds_command_apply_in_place_sets_extension_without_geometry_change() {
     .expect("set extension should apply");
 
     assert_eq!(output.extensions["example.extension"]["enabled"], true);
-    assert_primary_event(&events, MmdsDiffKind::ExtensionChanged, "");
-    assert_in_place_diff(&before, &output, MmdsDiffKind::ExtensionChanged, "");
+    assert_primary_event(&events, ModelEventKind::ExtensionChanged, "");
+    assert_in_place_diff(&before, &output, ChangeKind::ExtensionChanged, "");
 }
 
 #[test]
@@ -304,8 +306,8 @@ fn mmds_command_apply_in_place_sets_node_style_extension() {
         output.extensions[NODE_STYLE_EXTENSION_NAMESPACE]["nodes"]["A"]["fill"],
         "#abcdef"
     );
-    assert_primary_event(&events, MmdsDiffKind::NodeStyleChanged, "A");
-    assert_in_place_diff(&before, &output, MmdsDiffKind::NodeStyleChanged, "A");
+    assert_primary_event(&events, ModelEventKind::NodeStyleChanged, "A");
+    assert_in_place_diff(&before, &output, ChangeKind::NodeStyleChanged, "A");
 }
 
 #[test]
@@ -342,8 +344,8 @@ fn mmds_command_apply_in_place_changes_subgraph_title() {
     .expect("change subgraph title should apply");
 
     assert_eq!(subgraph_title(&output, "sg1"), "Pipeline");
-    assert_primary_event(&events, MmdsDiffKind::SubgraphTitleChanged, "sg1");
-    assert_in_place_diff(&before, &output, MmdsDiffKind::SubgraphTitleChanged, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphTitleChanged, "sg1");
+    assert_in_place_diff(&before, &output, ChangeKind::SubgraphTitleChanged, "sg1");
 }
 
 #[test]
@@ -379,10 +381,10 @@ fn mmds_command_apply_relayout_sets_geometry_level() {
     .expect("set geometry level should apply");
 
     assert_eq!(output.geometry_level, "layout");
-    assert_primary_event(&events, MmdsDiffKind::GeometryLevelChanged, "");
+    assert_primary_event(&events, ModelEventKind::GeometryLevelChanged, "");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::GeometryLevelChanged, "")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::GeometryLevelChanged, "")
     );
 }
 
@@ -400,10 +402,10 @@ fn mmds_command_apply_relayout_sets_direction() {
     .expect("set direction should apply");
 
     assert_eq!(output.metadata.direction, "LR");
-    assert_primary_event(&events, MmdsDiffKind::DirectionChanged, "");
+    assert_primary_event(&events, ModelEventKind::DirectionChanged, "");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::DirectionChanged, "")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::DirectionChanged, "")
     );
 }
 
@@ -421,10 +423,10 @@ fn mmds_command_apply_relayout_sets_engine() {
     .expect("set engine should apply");
 
     assert_eq!(output.metadata.engine.as_deref(), Some("mermaid-layered"));
-    assert_primary_event(&events, MmdsDiffKind::EngineChanged, "");
+    assert_primary_event(&events, ModelEventKind::EngineChanged, "");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EngineChanged, "")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EngineChanged, "")
     );
 }
 
@@ -476,9 +478,9 @@ fn mmds_command_apply_relayout_adds_node() {
     .expect("add node should apply");
 
     assert_eq!(node_label(&output, "C"), "Gamma");
-    assert_primary_event(&events, MmdsDiffKind::NodeAdded, "C");
+    assert_primary_event(&events, ModelEventKind::NodeAdded, "C");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output).has_event(MmdsDiffKind::NodeAdded, "C")
+        crate::mmds::diff::diff_documents(&before, &output).has_change(ChangeKind::NodeAdded, "C")
     );
 }
 
@@ -496,9 +498,10 @@ fn mmds_command_apply_relayout_removes_node() {
     .expect("remove node should apply");
 
     assert!(!output.nodes.iter().any(|node| node.id == "C"));
-    assert_primary_event(&events, MmdsDiffKind::NodeRemoved, "C");
+    assert_primary_event(&events, ModelEventKind::NodeRemoved, "C");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output).has_event(MmdsDiffKind::NodeRemoved, "C")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::NodeRemoved, "C")
     );
 }
 
@@ -517,10 +520,10 @@ fn mmds_command_apply_relayout_changes_node_label() {
     .expect("change node label should apply");
 
     assert_eq!(node_label(&output, "A"), "Alpha");
-    assert_primary_event(&events, MmdsDiffKind::NodeLabelChanged, "A");
+    assert_primary_event(&events, ModelEventKind::NodeLabelChanged, "A");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::NodeLabelChanged, "A")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::NodeLabelChanged, "A")
     );
 }
 
@@ -539,10 +542,10 @@ fn mmds_command_apply_relayout_changes_node_shape() {
     .expect("change node shape should apply");
 
     assert_eq!(node_shape(&output, "A"), "stadium");
-    assert_primary_event(&events, MmdsDiffKind::NodeShapeChanged, "A");
+    assert_primary_event(&events, ModelEventKind::NodeShapeChanged, "A");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::NodeShapeChanged, "A")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::NodeShapeChanged, "A")
     );
 }
 
@@ -563,10 +566,10 @@ fn mmds_command_apply_relayout_sets_node_parent() {
     .expect("set node parent should apply");
 
     assert_eq!(node_parent(&output, "A").as_deref(), Some("sg1"));
-    assert_primary_event(&events, MmdsDiffKind::NodeParentChanged, "A");
+    assert_primary_event(&events, ModelEventKind::NodeParentChanged, "A");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::NodeParentChanged, "A")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::NodeParentChanged, "A")
     );
 }
 
@@ -623,9 +626,9 @@ fn mmds_command_apply_relayout_adds_edge() {
     assert_eq!(edge.source, "A");
     assert_eq!(edge.target, "C");
     assert!(edge.path.is_some(), "added edge should be routed");
-    assert_primary_event(&events, MmdsDiffKind::EdgeAdded, "e1");
+    assert_primary_event(&events, ModelEventKind::EdgeAdded, "e1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output).has_event(MmdsDiffKind::EdgeAdded, "e1")
+        crate::mmds::diff::diff_documents(&before, &output).has_change(ChangeKind::EdgeAdded, "e1")
     );
 }
 
@@ -643,10 +646,10 @@ fn mmds_command_apply_relayout_removes_edge() {
     .expect("remove edge should apply");
 
     assert!(!output.edges.iter().any(|edge| edge.id == "e1"));
-    assert_primary_event(&events, MmdsDiffKind::EdgeRemoved, "e1");
+    assert_primary_event(&events, ModelEventKind::EdgeRemoved, "e1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EdgeRemoved, "e1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EdgeRemoved, "e1")
     );
 }
 
@@ -668,10 +671,10 @@ fn mmds_command_apply_relayout_reconnects_edge() {
     let edge = edge_by_id(&output, "e0");
     assert_eq!(edge.source, "A");
     assert_eq!(edge.target, "C");
-    assert_primary_event(&events, MmdsDiffKind::EdgeReconnected, "e0");
+    assert_primary_event(&events, ModelEventKind::EdgeReconnected, "e0");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EdgeReconnected, "e0")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EdgeReconnected, "e0")
     );
 }
 
@@ -695,10 +698,10 @@ fn mmds_command_apply_relayout_sets_edge_endpoint_intent() {
     let edge = edge_by_id(&output, "e0");
     assert_eq!(edge.from_subgraph.as_deref(), Some("sg1"));
     assert_eq!(edge.to_subgraph.as_deref(), Some("sg2"));
-    assert_primary_event(&events, MmdsDiffKind::EdgeEndpointIntentChanged, "e0");
+    assert_primary_event(&events, ModelEventKind::EdgeEndpointIntentChanged, "e0");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EdgeEndpointIntentChanged, "e0")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EdgeEndpointIntentChanged, "e0")
     );
 }
 
@@ -722,10 +725,10 @@ fn mmds_command_apply_relayout_changes_edge_label() {
         before.edges[0].label_rect.as_ref().map(|rect| rect.width),
         edge.label_rect.as_ref().map(|rect| rect.width)
     );
-    assert_primary_event(&events, MmdsDiffKind::EdgeLabelChanged, "e0");
+    assert_primary_event(&events, ModelEventKind::EdgeLabelChanged, "e0");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EdgeLabelChanged, "e0")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EdgeLabelChanged, "e0")
     );
 }
 
@@ -751,10 +754,10 @@ fn mmds_command_apply_relayout_changes_edge_style() {
     assert_eq!(edge.arrow_start, "circle");
     assert_eq!(edge.arrow_end, "diamond");
     assert_eq!(edge.minlen, 2);
-    assert_primary_event(&events, MmdsDiffKind::EdgeStyleChanged, "e0");
+    assert_primary_event(&events, ModelEventKind::EdgeStyleChanged, "e0");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::EdgeStyleChanged, "e0")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::EdgeStyleChanged, "e0")
     );
 }
 
@@ -841,10 +844,10 @@ fn mmds_command_apply_relayout_adds_subgraph() {
 
     assert_eq!(subgraph_title(&output, "sg1"), "Group");
     assert_eq!(node_parent(&output, "A").as_deref(), Some("sg1"));
-    assert_primary_event(&events, MmdsDiffKind::SubgraphAdded, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphAdded, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphAdded, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphAdded, "sg1")
     );
 }
 
@@ -864,10 +867,10 @@ fn mmds_command_apply_relayout_removes_subgraph() {
 
     assert!(!output.subgraphs.iter().any(|subgraph| subgraph.id == "sg1"));
     assert_eq!(node_parent(&output, "A"), None);
-    assert_primary_event(&events, MmdsDiffKind::SubgraphRemoved, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphRemoved, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphRemoved, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphRemoved, "sg1")
     );
 }
 
@@ -890,10 +893,10 @@ fn mmds_command_apply_relayout_sets_subgraph_direction() {
         subgraph_by_id(&output, "sg1").direction.as_deref(),
         Some("LR")
     );
-    assert_primary_event(&events, MmdsDiffKind::SubgraphDirectionChanged, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphDirectionChanged, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphDirectionChanged, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphDirectionChanged, "sg1")
     );
 }
 
@@ -917,10 +920,10 @@ fn mmds_command_apply_relayout_sets_subgraph_parent() {
         subgraph_by_id(&output, "sg1").parent.as_deref(),
         Some("outer")
     );
-    assert_primary_event(&events, MmdsDiffKind::SubgraphParentChanged, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphParentChanged, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphParentChanged, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphParentChanged, "sg1")
     );
 }
 
@@ -955,10 +958,10 @@ fn mmds_command_apply_relayout_changes_subgraph_membership() {
             .children
             .contains(&"B".to_string())
     );
-    assert_primary_event(&events, MmdsDiffKind::SubgraphMembershipChanged, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphMembershipChanged, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphMembershipChanged, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphMembershipChanged, "sg1")
     );
 }
 
@@ -1004,10 +1007,10 @@ fn mmds_command_apply_relayout_changes_subgraph_membership_concurrent_regions_on
         subgraph_by_id(&output, "r0").parent.as_deref(),
         Some("parent")
     );
-    assert_primary_event(&events, MmdsDiffKind::SubgraphMembershipChanged, "parent");
+    assert_primary_event(&events, ModelEventKind::SubgraphMembershipChanged, "parent");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphMembershipChanged, "parent")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphMembershipChanged, "parent")
     );
 }
 
@@ -1027,10 +1030,10 @@ fn mmds_command_apply_relayout_sets_subgraph_visibility() {
     .expect("set subgraph visibility should apply");
 
     assert!(subgraph_by_id(&output, "sg1").invisible);
-    assert_primary_event(&events, MmdsDiffKind::SubgraphVisibilityChanged, "sg1");
+    assert_primary_event(&events, ModelEventKind::SubgraphVisibilityChanged, "sg1");
     assert!(
-        crate::mmds::diff::diff_outputs(&before, &output)
-            .has_event(MmdsDiffKind::SubgraphVisibilityChanged, "sg1")
+        crate::mmds::diff::diff_documents(&before, &output)
+            .has_change(ChangeKind::SubgraphVisibilityChanged, "sg1")
     );
 }
 
@@ -1063,11 +1066,11 @@ fn mmds_command_apply_relayout_add_subgraph_duplicate_errors_without_mutation() 
 #[test]
 fn mmds_command_apply_round_trip_primary_event_matches_diff() {
     let cases = apply_round_trip_cases();
-    for expected_kind in commandable_diff_kinds() {
+    for expected_kind in commandable_model_event_kinds() {
         assert!(
             cases
                 .iter()
-                .any(|case| case.expected_kind == *expected_kind),
+                .any(|case| case.expected_kind == model_event_kind_to_change_kind(*expected_kind)),
             "missing round-trip case for {expected_kind:?}"
         );
     }
@@ -1077,17 +1080,18 @@ fn mmds_command_apply_round_trip_primary_event_matches_diff() {
         let apply_events = apply(&case.command, &mut after).unwrap_or_else(|err| {
             panic!("{} should apply successfully: {err:?}", case.name);
         });
-        let diff = crate::mmds::diff::diff_outputs(&case.before, &after);
+        let diff = crate::mmds::diff::diff_documents(&case.before, &after);
 
-        assert_has_event_pair(&apply_events, case.expected_kind, &case.expected_subject);
-        assert_has_event_pair(&diff.events, case.expected_kind, &case.expected_subject);
+        assert_has_model_event_change_pair(
+            &apply_events,
+            case.expected_kind,
+            &case.expected_subject,
+        );
+        assert_has_change_pair(&diff.changes, case.expected_kind, &case.expected_subject);
 
         if case.expect_no_geometry_effects {
             assert!(
-                !diff
-                    .events
-                    .iter()
-                    .any(|event| event.kind.is_geometry_effect()),
+                !diff.changes.iter().any(|event| event.kind.is_geometry()),
                 "{} produced geometry effects: {diff:#?}",
                 case.name
             );
@@ -1170,16 +1174,16 @@ fn mmds_command_apply_failure_modes_are_structured() {
 fn mmds_command_apply_tier_a_representative_canaries_hold() {
     for case in tier_a_representative_command_cases() {
         let (before, after) = render_tier_a_pair(case.pair_id);
-        let canary_diff = crate::mmds::diff::diff_outputs(&before, &after);
+        let canary_diff = crate::mmds::diff::diff_documents(&before, &after);
 
-        assert_has_event_pair(
-            &canary_diff.events,
+        assert_has_change_pair(
+            &canary_diff.changes,
             case.expected_kind,
             &case.expected_subject,
         );
         if case.pair_id == "M07" {
             assert!(
-                !canary_diff.has_kind(MmdsDiffKind::EdgeRerouted),
+                !canary_diff.has_change_kind(ChangeKind::EdgeRerouted),
                 "M07 should remain style-only with no edge reroute: {canary_diff:#?}"
             );
         }
@@ -1192,16 +1196,20 @@ fn mmds_command_apply_tier_a_representative_canaries_hold() {
             )
         });
 
-        assert_has_event_pair(&apply_events, case.expected_kind, &case.expected_subject);
-        let applied_diff = crate::mmds::diff::diff_outputs(&before, &applied);
-        assert_has_event_pair(
-            &applied_diff.events,
+        assert_has_model_event_change_pair(
+            &apply_events,
+            case.expected_kind,
+            &case.expected_subject,
+        );
+        let applied_diff = crate::mmds::diff::diff_documents(&before, &applied);
+        assert_has_change_pair(
+            &applied_diff.changes,
             case.expected_kind,
             &case.expected_subject,
         );
         if case.pair_id == "M07" {
             assert!(
-                !applied_diff.has_kind(MmdsDiffKind::EdgeRerouted),
+                !applied_diff.has_change_kind(ChangeKind::EdgeRerouted),
                 "M07 apply should remain style-only with no edge reroute: {applied_diff:#?}"
             );
         }
@@ -1211,119 +1219,65 @@ fn mmds_command_apply_tier_a_representative_canaries_hold() {
 #[test]
 fn mmds_command_vocabulary_classifies_all_diff_kinds() {
     let cases = [
+        (ChangeKind::GeometryLevelChanged, ChangeKindLayer::Model),
+        (ChangeKind::DirectionChanged, ChangeKindLayer::Model),
+        (ChangeKind::EngineChanged, ChangeKindLayer::Model),
+        (ChangeKind::NodeAdded, ChangeKindLayer::Model),
+        (ChangeKind::NodeRemoved, ChangeKindLayer::Model),
+        (ChangeKind::EdgeAdded, ChangeKindLayer::Model),
+        (ChangeKind::EdgeRemoved, ChangeKindLayer::Model),
+        (ChangeKind::SubgraphAdded, ChangeKindLayer::Model),
+        (ChangeKind::SubgraphRemoved, ChangeKindLayer::Model),
+        (ChangeKind::NodeLabelChanged, ChangeKindLayer::Model),
+        (ChangeKind::NodeShapeChanged, ChangeKindLayer::Model),
+        (ChangeKind::NodeParentChanged, ChangeKindLayer::Model),
+        (ChangeKind::NodeStyleChanged, ChangeKindLayer::Model),
+        (ChangeKind::EdgeReconnected, ChangeKindLayer::Model),
         (
-            MmdsDiffKind::GeometryLevelChanged,
-            MmdsDiffKindRole::Commandable,
+            ChangeKind::EdgeEndpointIntentChanged,
+            ChangeKindLayer::Model,
+        ),
+        (ChangeKind::EdgeLabelChanged, ChangeKindLayer::Model),
+        (ChangeKind::EdgeStyleChanged, ChangeKindLayer::Model),
+        (ChangeKind::SubgraphTitleChanged, ChangeKindLayer::Model),
+        (ChangeKind::SubgraphDirectionChanged, ChangeKindLayer::Model),
+        (ChangeKind::SubgraphParentChanged, ChangeKindLayer::Model),
+        (
+            ChangeKind::SubgraphMembershipChanged,
+            ChangeKindLayer::Model,
         ),
         (
-            MmdsDiffKind::DirectionChanged,
-            MmdsDiffKindRole::Commandable,
+            ChangeKind::SubgraphVisibilityChanged,
+            ChangeKindLayer::Model,
         ),
-        (MmdsDiffKind::EngineChanged, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::NodeAdded, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::NodeRemoved, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::EdgeAdded, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::EdgeRemoved, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::SubgraphAdded, MmdsDiffKindRole::Commandable),
-        (MmdsDiffKind::SubgraphRemoved, MmdsDiffKindRole::Commandable),
+        (ChangeKind::ProfileChanged, ChangeKindLayer::Model),
+        (ChangeKind::ExtensionChanged, ChangeKindLayer::Model),
+        (ChangeKind::NodeMoved, ChangeKindLayer::Geometry),
+        (ChangeKind::NodeResized, ChangeKindLayer::Geometry),
+        (ChangeKind::CanvasResized, ChangeKindLayer::Geometry),
+        (ChangeKind::SubgraphBoundsChanged, ChangeKindLayer::Geometry),
+        (ChangeKind::EdgeRerouted, ChangeKindLayer::Geometry),
+        (ChangeKind::EndpointFaceChanged, ChangeKindLayer::Geometry),
+        (ChangeKind::PortIntentChanged, ChangeKindLayer::Geometry),
+        (ChangeKind::LabelMoved, ChangeKindLayer::Geometry),
+        (ChangeKind::LabelResized, ChangeKindLayer::Geometry),
+        (ChangeKind::LabelSideChanged, ChangeKindLayer::Geometry),
         (
-            MmdsDiffKind::NodeLabelChanged,
-            MmdsDiffKindRole::Commandable,
+            ChangeKind::PathPortDivergenceChanged,
+            ChangeKindLayer::Geometry,
         ),
-        (
-            MmdsDiffKind::NodeShapeChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::NodeParentChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::NodeStyleChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (MmdsDiffKind::EdgeReconnected, MmdsDiffKindRole::Commandable),
-        (
-            MmdsDiffKind::EdgeEndpointIntentChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::EdgeLabelChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::EdgeStyleChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::SubgraphTitleChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::SubgraphDirectionChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::SubgraphParentChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::SubgraphMembershipChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (
-            MmdsDiffKind::SubgraphVisibilityChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (MmdsDiffKind::ProfileChanged, MmdsDiffKindRole::Commandable),
-        (
-            MmdsDiffKind::ExtensionChanged,
-            MmdsDiffKindRole::Commandable,
-        ),
-        (MmdsDiffKind::NodeMoved, MmdsDiffKindRole::GeometryEffect),
-        (MmdsDiffKind::NodeResized, MmdsDiffKindRole::GeometryEffect),
-        (
-            MmdsDiffKind::CanvasResized,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (
-            MmdsDiffKind::SubgraphBoundsChanged,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (MmdsDiffKind::EdgeRerouted, MmdsDiffKindRole::GeometryEffect),
-        (
-            MmdsDiffKind::EndpointFaceChanged,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (
-            MmdsDiffKind::PortIntentChanged,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (MmdsDiffKind::LabelMoved, MmdsDiffKindRole::GeometryEffect),
-        (MmdsDiffKind::LabelResized, MmdsDiffKindRole::GeometryEffect),
-        (
-            MmdsDiffKind::LabelSideChanged,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (
-            MmdsDiffKind::PathPortDivergenceChanged,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
-        (
-            MmdsDiffKind::GlobalReflowDetected,
-            MmdsDiffKindRole::GeometryEffect,
-        ),
+        (ChangeKind::GlobalReflowDetected, ChangeKindLayer::Geometry),
     ];
 
-    // The exhaustive matches in `mmds::commands` are the compile-time drift
+    // The exhaustive matches in `commands` are the compile-time drift
     // guard. This count keeps the test fixture's explicit variant list honest.
     assert_eq!(cases.len(), 36);
 
     for (kind, expected_role) in cases {
-        assert_eq!(diff_kind_role(kind), expected_role, "{kind:?}");
+        assert_eq!(change_kind_layer(kind), expected_role, "{kind:?}");
         assert_eq!(
-            kind.is_geometry_effect(),
-            expected_role == MmdsDiffKindRole::GeometryEffect,
+            kind.is_geometry(),
+            expected_role == ChangeKindLayer::Geometry,
             "{kind:?}"
         );
     }
@@ -1333,7 +1287,7 @@ fn mmds_command_vocabulary_classifies_all_diff_kinds() {
 fn mmds_command_vocabulary_document_node_examples_map_to_diff_kinds() {
     for (command, expected_kind) in document_node_command_examples() {
         assert_eq!(
-            diff_kind_for_command(&command),
+            model_event_kind_to_change_kind(model_event_kind_for_command(&command)),
             expected_kind,
             "{command:?}"
         );
@@ -1387,25 +1341,25 @@ fn mmds_command_vocabulary_document_node_commands_are_semantic_only() {
     }
 }
 
-fn document_node_command_examples() -> Vec<(Command, MmdsDiffKind)> {
+fn document_node_command_examples() -> Vec<(Command, ChangeKind)> {
     vec![
         (
             Command::SetGeometryLevel {
                 level: "routed".to_string(),
             },
-            MmdsDiffKind::GeometryLevelChanged,
+            ChangeKind::GeometryLevelChanged,
         ),
         (
             Command::SetDirection {
                 direction: "LR".to_string(),
             },
-            MmdsDiffKind::DirectionChanged,
+            ChangeKind::DirectionChanged,
         ),
         (
             Command::SetEngine {
                 engine: Some("flux-layered".to_string()),
             },
-            MmdsDiffKind::EngineChanged,
+            ChangeKind::EngineChanged,
         ),
         (
             Command::AddNode {
@@ -1414,54 +1368,54 @@ fn document_node_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 shape: "stadium".to_string(),
                 parent: Some("cluster_0".to_string()),
             },
-            MmdsDiffKind::NodeAdded,
+            ChangeKind::NodeAdded,
         ),
         (
             Command::RemoveNode {
                 id: "A".to_string(),
             },
-            MmdsDiffKind::NodeRemoved,
+            ChangeKind::NodeRemoved,
         ),
         (
             Command::ChangeNodeLabel {
                 node: "A".to_string(),
                 label: "Alpha".to_string(),
             },
-            MmdsDiffKind::NodeLabelChanged,
+            ChangeKind::NodeLabelChanged,
         ),
         (
             Command::ChangeNodeShape {
                 node: "A".to_string(),
                 shape: "stadium".to_string(),
             },
-            MmdsDiffKind::NodeShapeChanged,
+            ChangeKind::NodeShapeChanged,
         ),
         (
             Command::SetNodeParent {
                 node: "A".to_string(),
                 parent: Some("cluster_0".to_string()),
             },
-            MmdsDiffKind::NodeParentChanged,
+            ChangeKind::NodeParentChanged,
         ),
         (
             Command::SetNodeStyleExtension {
                 node: "A".to_string(),
                 value: json!({ "fill": "#fff" }),
             },
-            MmdsDiffKind::NodeStyleChanged,
+            ChangeKind::NodeStyleChanged,
         ),
         (
             Command::SetProfiles {
                 profiles: vec!["mmds-core-v1".to_string()],
             },
-            MmdsDiffKind::ProfileChanged,
+            ChangeKind::ProfileChanged,
         ),
         (
             Command::SetExtension {
                 namespace: "example.extension".to_string(),
                 value: json!({ "enabled": true }),
             },
-            MmdsDiffKind::ExtensionChanged,
+            ChangeKind::ExtensionChanged,
         ),
     ]
 }
@@ -1470,7 +1424,7 @@ fn document_node_command_examples() -> Vec<(Command, MmdsDiffKind)> {
 fn mmds_command_vocabulary_edge_examples_map_to_diff_kinds() {
     for (command, expected_kind) in edge_command_examples() {
         assert_eq!(
-            diff_kind_for_command(&command),
+            model_event_kind_to_change_kind(model_event_kind_for_command(&command)),
             expected_kind,
             "{command:?}"
         );
@@ -1511,7 +1465,7 @@ fn mmds_command_vocabulary_edge_selector_names_identity_without_layout() {
     }
 }
 
-fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
+fn edge_command_examples() -> Vec<(Command, ChangeKind)> {
     let selector = EdgeSelector::Id("e0".to_string());
 
     vec![
@@ -1528,13 +1482,13 @@ fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 arrow_end: "normal".to_string(),
                 minlen: 1,
             },
-            MmdsDiffKind::EdgeAdded,
+            ChangeKind::EdgeAdded,
         ),
         (
             Command::RemoveEdge {
                 edge: selector.clone(),
             },
-            MmdsDiffKind::EdgeRemoved,
+            ChangeKind::EdgeRemoved,
         ),
         (
             Command::ReconnectEdge {
@@ -1542,7 +1496,7 @@ fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 source: "A".to_string(),
                 target: "C".to_string(),
             },
-            MmdsDiffKind::EdgeReconnected,
+            ChangeKind::EdgeReconnected,
         ),
         (
             Command::SetEdgeEndpointIntent {
@@ -1550,14 +1504,14 @@ fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 from_subgraph: Some("cluster_a".to_string()),
                 to_subgraph: Some("cluster_b".to_string()),
             },
-            MmdsDiffKind::EdgeEndpointIntentChanged,
+            ChangeKind::EdgeEndpointIntentChanged,
         ),
         (
             Command::ChangeEdgeLabel {
                 edge: selector.clone(),
                 label: Some("calls".to_string()),
             },
-            MmdsDiffKind::EdgeLabelChanged,
+            ChangeKind::EdgeLabelChanged,
         ),
         (
             Command::ChangeEdgeStyle {
@@ -1567,7 +1521,7 @@ fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 arrow_end: Some("normal".to_string()),
                 minlen: Some(2),
             },
-            MmdsDiffKind::EdgeStyleChanged,
+            ChangeKind::EdgeStyleChanged,
         ),
     ]
 }
@@ -1576,7 +1530,7 @@ fn edge_command_examples() -> Vec<(Command, MmdsDiffKind)> {
 fn mmds_command_vocabulary_subgraph_examples_map_to_diff_kinds() {
     for (command, expected_kind) in subgraph_command_examples() {
         assert_eq!(
-            diff_kind_for_command(&command),
+            model_event_kind_to_change_kind(model_event_kind_for_command(&command)),
             expected_kind,
             "{command:?}"
         );
@@ -1611,7 +1565,7 @@ fn mmds_command_vocabulary_subgraph_membership_is_canonical() {
     }
 }
 
-fn subgraph_command_examples() -> Vec<(Command, MmdsDiffKind)> {
+fn subgraph_command_examples() -> Vec<(Command, ChangeKind)> {
     vec![
         (
             Command::AddSubgraph {
@@ -1623,34 +1577,34 @@ fn subgraph_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 concurrent_regions: vec!["region_0".to_string()],
                 invisible: false,
             },
-            MmdsDiffKind::SubgraphAdded,
+            ChangeKind::SubgraphAdded,
         ),
         (
             Command::RemoveSubgraph {
                 id: "cluster_0".to_string(),
             },
-            MmdsDiffKind::SubgraphRemoved,
+            ChangeKind::SubgraphRemoved,
         ),
         (
             Command::ChangeSubgraphTitle {
                 subgraph: "cluster_0".to_string(),
                 title: Some("Cluster".to_string()),
             },
-            MmdsDiffKind::SubgraphTitleChanged,
+            ChangeKind::SubgraphTitleChanged,
         ),
         (
             Command::SetSubgraphDirection {
                 subgraph: "cluster_0".to_string(),
                 direction: Some("LR".to_string()),
             },
-            MmdsDiffKind::SubgraphDirectionChanged,
+            ChangeKind::SubgraphDirectionChanged,
         ),
         (
             Command::SetSubgraphParent {
                 subgraph: "cluster_0".to_string(),
                 parent: Some("root".to_string()),
             },
-            MmdsDiffKind::SubgraphParentChanged,
+            ChangeKind::SubgraphParentChanged,
         ),
         (
             Command::ChangeSubgraphMembership {
@@ -1660,14 +1614,14 @@ fn subgraph_command_examples() -> Vec<(Command, MmdsDiffKind)> {
                 added_concurrent_regions: vec!["region_1".to_string()],
                 removed_concurrent_regions: vec!["region_0".to_string()],
             },
-            MmdsDiffKind::SubgraphMembershipChanged,
+            ChangeKind::SubgraphMembershipChanged,
         ),
         (
             Command::SetSubgraphVisibility {
                 subgraph: "cluster_0".to_string(),
                 invisible: true,
             },
-            MmdsDiffKind::SubgraphVisibilityChanged,
+            ChangeKind::SubgraphVisibilityChanged,
         ),
     ]
 }
@@ -1675,24 +1629,32 @@ fn subgraph_command_examples() -> Vec<(Command, MmdsDiffKind)> {
 #[test]
 fn mmds_command_vocabulary_is_symmetric_with_diff_kinds() {
     let command_examples = all_command_examples();
-    let command_kinds: Vec<MmdsDiffKind> = command_examples
+    let command_kinds: Vec<ChangeKind> = command_examples
         .iter()
-        .map(|(command, _)| diff_kind_for_command(command))
+        .map(|(command, _)| model_event_kind_to_change_kind(model_event_kind_for_command(command)))
         .collect();
 
-    assert_same_kinds(&command_kinds, commandable_diff_kinds());
-    assert_same_kinds(geometry_effect_diff_kinds(), &geometry_effect_kinds());
+    assert_same_kinds(
+        &command_kinds,
+        &commandable_model_event_kinds()
+            .iter()
+            .map(|kind| model_event_kind_to_change_kind(*kind))
+            .collect::<Vec<_>>(),
+    );
+    assert_same_kinds(geometry_effect_change_kinds(), &geometry_effect_kinds());
 
     for kind in all_diff_kinds() {
-        let is_effect = contains_kind(geometry_effect_diff_kinds(), kind);
-        let is_commandable = contains_kind(commandable_diff_kinds(), kind);
+        let is_effect = contains_kind(geometry_effect_change_kinds(), kind);
+        let is_commandable = commandable_model_event_kinds()
+            .iter()
+            .any(|command_kind| model_event_kind_to_change_kind(*command_kind) == kind);
 
         assert_ne!(is_effect, is_commandable, "{kind:?}");
-        assert_eq!(kind.is_geometry_effect(), is_effect, "{kind:?}");
+        assert_eq!(kind.is_geometry(), is_effect, "{kind:?}");
     }
 }
 
-fn all_command_examples() -> Vec<(Command, MmdsDiffKind)> {
+fn all_command_examples() -> Vec<(Command, ChangeKind)> {
     let mut examples = document_node_command_examples();
     examples.extend(edge_command_examples());
     examples.extend(subgraph_command_examples());
@@ -1703,16 +1665,16 @@ struct ApplyRoundTripCase {
     name: &'static str,
     before: crate::mmds::Document,
     command: Command,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ChangeKind,
+    expected_subject: Subject,
     expect_no_geometry_effects: bool,
 }
 
 struct TierARepresentativeCommandCase {
     pair_id: &'static str,
     command: Command,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ChangeKind,
+    expected_subject: Subject,
 }
 
 fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
@@ -1723,8 +1685,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::SetGeometryLevel {
                 level: "layout".to_string(),
             },
-            MmdsDiffKind::GeometryLevelChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::GeometryLevelChanged,
+            Subject::Document,
         ),
         round_trip_case(
             "set direction",
@@ -1732,8 +1694,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::SetDirection {
                 direction: "LR".to_string(),
             },
-            MmdsDiffKind::DirectionChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::DirectionChanged,
+            Subject::Document,
         ),
         round_trip_case(
             "set engine some",
@@ -1741,15 +1703,15 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::SetEngine {
                 engine: Some("mermaid-layered".to_string()),
             },
-            MmdsDiffKind::EngineChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::EngineChanged,
+            Subject::Document,
         ),
         round_trip_case(
             "set engine none",
             parse_routed_with_engine("graph TD\n    A --> B\n", "mermaid-layered"),
             Command::SetEngine { engine: None },
-            MmdsDiffKind::EngineChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::EngineChanged,
+            Subject::Document,
         ),
         round_trip_case(
             "add node",
@@ -1760,8 +1722,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 shape: "rectangle".to_string(),
                 parent: None,
             },
-            MmdsDiffKind::NodeAdded,
-            MmdsDiffSubject::Node("C".to_string()),
+            ChangeKind::NodeAdded,
+            Subject::Node("C".to_string()),
         ),
         round_trip_case(
             "remove node",
@@ -1769,8 +1731,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::RemoveNode {
                 id: "C".to_string(),
             },
-            MmdsDiffKind::NodeRemoved,
-            MmdsDiffSubject::Node("C".to_string()),
+            ChangeKind::NodeRemoved,
+            Subject::Node("C".to_string()),
         ),
         round_trip_case(
             "change node label",
@@ -1779,8 +1741,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 node: "A".to_string(),
                 label: "Alpha".to_string(),
             },
-            MmdsDiffKind::NodeLabelChanged,
-            MmdsDiffSubject::Node("A".to_string()),
+            ChangeKind::NodeLabelChanged,
+            Subject::Node("A".to_string()),
         ),
         round_trip_case(
             "change node shape",
@@ -1789,8 +1751,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 node: "A".to_string(),
                 shape: "stadium".to_string(),
             },
-            MmdsDiffKind::NodeShapeChanged,
-            MmdsDiffSubject::Node("A".to_string()),
+            ChangeKind::NodeShapeChanged,
+            Subject::Node("A".to_string()),
         ),
         round_trip_case(
             "set node parent",
@@ -1801,8 +1763,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 node: "A".to_string(),
                 parent: Some("sg1".to_string()),
             },
-            MmdsDiffKind::NodeParentChanged,
-            MmdsDiffSubject::Node("A".to_string()),
+            ChangeKind::NodeParentChanged,
+            Subject::Node("A".to_string()),
         ),
         round_trip_case_no_geometry(
             "set node style extension insert",
@@ -1811,8 +1773,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 node: "A".to_string(),
                 value: json!({ "fill": "#abcdef" }),
             },
-            MmdsDiffKind::NodeStyleChanged,
-            MmdsDiffSubject::Node("A".to_string()),
+            ChangeKind::NodeStyleChanged,
+            Subject::Node("A".to_string()),
         ),
         round_trip_case_no_geometry(
             "set node style extension update",
@@ -1821,8 +1783,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 node: "A".to_string(),
                 value: json!({ "fill": "#abcdef" }),
             },
-            MmdsDiffKind::NodeStyleChanged,
-            MmdsDiffSubject::Node("A".to_string()),
+            ChangeKind::NodeStyleChanged,
+            Subject::Node("A".to_string()),
         ),
         round_trip_case_no_geometry(
             "set profiles",
@@ -1830,8 +1792,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::SetProfiles {
                 profiles: vec!["custom-profile".to_string()],
             },
-            MmdsDiffKind::ProfileChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::ProfileChanged,
+            Subject::Document,
         ),
         round_trip_case_no_geometry(
             "set extension insert",
@@ -1840,8 +1802,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 namespace: "example.extension".to_string(),
                 value: json!({ "enabled": true }),
             },
-            MmdsDiffKind::ExtensionChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::ExtensionChanged,
+            Subject::Document,
         ),
         round_trip_case_no_geometry(
             "set extension update",
@@ -1854,15 +1816,15 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 namespace: "example.extension".to_string(),
                 value: json!({ "enabled": true }),
             },
-            MmdsDiffKind::ExtensionChanged,
-            MmdsDiffSubject::Document,
+            ChangeKind::ExtensionChanged,
+            Subject::Document,
         ),
         round_trip_case(
             "add edge",
             parse_routed_for_command_apply("graph TD\n    A --> B\n    C[Gamma]\n"),
             add_edge_command(None),
-            MmdsDiffKind::EdgeAdded,
-            MmdsDiffSubject::Edge("e1".to_string()),
+            ChangeKind::EdgeAdded,
+            Subject::Edge("e1".to_string()),
         ),
         round_trip_case(
             "remove edge",
@@ -1870,8 +1832,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::RemoveEdge {
                 edge: EdgeSelector::Id("e1".to_string()),
             },
-            MmdsDiffKind::EdgeRemoved,
-            MmdsDiffSubject::Edge("e1".to_string()),
+            ChangeKind::EdgeRemoved,
+            Subject::Edge("e1".to_string()),
         ),
         round_trip_case(
             "reconnect edge",
@@ -1881,8 +1843,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 source: "A".to_string(),
                 target: "C".to_string(),
             },
-            MmdsDiffKind::EdgeReconnected,
-            MmdsDiffSubject::Edge("e0".to_string()),
+            ChangeKind::EdgeReconnected,
+            Subject::Edge("e0".to_string()),
         ),
         round_trip_case(
             "set edge endpoint intent",
@@ -1894,8 +1856,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 from_subgraph: Some("sg1".to_string()),
                 to_subgraph: Some("sg2".to_string()),
             },
-            MmdsDiffKind::EdgeEndpointIntentChanged,
-            MmdsDiffSubject::Edge("e0".to_string()),
+            ChangeKind::EdgeEndpointIntentChanged,
+            Subject::Edge("e0".to_string()),
         ),
         round_trip_case(
             "change edge label",
@@ -1904,8 +1866,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 edge: EdgeSelector::Id("e0".to_string()),
                 label: Some("much longer label".to_string()),
             },
-            MmdsDiffKind::EdgeLabelChanged,
-            MmdsDiffSubject::Edge("e0".to_string()),
+            ChangeKind::EdgeLabelChanged,
+            Subject::Edge("e0".to_string()),
         ),
         round_trip_case(
             "change edge style",
@@ -1917,8 +1879,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 arrow_end: Some("diamond".to_string()),
                 minlen: Some(2),
             },
-            MmdsDiffKind::EdgeStyleChanged,
-            MmdsDiffSubject::Edge("e0".to_string()),
+            ChangeKind::EdgeStyleChanged,
+            Subject::Edge("e0".to_string()),
         ),
         round_trip_case(
             "add subgraph",
@@ -1932,8 +1894,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 concurrent_regions: Vec::new(),
                 invisible: false,
             },
-            MmdsDiffKind::SubgraphAdded,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphAdded,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case(
             "remove subgraph",
@@ -1941,8 +1903,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::RemoveSubgraph {
                 id: "sg1".to_string(),
             },
-            MmdsDiffKind::SubgraphRemoved,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphRemoved,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case_no_geometry(
             "change subgraph title",
@@ -1951,8 +1913,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 subgraph: "sg1".to_string(),
                 title: Some("Pipeline".to_string()),
             },
-            MmdsDiffKind::SubgraphTitleChanged,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphTitleChanged,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case(
             "set subgraph direction",
@@ -1961,8 +1923,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 subgraph: "sg1".to_string(),
                 direction: Some("LR".to_string()),
             },
-            MmdsDiffKind::SubgraphDirectionChanged,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphDirectionChanged,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case(
             "set subgraph parent",
@@ -1973,8 +1935,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 subgraph: "sg1".to_string(),
                 parent: Some("outer".to_string()),
             },
-            MmdsDiffKind::SubgraphParentChanged,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphParentChanged,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case(
             "change subgraph membership",
@@ -1988,8 +1950,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 added_concurrent_regions: Vec::new(),
                 removed_concurrent_regions: Vec::new(),
             },
-            MmdsDiffKind::SubgraphMembershipChanged,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphMembershipChanged,
+            Subject::Subgraph("sg1".to_string()),
         ),
         round_trip_case(
             "set subgraph visibility",
@@ -1998,8 +1960,8 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 subgraph: "sg1".to_string(),
                 invisible: true,
             },
-            MmdsDiffKind::SubgraphVisibilityChanged,
-            MmdsDiffSubject::Subgraph("sg1".to_string()),
+            ChangeKind::SubgraphVisibilityChanged,
+            Subject::Subgraph("sg1".to_string()),
         ),
     ]
 }
@@ -2008,8 +1970,8 @@ fn round_trip_case(
     name: &'static str,
     before: crate::mmds::Document,
     command: Command,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ChangeKind,
+    expected_subject: Subject,
 ) -> ApplyRoundTripCase {
     ApplyRoundTripCase {
         name,
@@ -2025,8 +1987,8 @@ fn round_trip_case_no_geometry(
     name: &'static str,
     before: crate::mmds::Document,
     command: Command,
-    expected_kind: MmdsDiffKind,
-    expected_subject: MmdsDiffSubject,
+    expected_kind: ChangeKind,
+    expected_subject: Subject,
 ) -> ApplyRoundTripCase {
     ApplyRoundTripCase {
         name,
@@ -2048,8 +2010,8 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
                 shape: "rectangle".to_string(),
                 parent: None,
             },
-            expected_kind: MmdsDiffKind::NodeAdded,
-            expected_subject: MmdsDiffSubject::Node("X".to_string()),
+            expected_kind: ChangeKind::NodeAdded,
+            expected_subject: Subject::Node("X".to_string()),
         },
         TierARepresentativeCommandCase {
             pair_id: "M05",
@@ -2057,8 +2019,8 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
                 node: "Lint".to_string(),
                 label: "Static Analysis".to_string(),
             },
-            expected_kind: MmdsDiffKind::NodeLabelChanged,
-            expected_subject: MmdsDiffSubject::Node("Lint".to_string()),
+            expected_kind: ChangeKind::NodeLabelChanged,
+            expected_subject: Subject::Node("Lint".to_string()),
         },
         TierARepresentativeCommandCase {
             pair_id: "M07",
@@ -2069,8 +2031,8 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
                 arrow_end: None,
                 minlen: None,
             },
-            expected_kind: MmdsDiffKind::EdgeStyleChanged,
-            expected_subject: MmdsDiffSubject::Edge("e0".to_string()),
+            expected_kind: ChangeKind::EdgeStyleChanged,
+            expected_subject: Subject::Edge("e0".to_string()),
         },
         TierARepresentativeCommandCase {
             pair_id: "M10",
@@ -2078,71 +2040,71 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
                 subgraph: "sg1".to_string(),
                 direction: Some("TD".to_string()),
             },
-            expected_kind: MmdsDiffKind::SubgraphDirectionChanged,
-            expected_subject: MmdsDiffSubject::Subgraph("sg1".to_string()),
+            expected_kind: ChangeKind::SubgraphDirectionChanged,
+            expected_subject: Subject::Subgraph("sg1".to_string()),
         },
     ]
 }
 
-fn all_diff_kinds() -> [MmdsDiffKind; 36] {
+fn all_diff_kinds() -> [ChangeKind; 36] {
     [
-        MmdsDiffKind::GeometryLevelChanged,
-        MmdsDiffKind::DirectionChanged,
-        MmdsDiffKind::EngineChanged,
-        MmdsDiffKind::NodeAdded,
-        MmdsDiffKind::NodeRemoved,
-        MmdsDiffKind::EdgeAdded,
-        MmdsDiffKind::EdgeRemoved,
-        MmdsDiffKind::SubgraphAdded,
-        MmdsDiffKind::SubgraphRemoved,
-        MmdsDiffKind::NodeLabelChanged,
-        MmdsDiffKind::NodeShapeChanged,
-        MmdsDiffKind::NodeParentChanged,
-        MmdsDiffKind::NodeStyleChanged,
-        MmdsDiffKind::EdgeReconnected,
-        MmdsDiffKind::EdgeEndpointIntentChanged,
-        MmdsDiffKind::EdgeLabelChanged,
-        MmdsDiffKind::EdgeStyleChanged,
-        MmdsDiffKind::SubgraphTitleChanged,
-        MmdsDiffKind::SubgraphDirectionChanged,
-        MmdsDiffKind::SubgraphParentChanged,
-        MmdsDiffKind::SubgraphMembershipChanged,
-        MmdsDiffKind::SubgraphVisibilityChanged,
-        MmdsDiffKind::ProfileChanged,
-        MmdsDiffKind::ExtensionChanged,
-        MmdsDiffKind::NodeMoved,
-        MmdsDiffKind::NodeResized,
-        MmdsDiffKind::CanvasResized,
-        MmdsDiffKind::SubgraphBoundsChanged,
-        MmdsDiffKind::EdgeRerouted,
-        MmdsDiffKind::EndpointFaceChanged,
-        MmdsDiffKind::PortIntentChanged,
-        MmdsDiffKind::LabelMoved,
-        MmdsDiffKind::LabelResized,
-        MmdsDiffKind::LabelSideChanged,
-        MmdsDiffKind::PathPortDivergenceChanged,
-        MmdsDiffKind::GlobalReflowDetected,
+        ChangeKind::GeometryLevelChanged,
+        ChangeKind::DirectionChanged,
+        ChangeKind::EngineChanged,
+        ChangeKind::NodeAdded,
+        ChangeKind::NodeRemoved,
+        ChangeKind::EdgeAdded,
+        ChangeKind::EdgeRemoved,
+        ChangeKind::SubgraphAdded,
+        ChangeKind::SubgraphRemoved,
+        ChangeKind::NodeLabelChanged,
+        ChangeKind::NodeShapeChanged,
+        ChangeKind::NodeParentChanged,
+        ChangeKind::NodeStyleChanged,
+        ChangeKind::EdgeReconnected,
+        ChangeKind::EdgeEndpointIntentChanged,
+        ChangeKind::EdgeLabelChanged,
+        ChangeKind::EdgeStyleChanged,
+        ChangeKind::SubgraphTitleChanged,
+        ChangeKind::SubgraphDirectionChanged,
+        ChangeKind::SubgraphParentChanged,
+        ChangeKind::SubgraphMembershipChanged,
+        ChangeKind::SubgraphVisibilityChanged,
+        ChangeKind::ProfileChanged,
+        ChangeKind::ExtensionChanged,
+        ChangeKind::NodeMoved,
+        ChangeKind::NodeResized,
+        ChangeKind::CanvasResized,
+        ChangeKind::SubgraphBoundsChanged,
+        ChangeKind::EdgeRerouted,
+        ChangeKind::EndpointFaceChanged,
+        ChangeKind::PortIntentChanged,
+        ChangeKind::LabelMoved,
+        ChangeKind::LabelResized,
+        ChangeKind::LabelSideChanged,
+        ChangeKind::PathPortDivergenceChanged,
+        ChangeKind::GlobalReflowDetected,
     ]
 }
 
-fn geometry_effect_kinds() -> [MmdsDiffKind; 12] {
+fn geometry_effect_kinds() -> [ChangeKind; 12] {
     [
-        MmdsDiffKind::NodeMoved,
-        MmdsDiffKind::NodeResized,
-        MmdsDiffKind::CanvasResized,
-        MmdsDiffKind::SubgraphBoundsChanged,
-        MmdsDiffKind::EdgeRerouted,
-        MmdsDiffKind::EndpointFaceChanged,
-        MmdsDiffKind::PortIntentChanged,
-        MmdsDiffKind::LabelMoved,
-        MmdsDiffKind::LabelResized,
-        MmdsDiffKind::LabelSideChanged,
-        MmdsDiffKind::PathPortDivergenceChanged,
-        MmdsDiffKind::GlobalReflowDetected,
+        ChangeKind::NodeMoved,
+        ChangeKind::NodeResized,
+        ChangeKind::CanvasResized,
+        ChangeKind::SubgraphBoundsChanged,
+        ChangeKind::EdgeRerouted,
+        ChangeKind::EndpointFaceChanged,
+        ChangeKind::PortIntentChanged,
+        ChangeKind::LabelMoved,
+        ChangeKind::LabelResized,
+        ChangeKind::LabelSideChanged,
+        ChangeKind::PathPortDivergenceChanged,
+        ChangeKind::GlobalReflowDetected,
     ]
 }
 
-fn assert_same_kinds(left: &[MmdsDiffKind], right: &[MmdsDiffKind]) {
+fn assert_same_kinds(left: &[ChangeKind], right: &[ChangeKind]) {
     assert_eq!(left.len(), right.len());
     for kind in left {
         assert!(contains_kind(right, *kind), "missing {kind:?}");
@@ -2152,7 +2114,7 @@ fn assert_same_kinds(left: &[MmdsDiffKind], right: &[MmdsDiffKind]) {
     }
 }
 
-fn contains_kind(kinds: &[MmdsDiffKind], needle: MmdsDiffKind) -> bool {
+fn contains_kind(kinds: &[ChangeKind], needle: ChangeKind) -> bool {
     kinds.contains(&needle)
 }
 
@@ -2219,20 +2181,16 @@ fn map_from_pairs<const N: usize>(
         .collect()
 }
 
-fn assert_primary_event(
-    events: &[crate::mmds::diff::MmdsDiffEvent],
-    kind: MmdsDiffKind,
-    subject_id: &str,
-) {
+fn assert_primary_event(events: &[ModelEvent], kind: ModelEventKind, subject_id: &str) {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, kind);
     assert!(subject_matches(&events[0].subject, subject_id));
 }
 
-fn assert_has_event_pair(
-    events: &[crate::mmds::diff::MmdsDiffEvent],
-    kind: MmdsDiffKind,
-    subject: &MmdsDiffSubject,
+fn assert_has_change_pair(
+    events: &[crate::mmds::diff::Change],
+    kind: ChangeKind,
+    subject: &Subject,
 ) {
     assert!(
         events
@@ -2242,20 +2200,27 @@ fn assert_has_event_pair(
     );
 }
 
+fn assert_has_model_event_change_pair(events: &[ModelEvent], kind: ChangeKind, subject: &Subject) {
+    assert!(
+        events
+            .iter()
+            .any(|event| model_event_kind_to_change_kind(event.kind) == kind
+                && event.subject == *subject),
+        "missing ({kind:?}, {subject:?}) in {events:#?}"
+    );
+}
+
 fn assert_in_place_diff(
     before: &crate::mmds::Document,
     after: &crate::mmds::Document,
-    kind: MmdsDiffKind,
+    kind: ChangeKind,
     subject_id: &str,
 ) {
     assert_geometry_unchanged(before, after);
-    let diff = crate::mmds::diff::diff_outputs(before, after);
-    assert!(diff.has_event(kind, subject_id), "{diff:#?}");
+    let diff = crate::mmds::diff::diff_documents(before, after);
+    assert!(diff.has_change(kind, subject_id), "{diff:#?}");
     assert!(
-        !diff
-            .events
-            .iter()
-            .any(|event| event.kind.is_geometry_effect()),
+        !diff.changes.iter().any(|event| event.kind.is_geometry()),
         "{diff:#?}"
     );
 }
@@ -2315,12 +2280,12 @@ fn subgraph_geometry(output: &crate::mmds::Document) -> Vec<serde_json::Value> {
         .collect()
 }
 
-fn subject_matches(subject: &crate::mmds::diff::MmdsDiffSubject, subject_id: &str) -> bool {
+fn subject_matches(subject: &crate::mmds::Subject, subject_id: &str) -> bool {
     match subject {
-        crate::mmds::diff::MmdsDiffSubject::Document => subject_id.is_empty(),
-        crate::mmds::diff::MmdsDiffSubject::Node(id)
-        | crate::mmds::diff::MmdsDiffSubject::Edge(id)
-        | crate::mmds::diff::MmdsDiffSubject::Subgraph(id) => id == subject_id,
+        crate::mmds::Subject::Document => subject_id.is_empty(),
+        crate::mmds::Subject::Node(id)
+        | crate::mmds::Subject::Edge(id)
+        | crate::mmds::Subject::Subgraph(id) => id == subject_id,
     }
 }
 

@@ -27,6 +27,7 @@ payload = {}
 registry = {}
 diagrams = {}
 builtins = { tags = { role = "runtime-facade" } }
+commands = {}
 mmds = {}
 views = {}
 frontends = { tags = { role = "runtime-facade" } }
@@ -146,6 +147,13 @@ type = "allow"
 [rules.config]
 source = "builtins"
 allowed = ["diagrams", "format", "registry"]
+
+[[rules]]
+id = "allow-commands"
+type = "allow"
+[rules.config]
+source = "commands"
+allowed = ["errors", "format", "graph", "mmds", "runtime"]
 
 # Must not import diagrams, config, engines, render, or runtime.
 [[rules]]

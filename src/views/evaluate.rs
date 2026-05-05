@@ -14,7 +14,7 @@ pub(super) struct ViewEvaluation {
     /// Subgraph IDs explicitly retained by the evaluated view.
     ///
     /// Ancestor subgraphs required to contain retained nodes are added by
-    /// [`apply_view`](crate::views::apply_view) during materialization.
+    /// [`project`](crate::views::project) during materialization.
     pub(super) subgraphs: BTreeSet<String>,
 }
 
@@ -38,7 +38,7 @@ impl ViewEvaluation {
 ///
 /// This function resolves selectors only. It does not clone or prune the MMDS
 /// payload, preserve ancestor subgraphs, filter edges, or emit elision events;
-/// use [`apply_view`](crate::views::apply_view) for the full materialized view.
+/// use [`project`](crate::views::project) for the full materialized view.
 pub(super) fn evaluate_view(
     output: &Document,
     spec: &ViewSpec,
