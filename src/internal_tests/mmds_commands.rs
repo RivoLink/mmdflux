@@ -7,7 +7,7 @@ use super::event_change_mapping::model_event_kind_to_change_kind;
 use super::layout_stability::mutations;
 use crate::commands::{
     ChangeKindLayer, Command, CommandApplyError, EdgeSelector, apply, change_kind_layer,
-    commandable_model_event_kinds, geometry_effect_change_kinds, model_event_kind_for_command,
+    geometry_change_kinds, model_event_kind_for_command, model_event_kinds,
     relayout_output_for_command_apply,
 };
 use crate::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
@@ -1074,7 +1074,7 @@ fn mmds_command_apply_relayout_add_subgraph_duplicate_errors_without_mutation() 
 #[test]
 fn mmds_command_apply_round_trip_primary_event_matches_diff() {
     let cases = apply_round_trip_cases();
-    for expected_kind in commandable_model_event_kinds() {
+    for expected_kind in model_event_kinds() {
         assert!(
             cases
                 .iter()
@@ -1648,21 +1648,21 @@ fn mmds_command_vocabulary_is_symmetric_with_diff_kinds() {
 
     assert_same_kinds(
         &command_kinds,
-        &commandable_model_event_kinds()
+        &model_event_kinds()
             .iter()
             .map(|kind| model_event_kind_to_change_kind(*kind))
             .collect::<Vec<_>>(),
     );
-    assert_same_kinds(geometry_effect_change_kinds(), &geometry_effect_kinds());
+    assert_same_kinds(geometry_change_kinds(), &geometry_effect_kinds());
 
     for kind in all_diff_kinds() {
-        let is_effect = contains_kind(geometry_effect_change_kinds(), kind);
-        let is_commandable = commandable_model_event_kinds()
+        let is_geometry = contains_kind(geometry_change_kinds(), kind);
+        let is_model = model_event_kinds()
             .iter()
             .any(|command_kind| model_event_kind_to_change_kind(*command_kind) == kind);
 
-        assert_ne!(is_effect, is_commandable, "{kind:?}");
-        assert_eq!(kind.is_geometry(), is_effect, "{kind:?}");
+        assert_ne!(is_geometry, is_model, "{kind:?}");
+        assert_eq!(kind.is_geometry(), is_geometry, "{kind:?}");
     }
 }
 

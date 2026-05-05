@@ -47,7 +47,7 @@ use crate::mmds::{
 use crate::runtime::config::RenderConfig;
 
 #[cfg(test)]
-const COMMANDABLE_MODEL_EVENT_KINDS: &[ModelEventKind] = &[
+const MODEL_EVENT_KINDS: &[ModelEventKind] = &[
     ModelEventKind::GeometryLevelChanged,
     ModelEventKind::DirectionChanged,
     ModelEventKind::EngineChanged,
@@ -75,7 +75,7 @@ const COMMANDABLE_MODEL_EVENT_KINDS: &[ModelEventKind] = &[
 ];
 
 #[cfg(test)]
-const GEOMETRY_EFFECT_DIFF_KINDS: &[ChangeKind] = &[
+const GEOMETRY_CHANGE_KINDS: &[ChangeKind] = &[
     ChangeKind::NodeMoved,
     ChangeKind::NodeResized,
     ChangeKind::CanvasResized,
@@ -266,13 +266,13 @@ pub enum CommandApplyError {
 }
 
 #[cfg(test)]
-pub(crate) fn commandable_model_event_kinds() -> &'static [ModelEventKind] {
-    COMMANDABLE_MODEL_EVENT_KINDS
+pub(crate) fn model_event_kinds() -> &'static [ModelEventKind] {
+    MODEL_EVENT_KINDS
 }
 
 #[cfg(test)]
-pub(crate) fn geometry_effect_change_kinds() -> &'static [ChangeKind] {
-    GEOMETRY_EFFECT_DIFF_KINDS
+pub(crate) fn geometry_change_kinds() -> &'static [ChangeKind] {
+    GEOMETRY_CHANGE_KINDS
 }
 
 #[cfg(test)]

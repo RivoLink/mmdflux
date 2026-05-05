@@ -208,7 +208,7 @@ mod tests {
             assert_eq!(Shape::parse_mmds(token), Ok(shape));
             assert_eq!(shape.as_mmds_str(), token);
         }
-        assert_eq!(Shape::parse_mmds("octogon").unwrap_err().kind, "shape");
+        assert_eq!(Shape::parse_mmds("shape").unwrap_err().kind, "shape");
     }
 
     #[test]

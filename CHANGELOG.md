@@ -67,7 +67,7 @@
 - align orthogonal backward side-offset labels to post-fan path - ([19ffee6](https://github.com/kevinswiber/mmdflux/commit/19ffee62c3cfaa20afbce720046367c251d74d2d)) - [@kevinswiber](https://github.com/kevinswiber)
 - coordinate axis-conflict label clusters with shared anchor and symmetric offsets - ([1dbf264](https://github.com/kevinswiber/mmdflux/commit/1dbf26406b73c21514353a26c50420b96666a76b)) - [@kevinswiber](https://github.com/kevinswiber)
 - kernel rank-space reservation for multi-member edge-label compartments - ([7d349ad](https://github.com/kevinswiber/mmdflux/commit/7d349ad03d270df060a6775cc04a9189a1c994d6)) - [@kevinswiber](https://github.com/kevinswiber)
-- honour edge_label_spacing in Text renderer via padded Grid dummy dims - ([1db67d0](https://github.com/kevinswiber/mmdflux/commit/1db67d0c9b1709b7520e1e90dbdcaba957c4ff97)) - [@kevinswiber](https://github.com/kevinswiber)
+- honor edge_label_spacing in Text renderer via padded Grid dummy dims - ([1db67d0](https://github.com/kevinswiber/mmdflux/commit/1db67d0c9b1709b7520e1e90dbdcaba957c4ff97)) - [@kevinswiber](https://github.com/kevinswiber)
 - prevent text edge labels from overflowing narrow compound subgraph columns - ([09737c1](https://github.com/kevinswiber/mmdflux/commit/09737c12f3e41f45cd8aa2cef30256cb922513e1)) - [@kevinswiber](https://github.com/kevinswiber)
 - use rect positions for BT/RL clamp gap (GPT-5.4 review) - ([6d5f517](https://github.com/kevinswiber/mmdflux/commit/6d5f517a5ab2bc8f8045f42cd132e38f59eae571)) - [@kevinswiber](https://github.com/kevinswiber)
 - clamp edge-label rects to source/target node bounds - ([2bc324d](https://github.com/kevinswiber/mmdflux/commit/2bc324d8627ba368f4fb077215207c3b4a49a1d7)) - [@kevinswiber](https://github.com/kevinswiber)
@@ -103,7 +103,7 @@
 #### Refactoring
 - delete derive-time heuristic; render-time corridor-aware placer owns all body labels - ([2555c51](https://github.com/kevinswiber/mmdflux/commit/2555c51d7710dd8deeedfe88308a104c75584e80)) - [@kevinswiber](https://github.com/kevinswiber)
 - make routing import explicit - ([89b8520](https://github.com/kevinswiber/mmdflux/commit/89b8520e0459eea9e16cf98b05337dfc20356b35)) - [@kevinswiber](https://github.com/kevinswiber)
-- remove layered measurementmode re-export - ([84f11a8](https://github.com/kevinswiber/mmdflux/commit/84f11a871dfca6fc4bdd3a4460ac28b8e871ddf7)) - [@kevinswiber](https://github.com/kevinswiber)
+- remove layered MeasurementMode re-export - ([84f11a8](https://github.com/kevinswiber/mmdflux/commit/84f11a871dfca6fc4bdd3a4460ac28b8e871ddf7)) - [@kevinswiber](https://github.com/kevinswiber)
 - retire boundary exception debt - ([d49910a](https://github.com/kevinswiber/mmdflux/commit/d49910a5bf12d5e7aae836e8df14a7b5ac2a79f7)) - [@kevinswiber](https://github.com/kevinswiber)
 - convert module-dep scripts from Python to Node.js - ([c413c6a](https://github.com/kevinswiber/mmdflux/commit/c413c6a469e8a246b43479c9923dd9b3052c6ae0)) - [@kevinswiber](https://github.com/kevinswiber)
 - split svg theme auto modules - ([7fbe696](https://github.com/kevinswiber/mmdflux/commit/7fbe696ae36e540626c56a4132039cee983c7327)) - [@kevinswiber](https://github.com/kevinswiber)

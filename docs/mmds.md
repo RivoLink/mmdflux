@@ -116,7 +116,7 @@ Materialized view payloads carry a top-level extension marker:
 When the canonical payload contains the text renderer projection extension
 (`org.mmdflux.render.text.v1`), v1 view materialization keeps `projection.node_ranks`
 for retained nodes and drops edge-array-indexed projection maps such as
-`edge_waypoints` and `label_positions`. This avoids reindexing edge projection
+`edge_waypoints` and `label_positions`. This avoids re-indexing edge projection
 data through sparse view edges.
 
 To render a materialized view, pass the returned `Document` through the typed
@@ -368,24 +368,24 @@ Rules:
 
 ### Edge
 
-| Field            | Type          | Level  | Description                                                                                                                                      |
-| ---------------- | ------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `source`         | string        | both   | Source node ID                                                                                                                                   |
-| `target`         | string        | both   | Target node ID                                                                                                                                   |
-| `id`             | string        | both   | Deterministic edge ID (`e{declaration_index}`)                                                                                                   |
-| `label`          | string?       | both   | Edge label                                                                                                                                       |
-| `from_subgraph`  | string?       | both   | Optional source subgraph endpoint intent (for subgraph-as-source edges)                                                                          |
-| `to_subgraph`    | string?       | both   | Optional target subgraph endpoint intent (for subgraph-as-target edges)                                                                          |
-| `stroke`         | string        | both   | `"solid"`, `"dotted"`, `"thick"`, `"invisible"`; omitted when equal to `defaults.edge.stroke`                                                    |
-| `arrow_start`    | string        | both   | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_start` |
-| `arrow_end`      | string        | both   | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_end`   |
-| `minlen`         | integer       | both   | Minimum rank separation; omitted when equal to `defaults.edge.minlen`                                                                            |
-| `path`           | `[[x,y],...]` | routed | Authoritative visible routed polyline path coordinates. Consumers should use `edge.path` for visible edge geometry and endpoints.                 |
-| `label_position` | `{x, y}`      | routed | Label center                                                                                                                                     |
-| `is_backward`    | boolean       | routed | Flows backward in layout                                                                                                                         |
-| `source_port`    | Port?         | routed | Logical source port anchor metadata describing route intent (see Port below)                                                                     |
-| `target_port`    | Port?         | routed | Logical target port anchor metadata describing route intent (see Port below)                                                                     |
-| `label_side`     | string?       | both   | `"above"`, `"below"`, or `"center"`; present at both layout and routed levels when the engine has assigned a side, omitted otherwise             |
+| Field            | Type          | Level  | Description                                                                                                                                                |
+| ---------------- | ------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`         | string        | both   | Source node ID                                                                                                                                             |
+| `target`         | string        | both   | Target node ID                                                                                                                                             |
+| `id`             | string        | both   | Deterministic edge ID (`e{declaration_index}`)                                                                                                             |
+| `label`          | string?       | both   | Edge label                                                                                                                                                 |
+| `from_subgraph`  | string?       | both   | Optional source subgraph endpoint intent (for subgraph-as-source edges)                                                                                    |
+| `to_subgraph`    | string?       | both   | Optional target subgraph endpoint intent (for subgraph-as-target edges)                                                                                    |
+| `stroke`         | string        | both   | `"solid"`, `"dotted"`, `"thick"`, `"invisible"`; omitted when equal to `defaults.edge.stroke`                                                              |
+| `arrow_start`    | string        | both   | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_start`           |
+| `arrow_end`      | string        | both   | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_end`             |
+| `minlen`         | integer       | both   | Minimum rank separation; omitted when equal to `defaults.edge.minlen`                                                                                      |
+| `path`           | `[[x,y],...]` | routed | Authoritative visible routed polyline path coordinates. Consumers should use `edge.path` for visible edge geometry and endpoints.                          |
+| `label_position` | `{x, y}`      | routed | Label center                                                                                                                                               |
+| `is_backward`    | boolean       | routed | Flows backward in layout                                                                                                                                   |
+| `source_port`    | Port?         | routed | Logical source port anchor metadata describing route intent (see Port below)                                                                               |
+| `target_port`    | Port?         | routed | Logical target port anchor metadata describing route intent (see Port below)                                                                               |
+| `label_side`     | string?       | both   | `"above"`, `"below"`, or `"center"`; present at both layout and routed levels when the engine has assigned a side, omitted otherwise                       |
 | `label_rect`     | Rect?         | routed | Padded label rectangle `{x, y, width, height}` including `label_padding_x`/`label_padding_y` padding; omitted when the engine has not assigned a rectangle |
 
 ### Port
@@ -396,12 +396,12 @@ metadata for choosing and grouping a boundary face, not a replacement for
 `edge.path[-1]`; consumers that need the visible rendered endpoint should read
 the routed path.
 
-| Field        | Type     | Description                                                                                             |
-| ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
-| `face`       | string   | Logical node boundary face for route intent: `"top"`, `"bottom"`, `"left"`, or `"right"`                |
-| `fraction`   | number   | Position along the logical face (0.0 = start, 1.0 = end). Top/bottom: left-to-right. Left/right: top-to-bottom. |
+| Field        | Type     | Description                                                                                                                    |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `face`       | string   | Logical node boundary face for route intent: `"top"`, `"bottom"`, `"left"`, or `"right"`                                       |
+| `fraction`   | number   | Position along the logical face (0.0 = start, 1.0 = end). Top/bottom: left-to-right. Left/right: top-to-bottom.                |
 | `position`   | `{x, y}` | Logical anchor coordinate derived from face, fraction, and node bounds. It is not guaranteed to equal a visible path endpoint. |
-| `group_size` | integer  | Number of edges sharing this face on this node                                                          |
+| `group_size` | integer  | Number of edges sharing this face on this node                                                                                 |
 
 ### Subgraph
 
@@ -516,19 +516,19 @@ Positions come from the proportional SVG layout engine and are in the same unitl
 
 #### `participants`
 
-| Field        | Type              | Description                                    |
-| ------------ | ----------------- | ---------------------------------------------- |
+| Field        | Type              | Description                                     |
+| ------------ | ----------------- | ----------------------------------------------- |
 | `id`         | string            | Participant identifier from source              |
 | `label`      | string            | Display label (alias if provided, otherwise id) |
 | `kind`       | string            | `"participant"` or `"actor"`                    |
 | `position`   | `{x, y}`          | Top-left of header box                          |
 | `size`       | `{width, height}` | Header box dimensions                           |
-| `lifeline_x` | number           | Center x of the vertical lifeline               |
+| `lifeline_x` | number            | Center x of the vertical lifeline               |
 
 #### `messages`
 
-| Field        | Type   | Description                                       |
-| ------------ | ------ | ------------------------------------------------- |
+| Field        | Type   | Description                                        |
+| ------------ | ------ | -------------------------------------------------- |
 | `id`         | string | Deterministic message ID (`m0`, `m1`, ...)         |
 | `from`       | number | Source participant index                           |
 | `to`         | number | Target participant index (same as `from` for self) |
@@ -539,40 +539,40 @@ Positions come from the proportional SVG layout engine and are in the same unitl
 
 #### `notes`
 
-| Field          | Type              | Description                                          |
-| -------------- | ----------------- | ---------------------------------------------------- |
-| `placement`    | string            | `"left_of"`, `"right_of"`, or `"over"`               |
-| `participants` | number[]          | Participant indices the note relates to               |
-| `text`         | string            | Note text                                            |
-| `position`     | `{x, y}`          | Top-left of note box                                 |
-| `size`         | `{width, height}` | Note box dimensions                                  |
+| Field          | Type              | Description                             |
+| -------------- | ----------------- | --------------------------------------- |
+| `placement`    | string            | `"left_of"`, `"right_of"`, or `"over"`  |
+| `participants` | number[]          | Participant indices the note relates to |
+| `text`         | string            | Note text                               |
+| `position`     | `{x, y}`          | Top-left of note box                    |
+| `size`         | `{width, height}` | Note box dimensions                     |
 
 #### `activations`
 
-| Field         | Type   | Description                        |
-| ------------- | ------ | ---------------------------------- |
-| `participant` | number | Participant index                  |
-| `y_start`     | number | Top of the activation bar          |
-| `y_end`       | number | Bottom of the activation bar       |
-| `depth`       | number | Nesting depth (0 = outermost)      |
+| Field         | Type   | Description                   |
+| ------------- | ------ | ----------------------------- |
+| `participant` | number | Participant index             |
+| `y_start`     | number | Top of the activation bar     |
+| `y_end`       | number | Bottom of the activation bar  |
+| `depth`       | number | Nesting depth (0 = outermost) |
 
 #### `blocks`
 
-| Field      | Type     | Description                                                |
-| ---------- | -------- | ---------------------------------------------------------- |
-| `kind`     | string   | `"loop"`, `"alt"`, `"opt"`, `"par"`, `"critical"`, `"break"`, `"rect"` |
-| `label`    | string   | Block header label                                          |
-| `rect`     | `{x, y, width, height}` | Bounding rectangle                        |
-| `dividers` | array    | `[{y, kind, label}]` — `kind` is `"else"`, `"and"`, or `"option"` |
+| Field      | Type                    | Description                                                            |
+| ---------- | ----------------------- | ---------------------------------------------------------------------- |
+| `kind`     | string                  | `"loop"`, `"alt"`, `"opt"`, `"par"`, `"critical"`, `"break"`, `"rect"` |
+| `label`    | string                  | Block header label                                                     |
+| `rect`     | `{x, y, width, height}` | Bounding rectangle                                                     |
+| `dividers` | array                   | `[{y, kind, label}]` — `kind` is `"else"`, `"and"`, or `"option"`      |
 
 #### `participant_boxes`
 
-| Field          | Type              | Description                          |
-| -------------- | ----------------- | ------------------------------------ |
-| `label`        | string?           | Optional grouping label              |
-| `color`        | string?           | Optional fill color                  |
-| `participants` | number[]          | Participant indices in this grouping |
-| `rect`         | `{x, y, width, height}` | Bounding rectangle          |
+| Field          | Type                    | Description                          |
+| -------------- | ----------------------- | ------------------------------------ |
+| `label`        | string?                 | Optional grouping label              |
+| `color`        | string?                 | Optional fill color                  |
+| `participants` | number[]                | Participant indices in this grouping |
+| `rect`         | `{x, y, width, height}` | Bounding rectangle                   |
 
 ### Sequence Example
 
@@ -588,13 +588,17 @@ Positions come from the proportional SVG layout engine and are in the same unitl
   "edges": [],
   "participants": [
     {
-      "id": "Alice", "label": "Alice", "kind": "participant",
+      "id": "Alice",
+      "label": "Alice",
+      "kind": "participant",
       "position": { "x": 60.0, "y": 20.0 },
       "size": { "width": 90.0, "height": 40.0 },
       "lifeline_x": 105.0
     },
     {
-      "id": "Bob", "label": "Bob", "kind": "participant",
+      "id": "Bob",
+      "label": "Bob",
+      "kind": "participant",
       "position": { "x": 210.0, "y": 20.0 },
       "size": { "width": 80.0, "height": 40.0 },
       "lifeline_x": 250.0
@@ -602,9 +606,13 @@ Positions come from the proportional SVG layout engine and are in the same unitl
   ],
   "messages": [
     {
-      "id": "m0", "from": 0, "to": 1,
-      "line_style": "solid", "arrow_head": "filled",
-      "text": "hello", "y": 100.0
+      "id": "m0",
+      "from": 0,
+      "to": 1,
+      "line_style": "solid",
+      "arrow_head": "filled",
+      "text": "hello",
+      "y": 100.0
     }
   ]
 }
