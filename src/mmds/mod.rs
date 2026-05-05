@@ -12,6 +12,7 @@ pub(crate) mod hydrate;
 mod mermaid;
 pub(crate) mod parse;
 pub(crate) mod sequence;
+pub mod token;
 
 use std::error::Error;
 use std::fmt;
@@ -49,6 +50,7 @@ pub use hydrate::{
 pub use mermaid::{GenerationError, generate_mermaid, generate_mermaid_from_str};
 pub use parse::{parse_with_profiles, validate_input};
 use serde_json::{Map, Value};
+pub use token::{MmdsToken, MmdsTokenError};
 
 #[cfg(test)]
 mod regression_tests;

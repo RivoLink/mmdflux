@@ -21,6 +21,12 @@
 //! explicit ID must be that next dense ID; existing IDs and arbitrary non-next IDs are
 //! rejected with structured errors. [`Command::SetExtension`] wraps non-object JSON
 //! values under a `"value"` key because [`Document::extensions`] stores object payloads.
+//! Finite MMDS vocabularies such as node shapes, layout directions, strokes, arrows,
+//! and geometry levels use typed Rust enums; callers with string input should parse
+//! graph tokens through [`crate::mmds::MmdsToken::parse_mmds`] before constructing a
+//! command. Engine IDs remain string-backed MMDS metadata in this slice because the
+//! engine selector type lives behind the runtime facade. `Command` itself does not
+//! define a wire serialization contract yet.
 //!
 //! [`CommandApplyError`] implements [`std::error::Error`] and keeps its variants public
 //! so callers can either bubble errors through trait objects or match precise failure
@@ -30,12 +36,13 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::format::OutputFormat;
-use crate::graph::GeometryLevel;
+use crate::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 #[cfg(test)]
 use crate::mmds::diff::ChangeKind;
 use crate::mmds::events::{ModelEvent, ModelEventKind};
 use crate::mmds::{
-    Document, Edge, NODE_STYLE_EXTENSION_NAMESPACE, Node, Position, Size, Subgraph, Subject,
+    Document, Edge, MmdsToken, NODE_STYLE_EXTENSION_NAMESPACE, Node, Position, Size, Subgraph,
+    Subject,
 };
 use crate::runtime::config::RenderConfig;
 
@@ -91,10 +98,10 @@ const GEOMETRY_EFFECT_DIFF_KINDS: &[ChangeKind] = &[
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     SetGeometryLevel {
-        level: String,
+        level: GeometryLevel,
     },
     SetDirection {
-        direction: String,
+        direction: Direction,
     },
     SetEngine {
         engine: Option<String>,
@@ -102,7 +109,7 @@ pub enum Command {
     AddNode {
         id: String,
         label: String,
-        shape: String,
+        shape: Shape,
         parent: Option<String>,
     },
     RemoveNode {
@@ -114,7 +121,7 @@ pub enum Command {
     },
     ChangeNodeShape {
         node: String,
-        shape: String,
+        shape: Shape,
     },
     SetNodeParent {
         node: String,
@@ -138,9 +145,9 @@ pub enum Command {
         from_subgraph: Option<String>,
         to_subgraph: Option<String>,
         label: Option<String>,
-        stroke: String,
-        arrow_start: String,
-        arrow_end: String,
+        stroke: Stroke,
+        arrow_start: Arrow,
+        arrow_end: Arrow,
         minlen: i32,
     },
     RemoveEdge {
@@ -162,16 +169,16 @@ pub enum Command {
     },
     ChangeEdgeStyle {
         edge: EdgeSelector,
-        stroke: Option<String>,
-        arrow_start: Option<String>,
-        arrow_end: Option<String>,
+        stroke: Option<Stroke>,
+        arrow_start: Option<Arrow>,
+        arrow_end: Option<Arrow>,
         minlen: Option<i32>,
     },
     AddSubgraph {
         id: String,
         title: Option<String>,
         parent: Option<String>,
-        direction: Option<String>,
+        direction: Option<Direction>,
         children: Vec<String>,
         concurrent_regions: Vec<String>,
         invisible: bool,
@@ -185,7 +192,7 @@ pub enum Command {
     },
     SetSubgraphDirection {
         subgraph: String,
-        direction: Option<String>,
+        direction: Option<Direction>,
     },
     SetSubgraphParent {
         subgraph: String,
@@ -217,9 +224,9 @@ pub enum EdgeSelector {
         source: String,
         target: String,
         label: Option<String>,
-        stroke: Option<String>,
-        arrow_start: Option<String>,
-        arrow_end: Option<String>,
+        stroke: Option<Stroke>,
+        arrow_start: Option<Arrow>,
+        arrow_end: Option<Arrow>,
         minlen: Option<i32>,
     },
 }
@@ -436,9 +443,9 @@ pub fn apply_with_config(
                         from_subgraph: from_subgraph.clone(),
                         to_subgraph: to_subgraph.clone(),
                         label: label.clone(),
-                        stroke: stroke.clone(),
-                        arrow_start: arrow_start.clone(),
-                        arrow_end: arrow_end.clone(),
+                        stroke: stroke.as_mmds_str().to_string(),
+                        arrow_start: arrow_start.as_mmds_str().to_string(),
+                        arrow_end: arrow_end.as_mmds_str().to_string(),
                         minlen: *minlen,
                         path: None,
                         label_position: None,
@@ -528,13 +535,14 @@ pub fn apply_with_config(
                 |candidate| {
                     let edge_index = resolve_edge_index(candidate, edge)?;
                     if let Some(stroke) = stroke {
-                        candidate.edges[edge_index].stroke = stroke.clone();
+                        candidate.edges[edge_index].stroke = stroke.as_mmds_str().to_string();
                     }
                     if let Some(arrow_start) = arrow_start {
-                        candidate.edges[edge_index].arrow_start = arrow_start.clone();
+                        candidate.edges[edge_index].arrow_start =
+                            arrow_start.as_mmds_str().to_string();
                     }
                     if let Some(arrow_end) = arrow_end {
-                        candidate.edges[edge_index].arrow_end = arrow_end.clone();
+                        candidate.edges[edge_index].arrow_end = arrow_end.as_mmds_str().to_string();
                     }
                     if let Some(minlen) = minlen {
                         candidate.edges[edge_index].minlen = *minlen;
@@ -548,7 +556,7 @@ pub fn apply_with_config(
             config,
             ModelEventKind::GeometryLevelChanged,
             |candidate| {
-                candidate.geometry_level = level.clone();
+                candidate.geometry_level = level.as_mmds_str().to_string();
                 Ok(())
             },
         ),
@@ -557,7 +565,7 @@ pub fn apply_with_config(
             config,
             ModelEventKind::DirectionChanged,
             |candidate| {
-                candidate.metadata.direction = direction.clone();
+                candidate.metadata.direction = direction.as_mmds_str().to_string();
                 Ok(())
             },
         ),
@@ -587,7 +595,7 @@ pub fn apply_with_config(
                     candidate.nodes.push(Node {
                         id: id.clone(),
                         label: label.clone(),
-                        shape: shape.clone(),
+                        shape: shape.as_mmds_str().to_string(),
                         parent: parent.clone(),
                         position: Position { x: 0.0, y: 0.0 },
                         size: Size {
@@ -620,7 +628,7 @@ pub fn apply_with_config(
                 node_event(ModelEventKind::NodeShapeChanged, node.clone()),
                 |candidate| {
                     let index = node_index(candidate, node)?;
-                    candidate.nodes[index].shape = shape.clone();
+                    candidate.nodes[index].shape = shape.as_mmds_str().to_string();
                     Ok(())
                 },
             )
@@ -714,7 +722,9 @@ pub fn apply_with_config(
                         title: title.clone().unwrap_or_else(|| id.clone()),
                         children: Vec::new(),
                         parent: parent.clone(),
-                        direction: direction.clone(),
+                        direction: direction
+                            .as_ref()
+                            .map(|direction| direction.as_mmds_str().to_string()),
                         bounds: None,
                         invisible: *invisible,
                         concurrent_regions: concurrent_regions.clone(),
@@ -767,7 +777,9 @@ pub fn apply_with_config(
                 subgraph_event(ModelEventKind::SubgraphDirectionChanged, subgraph.clone()),
                 |candidate| {
                     let subgraph_index = subgraph_index(candidate, subgraph)?;
-                    candidate.subgraphs[subgraph_index].direction = direction.clone();
+                    candidate.subgraphs[subgraph_index].direction = direction
+                        .as_ref()
+                        .map(|direction| direction.as_mmds_str().to_string());
                     Ok(())
                 },
             )
@@ -1057,13 +1069,13 @@ fn semantic_selector_matches(edge: &Edge, selector: &EdgeSelector) -> bool {
             .is_none_or(|expected| edge.label.as_ref() == Some(expected))
         && stroke
             .as_ref()
-            .is_none_or(|expected| edge.stroke == *expected)
+            .is_none_or(|expected| edge.stroke == expected.as_mmds_str())
         && arrow_start
             .as_ref()
-            .is_none_or(|expected| edge.arrow_start == *expected)
+            .is_none_or(|expected| edge.arrow_start == expected.as_mmds_str())
         && arrow_end
             .as_ref()
-            .is_none_or(|expected| edge.arrow_end == *expected)
+            .is_none_or(|expected| edge.arrow_end == expected.as_mmds_str())
         && minlen.is_none_or(|expected| edge.minlen == expected)
 }
 

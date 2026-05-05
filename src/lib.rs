@@ -186,6 +186,7 @@
 //!
 //! ```
 //! use mmdflux::commands::{Command, apply};
+//! use mmdflux::graph::{Arrow, Shape, Stroke};
 //! use mmdflux::mmds::Subject;
 //! use mmdflux::mmds::diff::{ChangeKind, diff_documents};
 //! use mmdflux::mmds::events::ModelEventKind;
@@ -203,7 +204,7 @@
 //!     &Command::AddNode {
 //!         id: "C".to_string(),
 //!         label: "Auth".to_string(),
-//!         shape: "rectangle".to_string(),
+//!         shape: Shape::Rectangle,
 //!         parent: None,
 //!     },
 //!     &mut current,
@@ -216,9 +217,9 @@
 //!         from_subgraph: None,
 //!         to_subgraph: None,
 //!         label: Some("routes".to_string()),
-//!         stroke: "solid".to_string(),
-//!         arrow_start: "none".to_string(),
-//!         arrow_end: "normal".to_string(),
+//!         stroke: Stroke::Solid,
+//!         arrow_start: Arrow::None,
+//!         arrow_end: Arrow::Normal,
 //!         minlen: 1,
 //!     },
 //!     &mut current,

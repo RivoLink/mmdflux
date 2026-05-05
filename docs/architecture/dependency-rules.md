@@ -120,6 +120,16 @@ collapsed back into singleton roots:
    mmds must not import from `render` or `engines`. Replay rendering
    (hydrate→render dispatch) lives in `runtime/mmds.rs`.
 
+   `mmds/` also owns the canonical MMDS string token contract for graph-family
+   enums. The `MmdsToken` trait maps graph-owned typed vocabulary such as
+   `Shape`, `Direction`, `Stroke`, `Arrow`, and `GeometryLevel` to and from
+   MMDS schema tokens via `parse_mmds` / `as_mmds_str`. `mmds::Document` fields
+   retain the string form for adapter-friendly interchange, while command inputs
+   use the typed form so Rust callers get vocabulary validation before relayout.
+   Engine IDs are the exception: they stay string-backed at the command boundary
+   because engine selector types live behind the runtime/engine facade, not in
+   graph-owned vocabulary.
+
 10. **MMDS is a frontend, not a logical diagram type** — MMDS input handling
     is detected through `src/frontends.rs`, while the MMDS parse, hydration,
     and output helpers live under `src/mmds/`. MMDS is not registered

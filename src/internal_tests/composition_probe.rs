@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::event_change_mapping::model_event_kind_to_change_kind;
 use crate::commands::{Command, apply};
+use crate::graph::{Arrow, Direction, Shape, Stroke};
 use crate::mmds::diff::{Change, ChangeKind, diff_documents};
 use crate::mmds::events::{ModelEvent, ModelEventKind};
 use crate::mmds::{Document, Subject};
@@ -137,7 +138,7 @@ fn build_probe_scenario() -> ProbeScenario {
                     id: "auth".to_string(),
                     title: Some("Auth".to_string()),
                     parent: None,
-                    direction: Some("LR".to_string()),
+                    direction: Some(Direction::LeftRight),
                     children: Vec::new(),
                     concurrent_regions: Vec::new(),
                     invisible: false,
@@ -150,7 +151,7 @@ fn build_probe_scenario() -> ProbeScenario {
                 command: Command::AddNode {
                     id: "login".to_string(),
                     label: "Login".to_string(),
-                    shape: "rectangle".to_string(),
+                    shape: Shape::Rectangle,
                     parent: Some("auth".to_string()),
                 },
                 expected_kind: ModelEventKind::NodeAdded,
@@ -177,9 +178,9 @@ fn build_probe_scenario() -> ProbeScenario {
                     from_subgraph: None,
                     to_subgraph: None,
                     label: Some("reads".to_string()),
-                    stroke: "solid".to_string(),
-                    arrow_start: "none".to_string(),
-                    arrow_end: "normal".to_string(),
+                    stroke: Stroke::Solid,
+                    arrow_start: Arrow::None,
+                    arrow_end: Arrow::Normal,
                     minlen: 1,
                 },
                 expected_kind: ModelEventKind::EdgeAdded,

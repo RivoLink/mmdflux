@@ -19,7 +19,8 @@ use crate::graph::space::{FPoint, FRect};
 use crate::graph::style::{ColorToken, NodeStyle};
 use crate::graph::{Arrow, Direction, Edge as GraphEdge, Graph, Node, Shape, Stroke, Subgraph};
 use crate::mmds::{
-    Document, Edge, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE, parse_input,
+    Document, Edge, MmdsToken, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE,
+    parse_input,
 };
 
 /// Hydrate a graph `Diagram` from MMDS JSON text.
@@ -34,7 +35,7 @@ pub fn from_str(input: &str) -> Result<Graph, HydrationError> {
 pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
     validate_output(output)?;
 
-    let direction = parse_direction(&output.metadata.direction).ok_or_else(|| {
+    let direction = Direction::parse_mmds(&output.metadata.direction).map_err(|_| {
         HydrationError::InvalidDirection {
             context: "metadata.direction".to_string(),
             value: output.metadata.direction.clone(),
@@ -47,12 +48,12 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
             return Err(HydrationError::MissingSubgraphId { index });
         }
         let dir = if let Some(direction) = &subgraph.direction {
-            Some(
-                parse_direction(direction).ok_or_else(|| HydrationError::InvalidDirection {
+            Some(Direction::parse_mmds(direction).map_err(|_| {
+                HydrationError::InvalidDirection {
                     context: format!("subgraph {} direction", subgraph.id),
                     value: direction.to_string(),
-                })?,
-            )
+                }
+            })?)
         } else {
             None
         };
@@ -75,7 +76,7 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
         if node.id.trim().is_empty() {
             return Err(HydrationError::MissingNodeId { index });
         }
-        let shape = parse_shape(&node.shape).ok_or_else(|| HydrationError::InvalidShape {
+        let shape = Shape::parse_mmds(&node.shape).map_err(|_| HydrationError::InvalidShape {
             node_id: node.id.clone(),
             value: node.shape.clone(),
         })?;
@@ -185,18 +186,19 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
             });
         }
 
-        let stroke = parse_stroke(&edge.stroke).ok_or_else(|| HydrationError::InvalidStroke {
-            edge_id: edge.id.clone(),
-            value: edge.stroke.clone(),
-        })?;
+        let stroke =
+            Stroke::parse_mmds(&edge.stroke).map_err(|_| HydrationError::InvalidStroke {
+                edge_id: edge.id.clone(),
+                value: edge.stroke.clone(),
+            })?;
         let arrow_start =
-            parse_arrow(&edge.arrow_start).ok_or_else(|| HydrationError::InvalidArrow {
+            Arrow::parse_mmds(&edge.arrow_start).map_err(|_| HydrationError::InvalidArrow {
                 edge_id: edge.id.clone(),
                 endpoint: "start".to_string(),
                 value: edge.arrow_start.clone(),
             })?;
         let arrow_end =
-            parse_arrow(&edge.arrow_end).ok_or_else(|| HydrationError::InvalidArrow {
+            Arrow::parse_mmds(&edge.arrow_end).map_err(|_| HydrationError::InvalidArrow {
                 edge_id: edge.id.clone(),
                 endpoint: "end".to_string(),
                 value: edge.arrow_end.clone(),
@@ -826,72 +828,6 @@ fn compare_edge_ids(left: &str, right: &str) -> Ordering {
 
 fn parse_edge_index(value: &str) -> Option<u64> {
     value.strip_prefix('e')?.parse::<u64>().ok()
-}
-
-fn parse_direction(value: &str) -> Option<Direction> {
-    match value {
-        "TD" => Some(Direction::TopDown),
-        "BT" => Some(Direction::BottomTop),
-        "LR" => Some(Direction::LeftRight),
-        "RL" => Some(Direction::RightLeft),
-        _ => None,
-    }
-}
-
-fn parse_shape(value: &str) -> Option<Shape> {
-    match value {
-        "rectangle" => Some(Shape::Rectangle),
-        "round" => Some(Shape::Round),
-        "stadium" => Some(Shape::Stadium),
-        "subroutine" => Some(Shape::Subroutine),
-        "cylinder" => Some(Shape::Cylinder),
-        "document" => Some(Shape::Document),
-        "documents" => Some(Shape::Documents),
-        "tagged_document" => Some(Shape::TaggedDocument),
-        "card" => Some(Shape::Card),
-        "tagged_rect" => Some(Shape::TaggedRect),
-        "diamond" => Some(Shape::Diamond),
-        "hexagon" => Some(Shape::Hexagon),
-        "trapezoid" => Some(Shape::Trapezoid),
-        "inv_trapezoid" => Some(Shape::InvTrapezoid),
-        "parallelogram" => Some(Shape::Parallelogram),
-        "inv_parallelogram" => Some(Shape::InvParallelogram),
-        "manual_input" => Some(Shape::ManualInput),
-        "asymmetric" => Some(Shape::Asymmetric),
-        "circle" => Some(Shape::Circle),
-        "double_circle" => Some(Shape::DoubleCircle),
-        "small_circle" => Some(Shape::SmallCircle),
-        "framed_circle" => Some(Shape::FramedCircle),
-        "crossed_circle" => Some(Shape::CrossedCircle),
-        "text_block" => Some(Shape::TextBlock),
-        "fork_join" => Some(Shape::ForkJoin),
-        "note_rect" => Some(Shape::NoteRect),
-        _ => None,
-    }
-}
-
-fn parse_stroke(value: &str) -> Option<Stroke> {
-    match value {
-        "solid" => Some(Stroke::Solid),
-        "dotted" => Some(Stroke::Dotted),
-        "dashed" => Some(Stroke::Dashed),
-        "thick" => Some(Stroke::Thick),
-        "invisible" => Some(Stroke::Invisible),
-        _ => None,
-    }
-}
-
-fn parse_arrow(value: &str) -> Option<Arrow> {
-    match value {
-        "normal" => Some(Arrow::Normal),
-        "none" => Some(Arrow::None),
-        "cross" => Some(Arrow::Cross),
-        "circle" => Some(Arrow::Circle),
-        "open_triangle" => Some(Arrow::OpenTriangle),
-        "diamond" => Some(Arrow::Diamond),
-        "open_diamond" => Some(Arrow::OpenDiamond),
-        _ => None,
-    }
 }
 
 /// MMDS hydration and validation error.

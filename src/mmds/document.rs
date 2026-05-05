@@ -18,7 +18,8 @@ use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::style::NodeStyle;
-use crate::graph::{Arrow, Direction, GeometryLevel, Graph, Shape, Stroke};
+use crate::graph::{GeometryLevel, Graph};
+use crate::mmds::MmdsToken;
 use crate::simplification::PathSimplification;
 
 pub const CORE_PROFILE: &str = "mmds-core-v1";
@@ -311,7 +312,7 @@ fn build_document(
     let effective_bounds = routed.map_or(geometry.bounds, |r| r.bounds);
     let metadata = Metadata {
         diagram_type: diagram_type.to_string(),
-        direction: direction_str(diagram.direction).to_string(),
+        direction: diagram.direction.as_mmds_str().to_string(),
         bounds: Bounds {
             width: effective_bounds.width,
             height: effective_bounds.height,
@@ -340,9 +341,9 @@ fn build_document(
                 from_subgraph: edge.from_subgraph.clone(),
                 to_subgraph: edge.to_subgraph.clone(),
                 label: edge.label.clone(),
-                stroke: stroke_str(edge.stroke).to_string(),
-                arrow_start: arrow_str(edge.arrow_start).to_string(),
-                arrow_end: arrow_str(edge.arrow_end).to_string(),
+                stroke: edge.stroke.as_mmds_str().to_string(),
+                arrow_start: edge.arrow_start.as_mmds_str().to_string(),
+                arrow_end: edge.arrow_end.as_mmds_str().to_string(),
                 minlen: edge.minlen,
                 path: None,
                 label_position: None,
@@ -411,7 +412,7 @@ fn build_document(
                 title: sg.title.clone(),
                 children: direct_children,
                 parent: sg.parent.clone(),
-                direction: sg.dir.map(|d| direction_str(d).to_string()),
+                direction: sg.dir.map(|d| d.as_mmds_str().to_string()),
                 bounds,
                 invisible: sg.invisible,
                 concurrent_regions: sg.concurrent_regions.clone(),
@@ -645,7 +646,7 @@ fn node(pn: &PositionedNode) -> Node {
     Node {
         id: pn.id.clone(),
         label: pn.label.clone(),
-        shape: shape_str(pn.shape).to_string(),
+        shape: pn.shape.as_mmds_str().to_string(),
         parent: pn.parent.clone(),
         position: Position {
             x: pn.rect.x + pn.rect.width / 2.0,
@@ -655,68 +656,6 @@ fn node(pn: &PositionedNode) -> Node {
             width: pn.rect.width,
             height: pn.rect.height,
         },
-    }
-}
-
-fn direction_str(dir: Direction) -> &'static str {
-    match dir {
-        Direction::TopDown => "TD",
-        Direction::BottomTop => "BT",
-        Direction::LeftRight => "LR",
-        Direction::RightLeft => "RL",
-    }
-}
-
-fn shape_str(shape: Shape) -> &'static str {
-    match shape {
-        Shape::Rectangle => "rectangle",
-        Shape::Round => "round",
-        Shape::Stadium => "stadium",
-        Shape::Subroutine => "subroutine",
-        Shape::Cylinder => "cylinder",
-        Shape::Document => "document",
-        Shape::Documents => "documents",
-        Shape::TaggedDocument => "tagged_document",
-        Shape::Card => "card",
-        Shape::TaggedRect => "tagged_rect",
-        Shape::Diamond => "diamond",
-        Shape::Hexagon => "hexagon",
-        Shape::Trapezoid => "trapezoid",
-        Shape::InvTrapezoid => "inv_trapezoid",
-        Shape::Parallelogram => "parallelogram",
-        Shape::InvParallelogram => "inv_parallelogram",
-        Shape::ManualInput => "manual_input",
-        Shape::Asymmetric => "asymmetric",
-        Shape::Circle => "circle",
-        Shape::DoubleCircle => "double_circle",
-        Shape::SmallCircle => "small_circle",
-        Shape::FramedCircle => "framed_circle",
-        Shape::CrossedCircle => "crossed_circle",
-        Shape::TextBlock => "text_block",
-        Shape::ForkJoin => "fork_join",
-        Shape::NoteRect => "note_rect",
-    }
-}
-
-fn stroke_str(stroke: Stroke) -> &'static str {
-    match stroke {
-        Stroke::Solid => "solid",
-        Stroke::Dotted => "dotted",
-        Stroke::Dashed => "dashed",
-        Stroke::Thick => "thick",
-        Stroke::Invisible => "invisible",
-    }
-}
-
-fn arrow_str(arrow: Arrow) -> &'static str {
-    match arrow {
-        Arrow::Normal => "normal",
-        Arrow::None => "none",
-        Arrow::Cross => "cross",
-        Arrow::Circle => "circle",
-        Arrow::OpenTriangle => "open_triangle",
-        Arrow::Diamond => "diamond",
-        Arrow::OpenDiamond => "open_diamond",
     }
 }
 

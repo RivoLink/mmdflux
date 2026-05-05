@@ -10,7 +10,7 @@ use crate::commands::{
     commandable_model_event_kinds, geometry_effect_change_kinds, model_event_kind_for_command,
     relayout_output_for_command_apply,
 };
-use crate::graph::GeometryLevel;
+use crate::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 use crate::mmds::diff::ChangeKind;
 use crate::mmds::events::{ModelEvent, ModelEventKind};
 use crate::mmds::{NODE_STYLE_EXTENSION_NAMESPACE, Subject, TEXT_EXTENSION_NAMESPACE};
@@ -374,7 +374,7 @@ fn mmds_command_apply_relayout_sets_geometry_level() {
 
     let events = apply(
         &Command::SetGeometryLevel {
-            level: "layout".to_string(),
+            level: GeometryLevel::Layout,
         },
         &mut output,
     )
@@ -395,7 +395,7 @@ fn mmds_command_apply_relayout_sets_direction() {
 
     let events = apply(
         &Command::SetDirection {
-            direction: "LR".to_string(),
+            direction: Direction::LeftRight,
         },
         &mut output,
     )
@@ -433,11 +433,15 @@ fn mmds_command_apply_relayout_sets_engine() {
 #[test]
 fn mmds_command_apply_relayout_invalid_document_config_rolls_back() {
     let mut output = parse_routed_for_command_apply("graph TD\n    A --> B\n");
+    output.metadata.direction = "SIDEWAYS".to_string();
     let before = output.clone();
 
     let result = apply(
-        &Command::SetDirection {
-            direction: "SIDEWAYS".to_string(),
+        &Command::AddNode {
+            id: "C".to_string(),
+            label: "Gamma".to_string(),
+            shape: Shape::Rectangle,
+            parent: None,
         },
         &mut output,
     );
@@ -452,10 +456,14 @@ fn mmds_command_apply_relayout_invalid_document_config_rolls_back() {
 #[test]
 fn mmds_command_apply_relayout_invalid_engine_config_rolls_back() {
     let mut output = parse_routed_for_command_apply("graph TD\n    A --> B\n");
+    output.metadata.engine = Some("not-a-real-engine".to_string());
     assert_apply_error_preserves_output(
         &mut output,
-        Command::SetEngine {
-            engine: Some("not-a-real-engine".to_string()),
+        Command::AddNode {
+            id: "C".to_string(),
+            label: "Gamma".to_string(),
+            shape: Shape::Rectangle,
+            parent: None,
         },
         |error| matches!(error, CommandApplyError::RelayoutFailed { stage, .. } if stage == "config"),
     );
@@ -470,7 +478,7 @@ fn mmds_command_apply_relayout_adds_node() {
         &Command::AddNode {
             id: "C".to_string(),
             label: "Gamma".to_string(),
-            shape: "rectangle".to_string(),
+            shape: Shape::Rectangle,
             parent: None,
         },
         &mut output,
@@ -535,7 +543,7 @@ fn mmds_command_apply_relayout_changes_node_shape() {
     let events = apply(
         &Command::ChangeNodeShape {
             node: "A".to_string(),
-            shape: "stadium".to_string(),
+            shape: Shape::Stadium,
         },
         &mut output,
     )
@@ -582,7 +590,7 @@ fn mmds_command_apply_relayout_add_node_duplicate_errors_without_mutation() {
         &Command::AddNode {
             id: "A".to_string(),
             label: "Duplicate".to_string(),
-            shape: "rectangle".to_string(),
+            shape: Shape::Rectangle,
             parent: None,
         },
         &mut output,
@@ -740,9 +748,9 @@ fn mmds_command_apply_relayout_changes_edge_style() {
     let events = apply(
         &Command::ChangeEdgeStyle {
             edge: EdgeSelector::Id("e0".to_string()),
-            stroke: Some("dotted".to_string()),
-            arrow_start: Some("circle".to_string()),
-            arrow_end: Some("diamond".to_string()),
+            stroke: Some(Stroke::Dotted),
+            arrow_start: Some(Arrow::Circle),
+            arrow_end: Some(Arrow::Diamond),
             minlen: Some(2),
         },
         &mut output,
@@ -833,7 +841,7 @@ fn mmds_command_apply_relayout_adds_subgraph() {
             id: "sg1".to_string(),
             title: Some("Group".to_string()),
             parent: None,
-            direction: Some("LR".to_string()),
+            direction: Some(Direction::LeftRight),
             children: vec!["A".to_string()],
             concurrent_regions: Vec::new(),
             invisible: false,
@@ -883,7 +891,7 @@ fn mmds_command_apply_relayout_sets_subgraph_direction() {
     let events = apply(
         &Command::SetSubgraphDirection {
             subgraph: "sg1".to_string(),
-            direction: Some("LR".to_string()),
+            direction: Some(Direction::LeftRight),
         },
         &mut output,
     )
@@ -1147,7 +1155,7 @@ fn mmds_command_apply_failure_modes_are_structured() {
         &mut output,
         Command::SetSubgraphDirection {
             subgraph: "missing".to_string(),
-            direction: Some("LR".to_string()),
+            direction: Some(Direction::LeftRight),
         },
         |error| matches!(error, CommandApplyError::SubgraphNotFound { id } if id == "missing"),
     );
@@ -1156,15 +1164,17 @@ fn mmds_command_apply_failure_modes_are_structured() {
         Command::AddNode {
             id: "A".to_string(),
             label: "Duplicate".to_string(),
-            shape: "rectangle".to_string(),
+            shape: Shape::Rectangle,
             parent: None,
         },
         |error| matches!(error, CommandApplyError::SubjectAlreadyExists { id } if id == "A"),
     );
+    output.metadata.direction = "SIDEWAYS".to_string();
     assert_apply_error_preserves_output(
         &mut output,
-        Command::SetDirection {
-            direction: "SIDEWAYS".to_string(),
+        Command::ChangeNodeLabel {
+            node: "A".to_string(),
+            label: "Alpha".to_string(),
         },
         |error| matches!(error, CommandApplyError::RelayoutFailed { stage, .. } if stage == "hydrate"),
     );
@@ -1298,9 +1308,11 @@ fn mmds_command_vocabulary_document_node_examples_map_to_diff_kinds() {
 fn mmds_command_vocabulary_document_node_commands_are_semantic_only() {
     for (command, _) in document_node_command_examples() {
         match command {
-            Command::SetGeometryLevel { level } => assert_eq!(level, "routed"),
-            Command::SetDirection { direction } => assert_eq!(direction, "LR"),
-            Command::SetEngine { engine } => assert_eq!(engine.as_deref(), Some("flux-layered")),
+            Command::SetGeometryLevel { level } => assert_eq!(level, GeometryLevel::Routed),
+            Command::SetDirection { direction } => assert_eq!(direction, Direction::LeftRight),
+            Command::SetEngine { engine } => {
+                assert_eq!(engine.as_deref(), Some("flux-layered"))
+            }
             Command::AddNode {
                 id,
                 label,
@@ -1309,7 +1321,7 @@ fn mmds_command_vocabulary_document_node_commands_are_semantic_only() {
             } => {
                 assert_eq!(id, "A");
                 assert_eq!(label, "Alpha");
-                assert_eq!(shape, "stadium");
+                assert_eq!(shape, Shape::Stadium);
                 assert_eq!(parent.as_deref(), Some("cluster_0"));
             }
             Command::RemoveNode { id } => assert_eq!(id, "A"),
@@ -1319,7 +1331,7 @@ fn mmds_command_vocabulary_document_node_commands_are_semantic_only() {
             }
             Command::ChangeNodeShape { node, shape } => {
                 assert_eq!(node, "A");
-                assert_eq!(shape, "stadium");
+                assert_eq!(shape, Shape::Stadium);
             }
             Command::SetNodeParent { node, parent } => {
                 assert_eq!(node, "A");
@@ -1345,13 +1357,13 @@ fn document_node_command_examples() -> Vec<(Command, ChangeKind)> {
     vec![
         (
             Command::SetGeometryLevel {
-                level: "routed".to_string(),
+                level: GeometryLevel::Routed,
             },
             ChangeKind::GeometryLevelChanged,
         ),
         (
             Command::SetDirection {
-                direction: "LR".to_string(),
+                direction: Direction::LeftRight,
             },
             ChangeKind::DirectionChanged,
         ),
@@ -1365,7 +1377,7 @@ fn document_node_command_examples() -> Vec<(Command, ChangeKind)> {
             Command::AddNode {
                 id: "A".to_string(),
                 label: "Alpha".to_string(),
-                shape: "stadium".to_string(),
+                shape: Shape::Stadium,
                 parent: Some("cluster_0".to_string()),
             },
             ChangeKind::NodeAdded,
@@ -1386,7 +1398,7 @@ fn document_node_command_examples() -> Vec<(Command, ChangeKind)> {
         (
             Command::ChangeNodeShape {
                 node: "A".to_string(),
-                shape: "stadium".to_string(),
+                shape: Shape::Stadium,
             },
             ChangeKind::NodeShapeChanged,
         ),
@@ -1437,9 +1449,9 @@ fn mmds_command_vocabulary_edge_selector_names_identity_without_layout() {
         source: "A".to_string(),
         target: "B".to_string(),
         label: Some("calls".to_string()),
-        stroke: Some("dotted".to_string()),
-        arrow_start: Some("none".to_string()),
-        arrow_end: Some("normal".to_string()),
+        stroke: Some(Stroke::Dotted),
+        arrow_start: Some(Arrow::None),
+        arrow_end: Some(Arrow::Normal),
         minlen: Some(2),
     };
 
@@ -1456,9 +1468,9 @@ fn mmds_command_vocabulary_edge_selector_names_identity_without_layout() {
             assert_eq!(source, "A");
             assert_eq!(target, "B");
             assert_eq!(label.as_deref(), Some("calls"));
-            assert_eq!(stroke.as_deref(), Some("dotted"));
-            assert_eq!(arrow_start.as_deref(), Some("none"));
-            assert_eq!(arrow_end.as_deref(), Some("normal"));
+            assert_eq!(stroke, Some(Stroke::Dotted));
+            assert_eq!(arrow_start, Some(Arrow::None));
+            assert_eq!(arrow_end, Some(Arrow::Normal));
             assert_eq!(minlen, Some(2));
         }
         EdgeSelector::Id(_) => panic!("expected semantic selector"),
@@ -1477,9 +1489,9 @@ fn edge_command_examples() -> Vec<(Command, ChangeKind)> {
                 from_subgraph: None,
                 to_subgraph: None,
                 label: Some("calls".to_string()),
-                stroke: "solid".to_string(),
-                arrow_start: "none".to_string(),
-                arrow_end: "normal".to_string(),
+                stroke: Stroke::Solid,
+                arrow_start: Arrow::None,
+                arrow_end: Arrow::Normal,
                 minlen: 1,
             },
             ChangeKind::EdgeAdded,
@@ -1516,9 +1528,9 @@ fn edge_command_examples() -> Vec<(Command, ChangeKind)> {
         (
             Command::ChangeEdgeStyle {
                 edge: selector,
-                stroke: Some("dotted".to_string()),
-                arrow_start: Some("none".to_string()),
-                arrow_end: Some("normal".to_string()),
+                stroke: Some(Stroke::Dotted),
+                arrow_start: Some(Arrow::None),
+                arrow_end: Some(Arrow::Normal),
                 minlen: Some(2),
             },
             ChangeKind::EdgeStyleChanged,
@@ -1572,7 +1584,7 @@ fn subgraph_command_examples() -> Vec<(Command, ChangeKind)> {
                 id: "cluster_0".to_string(),
                 title: Some("Cluster".to_string()),
                 parent: None,
-                direction: Some("LR".to_string()),
+                direction: Some(Direction::LeftRight),
                 children: vec!["A".to_string()],
                 concurrent_regions: vec!["region_0".to_string()],
                 invisible: false,
@@ -1595,7 +1607,7 @@ fn subgraph_command_examples() -> Vec<(Command, ChangeKind)> {
         (
             Command::SetSubgraphDirection {
                 subgraph: "cluster_0".to_string(),
-                direction: Some("LR".to_string()),
+                direction: Some(Direction::LeftRight),
             },
             ChangeKind::SubgraphDirectionChanged,
         ),
@@ -1683,7 +1695,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             "set geometry level",
             parse_routed_for_command_apply("graph TD\n    A --> B\n"),
             Command::SetGeometryLevel {
-                level: "layout".to_string(),
+                level: GeometryLevel::Layout,
             },
             ChangeKind::GeometryLevelChanged,
             Subject::Document,
@@ -1692,7 +1704,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             "set direction",
             parse_routed_for_command_apply("graph TD\n    A --> B\n"),
             Command::SetDirection {
-                direction: "LR".to_string(),
+                direction: Direction::LeftRight,
             },
             ChangeKind::DirectionChanged,
             Subject::Document,
@@ -1719,7 +1731,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             Command::AddNode {
                 id: "C".to_string(),
                 label: "Gamma".to_string(),
-                shape: "rectangle".to_string(),
+                shape: Shape::Rectangle,
                 parent: None,
             },
             ChangeKind::NodeAdded,
@@ -1749,7 +1761,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             parse_routed_for_command_apply("graph TD\n    A[Old] --> B\n"),
             Command::ChangeNodeShape {
                 node: "A".to_string(),
-                shape: "stadium".to_string(),
+                shape: Shape::Stadium,
             },
             ChangeKind::NodeShapeChanged,
             Subject::Node("A".to_string()),
@@ -1874,9 +1886,9 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             parse_routed_for_command_apply("graph TD\n    A --> B\n"),
             Command::ChangeEdgeStyle {
                 edge: EdgeSelector::Id("e0".to_string()),
-                stroke: Some("dotted".to_string()),
-                arrow_start: Some("circle".to_string()),
-                arrow_end: Some("diamond".to_string()),
+                stroke: Some(Stroke::Dotted),
+                arrow_start: Some(Arrow::Circle),
+                arrow_end: Some(Arrow::Diamond),
                 minlen: Some(2),
             },
             ChangeKind::EdgeStyleChanged,
@@ -1889,7 +1901,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
                 id: "sg1".to_string(),
                 title: Some("Group".to_string()),
                 parent: None,
-                direction: Some("LR".to_string()),
+                direction: Some(Direction::LeftRight),
                 children: vec!["A".to_string()],
                 concurrent_regions: Vec::new(),
                 invisible: false,
@@ -1921,7 +1933,7 @@ fn apply_round_trip_cases() -> Vec<ApplyRoundTripCase> {
             parse_routed_for_command_apply("graph TD\n    subgraph sg1[Group]\n    A\n    end\n"),
             Command::SetSubgraphDirection {
                 subgraph: "sg1".to_string(),
-                direction: Some("LR".to_string()),
+                direction: Some(Direction::LeftRight),
             },
             ChangeKind::SubgraphDirectionChanged,
             Subject::Subgraph("sg1".to_string()),
@@ -2007,7 +2019,7 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
             command: Command::AddNode {
                 id: "X".to_string(),
                 label: "Inserted".to_string(),
-                shape: "rectangle".to_string(),
+                shape: Shape::Rectangle,
                 parent: None,
             },
             expected_kind: ChangeKind::NodeAdded,
@@ -2026,7 +2038,7 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
             pair_id: "M07",
             command: Command::ChangeEdgeStyle {
                 edge: EdgeSelector::Id("e0".to_string()),
-                stroke: Some("dotted".to_string()),
+                stroke: Some(Stroke::Dotted),
                 arrow_start: None,
                 arrow_end: None,
                 minlen: None,
@@ -2038,7 +2050,7 @@ fn tier_a_representative_command_cases() -> Vec<TierARepresentativeCommandCase> 
             pair_id: "M10",
             command: Command::SetSubgraphDirection {
                 subgraph: "sg1".to_string(),
-                direction: Some("TD".to_string()),
+                direction: Some(Direction::TopDown),
             },
             expected_kind: ChangeKind::SubgraphDirectionChanged,
             expected_subject: Subject::Subgraph("sg1".to_string()),
@@ -2357,9 +2369,9 @@ fn add_edge_command(id: Option<&str>) -> Command {
         from_subgraph: None,
         to_subgraph: None,
         label: Some("new".to_string()),
-        stroke: "solid".to_string(),
-        arrow_start: "none".to_string(),
-        arrow_end: "normal".to_string(),
+        stroke: Stroke::Solid,
+        arrow_start: Arrow::None,
+        arrow_end: Arrow::Normal,
         minlen: 1,
     }
 }

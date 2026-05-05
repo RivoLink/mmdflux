@@ -1,4 +1,5 @@
 use mmdflux::commands::{Command, CommandApplyError, EdgeSelector, apply, apply_with_config};
+use mmdflux::graph::Shape;
 use mmdflux::mmds::Subject;
 use mmdflux::mmds::diff::{ChangeKind, diff_documents};
 use mmdflux::mmds::events::ModelEventKind;
@@ -12,7 +13,7 @@ fn add_gamma_command() -> Command {
     Command::AddNode {
         id: "C".to_string(),
         label: "Gamma".to_string(),
-        shape: "rectangle".to_string(),
+        shape: Shape::Rectangle,
         parent: None,
     }
 }
@@ -172,6 +173,7 @@ fn public_mmds_commands_docs_name_event_snapshot_diff_contract() {
         "EdgeSelector::Semantic",
         "AddEdge.id",
         "wraps non-object",
+        "typed Rust enums",
         "std::error::Error",
     ] {
         assert!(
