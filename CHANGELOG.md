@@ -1,6 +1,19 @@
 # Changelog
 
 - - -
+## [mmdflux-v2.4.0](https://github.com/kevinswiber/mmdflux/compare/c87ea4dcca820288a58751113d1fdd649832c9d5..mmdflux-v2.4.0) - 2026-05-06
+#### Features
+- type mmds command tokens - ([0530d4c](https://github.com/kevinswiber/mmdflux/commit/0530d4ce8ab490ddd848c4bd587bfc07f775a11b)) - [@kevinswiber](https://github.com/kevinswiber)
+- expose mmds diff and commands APIs - ([ff7ca97](https://github.com/kevinswiber/mmdflux/commit/ff7ca97a746f66a19c02dab665fb6e7da81ee596)) - [@kevinswiber](https://github.com/kevinswiber)
+- add materialized diagram views - ([c87ea4d](https://github.com/kevinswiber/mmdflux/commit/c87ea4dcca820288a58751113d1fdd649832c9d5)) - [@kevinswiber](https://github.com/kevinswiber)
+#### Documentation
+- move stability policy below examples - ([065a22a](https://github.com/kevinswiber/mmdflux/commit/065a22ae16b550db0ce3c7a51abea9a2d12cf31c)) - [@kevinswiber](https://github.com/kevinswiber)
+- remove private planning references from public docs - ([b56603f](https://github.com/kevinswiber/mmdflux/commit/b56603f1e85950e33a9dcd8d92415f0b4c4417b0)) - [@kevinswiber](https://github.com/kevinswiber)
+- harden public Rust API pre-tag surface - ([1844971](https://github.com/kevinswiber/mmdflux/commit/18449717129aa9de6e1a6a06f39383b3e5446d74)) - [@kevinswiber](https://github.com/kevinswiber)
+- add mmds API examples - ([0eaf4e9](https://github.com/kevinswiber/mmdflux/commit/0eaf4e9dd6bbf2a52e1f10efe37d9b0cb7ddad0b)) - [@kevinswiber](https://github.com/kevinswiber)
+
+- - -
+
 ## [mmdflux-v2.3.0](https://github.com/kevinswiber/mmdflux/compare/fd18585640373f080e52f057cb038dcfeec65495..mmdflux-v2.3.0) - 2026-05-04
 #### Features
 - support tracing diagnostics - ([8e16714](https://github.com/kevinswiber/mmdflux/commit/8e1671472b813168d90b8e1f42ab785b05e420ac)) - [@kevinswiber](https://github.com/kevinswiber)
