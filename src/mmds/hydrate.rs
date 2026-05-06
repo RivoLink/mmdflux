@@ -7,6 +7,8 @@ use std::fmt;
 
 use serde_json::{Map, Value};
 
+#[cfg(test)]
+use crate::graph::Direction;
 use crate::graph::direction_policy::build_node_directions;
 use crate::graph::geometry::{
     EdgeLabelGeometry, EdgeLabelSide, GraphGeometry, LayoutEdge, PositionedNode,
@@ -17,10 +19,9 @@ use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::style::{ColorToken, NodeStyle};
-use crate::graph::{Arrow, Direction, Edge as GraphEdge, Graph, Node, Stroke, Subgraph};
+use crate::graph::{Edge as GraphEdge, GeometryLevel, Graph, Node, Subgraph};
 use crate::mmds::{
-    Document, Edge, MmdsToken, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE,
-    parse_input,
+    Document, Edge, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE, parse_input,
 };
 
 /// Hydrate a graph `Diagram` from MMDS JSON text.
@@ -35,28 +36,13 @@ pub fn from_str(input: &str) -> Result<Graph, HydrationError> {
 pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
     validate_output(output)?;
 
-    let direction = Direction::parse_mmds(&output.metadata.direction).map_err(|_| {
-        HydrationError::InvalidDirection {
-            context: "metadata.direction".to_string(),
-            value: output.metadata.direction.clone(),
-        }
-    })?;
+    let direction = output.metadata.direction;
     let mut diagram = Graph::new(direction);
 
     for (index, subgraph) in output.subgraphs.iter().enumerate() {
         if subgraph.id.trim().is_empty() {
             return Err(HydrationError::MissingSubgraphId { index });
         }
-        let dir = if let Some(direction) = &subgraph.direction {
-            Some(Direction::parse_mmds(direction).map_err(|_| {
-                HydrationError::InvalidDirection {
-                    context: format!("subgraph {} direction", subgraph.id),
-                    value: direction.to_string(),
-                }
-            })?)
-        } else {
-            None
-        };
         diagram.subgraphs.insert(
             subgraph.id.clone(),
             Subgraph {
@@ -64,7 +50,7 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
                 title: subgraph.title.clone(),
                 nodes: subgraph.children.clone(),
                 parent: subgraph.parent.clone(),
-                dir,
+                dir: subgraph.direction,
                 invisible: subgraph.invisible,
                 concurrent_regions: subgraph.concurrent_regions.clone(),
             },
@@ -181,27 +167,9 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
             });
         }
 
-        let stroke =
-            Stroke::parse_mmds(&edge.stroke).map_err(|_| HydrationError::InvalidStroke {
-                edge_id: edge.id.clone(),
-                value: edge.stroke.clone(),
-            })?;
-        let arrow_start =
-            Arrow::parse_mmds(&edge.arrow_start).map_err(|_| HydrationError::InvalidArrow {
-                edge_id: edge.id.clone(),
-                endpoint: "start".to_string(),
-                value: edge.arrow_start.clone(),
-            })?;
-        let arrow_end =
-            Arrow::parse_mmds(&edge.arrow_end).map_err(|_| HydrationError::InvalidArrow {
-                edge_id: edge.id.clone(),
-                endpoint: "end".to_string(),
-                value: edge.arrow_end.clone(),
-            })?;
-
         let mut hydrated = GraphEdge::new(edge.source.clone(), edge.target.clone())
-            .with_stroke(stroke)
-            .with_arrows(arrow_start, arrow_end)
+            .with_stroke(edge.stroke)
+            .with_arrows(edge.arrow_start, edge.arrow_end)
             .with_minlen(edge.minlen);
         if let Some(label) = &edge.label {
             hydrated = hydrated.with_label(label.clone());
@@ -360,7 +328,7 @@ pub fn hydrate_routed_geometry_from_document(
     output: &Document,
 ) -> Result<RoutedGraphGeometry, HydrationError> {
     let (diagram, geometry) = hydrate_geometry_parts(output)?;
-    let edge_routing = if output.geometry_level == "routed" {
+    let edge_routing = if output.geometry_level == GeometryLevel::Routed {
         EdgeRouting::EngineProvided
     } else {
         EdgeRouting::PolylineRoute
@@ -376,7 +344,7 @@ pub fn hydrate_routed_geometry_from_document(
     // `label_position` inside `populate_label_geometry`, which would silently
     // lose the authoritative `label_rect` whenever `label_position` and
     // `label_rect` disagree.
-    if output.geometry_level == "routed" {
+    if output.geometry_level == GeometryLevel::Routed {
         overlay_authoritative_label_geometry(&mut routed, output, &metrics);
     }
 
@@ -412,7 +380,8 @@ fn overlay_authoritative_label_geometry(
         else {
             continue;
         };
-        let side = parse_mmds_label_side(mmds_edge.label_side.as_deref())
+        let side = mmds_edge
+            .label_side
             .or(routed_edge.label_side)
             .unwrap_or(EdgeLabelSide::Center);
         let rect = FRect::new(mmds_rect.x, mmds_rect.y, mmds_rect.width, mmds_rect.height);
@@ -435,15 +404,6 @@ fn overlay_authoritative_label_geometry(
             track: 0,
             compartment_size: 2,
         });
-    }
-}
-
-fn parse_mmds_label_side(value: Option<&str>) -> Option<EdgeLabelSide> {
-    match value? {
-        "above" => Some(EdgeLabelSide::Above),
-        "below" => Some(EdgeLabelSide::Below),
-        "center" => Some(EdgeLabelSide::Center),
-        _ => None,
     }
 }
 
@@ -635,7 +595,7 @@ fn build_positioned_nodes(
 }
 
 fn build_layout_edges(output: &Document) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry>, Vec<usize>) {
-    let routed_level = output.geometry_level == "routed";
+    let routed_level = output.geometry_level == GeometryLevel::Routed;
     let edges = sorted_output_edges(output);
 
     let mut layout_edges = Vec::with_capacity(edges.len());
@@ -667,7 +627,7 @@ fn build_layout_edges(output: &Document) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeomet
         } else {
             None
         };
-        let label_side = parse_mmds_label_side(edge.label_side.as_deref());
+        let label_side = edge.label_side;
 
         layout_edges.push(LayoutEdge {
             index,
@@ -790,12 +750,6 @@ fn validate_output(output: &Document) -> Result<(), HydrationError> {
     if output.version != 1 {
         return Err(HydrationError::UnsupportedVersion {
             version: output.version,
-        });
-    }
-
-    if !matches!(output.geometry_level.as_str(), "layout" | "routed") {
-        return Err(HydrationError::InvalidGeometryLevel {
-            value: output.geometry_level.clone(),
         });
     }
 

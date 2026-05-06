@@ -32,6 +32,8 @@ use serde_json::Value;
 
 use super::document::NODE_STYLE_EXTENSION_NAMESPACE;
 use super::{Bounds, Document, Edge, Node, Port, Position, Rect, Subgraph, Subject};
+use crate::graph::GeometryLevel;
+use crate::mmds::MmdsToken;
 
 const COORD_EPS: f64 = 0.01;
 const DISPLAY_EPS: f64 = 1.0;
@@ -40,9 +42,9 @@ const DISPLAY_EPS: f64 = 1.0;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diff {
     /// Geometry level recorded on the `before` document.
-    pub before_geometry_level: String,
+    pub before_geometry_level: GeometryLevel,
     /// Geometry level recorded on the `after` document.
-    pub after_geometry_level: String,
+    pub after_geometry_level: GeometryLevel,
     /// Flat change list describing differences between the two documents.
     pub changes: Vec<Change>,
 }
@@ -199,8 +201,8 @@ pub fn diff_documents(before: &Document, after: &Document) -> Diff {
     link_related_geometry(&mut changes);
 
     Diff {
-        before_geometry_level: before.geometry_level.clone(),
-        after_geometry_level: after.geometry_level.clone(),
+        before_geometry_level: before.geometry_level,
+        after_geometry_level: after.geometry_level,
         changes,
     }
 }
@@ -601,7 +603,10 @@ fn edge_label_key(edge: &Edge) -> String {
 fn edge_style_key(edge: &Edge) -> String {
     format!(
         "{}|{}|{}|{}",
-        edge.stroke, edge.arrow_start, edge.arrow_end, edge.minlen
+        edge.stroke.as_mmds_str(),
+        edge.arrow_start.as_mmds_str(),
+        edge.arrow_end.as_mmds_str(),
+        edge.minlen
     )
 }
 
@@ -1249,8 +1254,15 @@ fn same_port_intent(before: Option<&Port>, after: Option<&Port>) -> bool {
 }
 
 fn port_summary(port: Option<&Port>) -> String {
-    port.map(|port| format!("{}@{:.3}/{}", port.face, port.fraction, port.group_size))
-        .unwrap_or_else(|| "none".to_string())
+    port.map(|port| {
+        format!(
+            "{}@{:.3}/{}",
+            port.face.as_str(),
+            port.fraction,
+            port.group_size
+        )
+    })
+    .unwrap_or_else(|| "none".to_string())
 }
 
 fn path_port_diverged(path_face: &str, port_face: Option<&str>) -> bool {

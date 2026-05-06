@@ -6,6 +6,69 @@
 
 use serde::Serialize;
 
+use crate::graph::GeometryLevel;
+
+// ---------------------------------------------------------------------------
+// Sequence MMDS vocabulary
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SequenceDiagramType {
+    Sequence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsParticipantKind {
+    Participant,
+    Actor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsLineStyle {
+    Solid,
+    Dashed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsArrowHead {
+    None,
+    Filled,
+    Cross,
+    Async,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsNotePlacement {
+    LeftOf,
+    RightOf,
+    Over,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsBlockKind {
+    Loop,
+    Alt,
+    Opt,
+    Par,
+    Critical,
+    Break,
+    Rect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MmdsBlockDividerKind {
+    Else,
+    And,
+    Option,
+}
+
 // ---------------------------------------------------------------------------
 // Document types
 // ---------------------------------------------------------------------------
@@ -13,7 +76,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub(crate) struct SequenceDocument {
     pub version: u32,
-    pub geometry_level: String,
+    pub geometry_level: GeometryLevel,
     pub metadata: SequenceMetadata,
     // Envelope compat — always empty for sequence diagrams.
     pub nodes: Vec<()>,
@@ -33,7 +96,7 @@ pub(crate) struct SequenceDocument {
 
 #[derive(Serialize)]
 pub(crate) struct SequenceMetadata {
-    pub diagram_type: String,
+    pub diagram_type: SequenceDiagramType,
     pub bounds: MmdsBounds,
 }
 
@@ -67,7 +130,7 @@ pub(crate) struct MmdsRect {
 pub(crate) struct MmdsParticipant {
     pub id: String,
     pub label: String,
-    pub kind: String,
+    pub kind: MmdsParticipantKind,
     pub position: MmdsPosition,
     pub size: MmdsSize,
     pub lifeline_x: f64,
@@ -78,15 +141,15 @@ pub(crate) struct MmdsMessage {
     pub id: String,
     pub from: usize,
     pub to: usize,
-    pub line_style: String,
-    pub arrow_head: String,
+    pub line_style: MmdsLineStyle,
+    pub arrow_head: MmdsArrowHead,
     pub text: String,
     pub y: f64,
 }
 
 #[derive(Serialize)]
 pub(crate) struct MmdsNote {
-    pub placement: String,
+    pub placement: MmdsNotePlacement,
     pub participants: Vec<usize>,
     pub text: String,
     pub position: MmdsPosition,
@@ -104,13 +167,13 @@ pub(crate) struct MmdsActivation {
 #[derive(Serialize)]
 pub(crate) struct MmdsBlockDivider {
     pub y: f64,
-    pub kind: String,
+    pub kind: MmdsBlockDividerKind,
     pub label: String,
 }
 
 #[derive(Serialize)]
 pub(crate) struct MmdsBlock {
-    pub kind: String,
+    pub kind: MmdsBlockKind,
     pub label: String,
     pub rect: MmdsRect,
     #[serde(skip_serializing_if = "Vec::is_empty")]

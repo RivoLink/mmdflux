@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fmt;
 
 use super::{Document, Edge, Node, Subgraph, parse_input};
-use crate::graph::Shape;
+use crate::graph::{Arrow, Shape, Stroke};
 use crate::mmds::MmdsToken;
 
 /// Error produced when MMDS-to-Mermaid regeneration fails.
@@ -43,7 +43,10 @@ pub fn generate_mermaid(output: &Document) -> Result<String, GenerationError> {
     let identifiers = build_identifier_maps(output);
 
     let mut lines = Vec::with_capacity(1 + output.nodes.len() + output.edges.len());
-    lines.push(format!("flowchart {}", output.metadata.direction));
+    lines.push(format!(
+        "flowchart {}",
+        output.metadata.direction.as_mmds_str()
+    ));
 
     emit_nodes(output, &identifiers, &mut lines)?;
     emit_edges(output, &identifiers, &mut lines)?;
@@ -206,7 +209,10 @@ fn emit_subgraph(
 
     if let Some(direction) = &subgraph.direction {
         let child_padding = " ".repeat(indent + 4);
-        lines.push(format!("{child_padding}direction {direction}"));
+        lines.push(format!(
+            "{child_padding}direction {}",
+            direction.as_mmds_str()
+        ));
     }
 
     if let Some(children) = subgraphs_by_parent.get(subgraph.id.as_str()) {
@@ -375,33 +381,32 @@ fn format_edge_label(label: &str) -> String {
 
 fn connector_for(edge: &Edge) -> Result<String, GenerationError> {
     let minlen = edge.minlen.max(1) as usize;
-    let connector = match (
-        edge.stroke.as_str(),
-        edge.arrow_start.as_str(),
-        edge.arrow_end.as_str(),
-    ) {
-        ("solid", "none", "normal") => format!("{}>", "-".repeat(minlen + 1)),
-        ("solid", "none", "none") => "-".repeat(minlen + 2),
-        ("solid", "normal", "normal") => format!("<{}>", "-".repeat(minlen + 1)),
-        ("solid", "none", "cross") => format!("{}x", "-".repeat(minlen + 1)),
-        ("solid", "cross", "cross") => format!("x{}x", "-".repeat(minlen + 1)),
-        ("solid", "none", "circle") => format!("{}o", "-".repeat(minlen + 1)),
-        ("solid", "circle", "circle") => format!("o{}o", "-".repeat(minlen + 1)),
-        ("dotted", "none", "normal") => format!("-{}->", ".".repeat(minlen)),
-        ("dotted", "none", "none") => format!("-{}-", ".".repeat(minlen)),
-        ("dotted", "normal", "normal") => format!("<-{}->", ".".repeat(minlen)),
-        ("dotted", "none", "cross") => format!("-{}-x", ".".repeat(minlen)),
-        ("dotted", "none", "circle") => format!("-{}-o", ".".repeat(minlen)),
-        ("thick", "none", "normal") => format!("{}>", "=".repeat(minlen + 1)),
-        ("thick", "none", "none") => "=".repeat(minlen + 2),
-        ("thick", "normal", "normal") => format!("<{}>", "=".repeat(minlen + 1)),
-        ("thick", "none", "cross") => format!("{}x", "=".repeat(minlen + 1)),
-        ("thick", "none", "circle") => format!("{}o", "=".repeat(minlen + 1)),
-        ("invisible", "none", "none") => "~".repeat(minlen + 2),
+    let connector = match (edge.stroke, edge.arrow_start, edge.arrow_end) {
+        (Stroke::Solid, Arrow::None, Arrow::Normal) => format!("{}>", "-".repeat(minlen + 1)),
+        (Stroke::Solid, Arrow::None, Arrow::None) => "-".repeat(minlen + 2),
+        (Stroke::Solid, Arrow::Normal, Arrow::Normal) => format!("<{}>", "-".repeat(minlen + 1)),
+        (Stroke::Solid, Arrow::None, Arrow::Cross) => format!("{}x", "-".repeat(minlen + 1)),
+        (Stroke::Solid, Arrow::Cross, Arrow::Cross) => format!("x{}x", "-".repeat(minlen + 1)),
+        (Stroke::Solid, Arrow::None, Arrow::Circle) => format!("{}o", "-".repeat(minlen + 1)),
+        (Stroke::Solid, Arrow::Circle, Arrow::Circle) => format!("o{}o", "-".repeat(minlen + 1)),
+        (Stroke::Dotted, Arrow::None, Arrow::Normal) => format!("-{}->", ".".repeat(minlen)),
+        (Stroke::Dotted, Arrow::None, Arrow::None) => format!("-{}-", ".".repeat(minlen)),
+        (Stroke::Dotted, Arrow::Normal, Arrow::Normal) => format!("<-{}->", ".".repeat(minlen)),
+        (Stroke::Dotted, Arrow::None, Arrow::Cross) => format!("-{}-x", ".".repeat(minlen)),
+        (Stroke::Dotted, Arrow::None, Arrow::Circle) => format!("-{}-o", ".".repeat(minlen)),
+        (Stroke::Thick, Arrow::None, Arrow::Normal) => format!("{}>", "=".repeat(minlen + 1)),
+        (Stroke::Thick, Arrow::None, Arrow::None) => "=".repeat(minlen + 2),
+        (Stroke::Thick, Arrow::Normal, Arrow::Normal) => format!("<{}>", "=".repeat(minlen + 1)),
+        (Stroke::Thick, Arrow::None, Arrow::Cross) => format!("{}x", "=".repeat(minlen + 1)),
+        (Stroke::Thick, Arrow::None, Arrow::Circle) => format!("{}o", "=".repeat(minlen + 1)),
+        (Stroke::Invisible, Arrow::None, Arrow::None) => "~".repeat(minlen + 2),
         _ => {
             return Err(GenerationError::new(format!(
                 "unsupported edge connector combination stroke='{}' arrow_start='{}' arrow_end='{}' on edge '{}'",
-                edge.stroke, edge.arrow_start, edge.arrow_end, edge.id
+                edge.stroke.as_mmds_str(),
+                edge.arrow_start.as_mmds_str(),
+                edge.arrow_end.as_mmds_str(),
+                edge.id
             )));
         }
     };

@@ -6,10 +6,11 @@
 use crate::engines::graph::EngineConfig;
 use crate::engines::graph::algorithms::layered::run_layered_layout;
 use crate::engines::graph::contracts::MeasurementMode;
+use crate::graph::attachment::PortFace;
 use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
-use crate::graph::{GeometryLevel, Graph, Shape};
+use crate::graph::{Arrow, Direction, GeometryLevel, Graph, Shape, Stroke};
 use crate::mmds::document::{Document, to_json, to_layout, to_routed};
 use crate::simplification::PathSimplification;
 
@@ -40,7 +41,7 @@ fn layout_json_has_version_and_level() {
     let json = to_layout(&diagram, &geom);
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.version, 1);
-    assert_eq!(output.geometry_level, "layout");
+    assert_eq!(output.geometry_level, GeometryLevel::Layout);
 }
 
 #[test]
@@ -49,12 +50,12 @@ fn layout_json_has_metadata() {
     let json = to_layout(&diagram, &geom);
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.defaults.node.shape, Shape::Rectangle);
-    assert_eq!(output.defaults.edge.stroke, "solid");
-    assert_eq!(output.defaults.edge.arrow_start, "none");
-    assert_eq!(output.defaults.edge.arrow_end, "normal");
+    assert_eq!(output.defaults.edge.stroke, Stroke::Solid);
+    assert_eq!(output.defaults.edge.arrow_start, Arrow::None);
+    assert_eq!(output.defaults.edge.arrow_end, Arrow::Normal);
     assert_eq!(output.defaults.edge.minlen, 1);
     assert_eq!(output.metadata.diagram_type, "flowchart");
-    assert_eq!(output.metadata.direction, "TD");
+    assert_eq!(output.metadata.direction, Direction::TopDown);
     assert!(output.metadata.bounds.width > 0.0);
     assert!(output.metadata.bounds.height > 0.0);
 }
@@ -98,9 +99,9 @@ fn layout_json_edge_semantics() {
 
     let edge = &output.edges[0];
     assert_eq!(edge.id, "e0");
-    assert_eq!(edge.stroke, "dotted");
+    assert_eq!(edge.stroke, Stroke::Dotted);
     assert_eq!(edge.label, Some("label".to_string()));
-    assert_eq!(edge.arrow_end, "normal");
+    assert_eq!(edge.arrow_end, Arrow::Normal);
     assert_eq!(edge.minlen, 1);
 }
 
@@ -191,9 +192,9 @@ fn layout_deserializes_with_defaults() {
     .unwrap();
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.nodes[0].shape, Shape::Rectangle);
-    assert_eq!(output.edges[0].stroke, "solid");
-    assert_eq!(output.edges[0].arrow_start, "none");
-    assert_eq!(output.edges[0].arrow_end, "normal");
+    assert_eq!(output.edges[0].stroke, Stroke::Solid);
+    assert_eq!(output.edges[0].arrow_start, Arrow::None);
+    assert_eq!(output.edges[0].arrow_end, Arrow::Normal);
     assert_eq!(output.edges[0].minlen, 1);
     assert!(output.subgraphs.is_empty());
 }
@@ -217,7 +218,7 @@ fn layout_json_subgraph_direction_override() {
         layout_geometry("graph TD\nsubgraph sg1[Group]\ndirection LR\nA-->B\nend");
     let json = to_layout(&diagram, &geom);
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.subgraphs[0].direction.as_deref(), Some("LR"));
+    assert_eq!(output.subgraphs[0].direction, Some(Direction::LeftRight));
 }
 
 #[test]
@@ -232,7 +233,12 @@ fn layout_json_nodes_sorted_by_id() {
 
 #[test]
 fn layout_json_direction_variants() {
-    for (dir_str, expected) in [("TD", "TD"), ("LR", "LR"), ("BT", "BT"), ("RL", "RL")] {
+    for (dir_str, expected) in [
+        ("TD", Direction::TopDown),
+        ("LR", Direction::LeftRight),
+        ("BT", Direction::BottomTop),
+        ("RL", Direction::RightLeft),
+    ] {
         let input = format!("graph {dir_str}\nA-->B");
         let (diagram, geom) = layout_geometry(&input);
         let json = to_layout(&diagram, &geom);
@@ -248,7 +254,7 @@ fn routed_json_has_version_and_level() {
     let json = to_routed(&diagram, &geom, &routed);
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.version, 1);
-    assert_eq!(output.geometry_level, "routed");
+    assert_eq!(output.geometry_level, GeometryLevel::Routed);
 }
 
 #[test]
@@ -331,8 +337,8 @@ fn routed_json_includes_port_metadata() {
     assert!(edge.target_port.is_some());
     let sp = edge.source_port.as_ref().unwrap();
     let tp = edge.target_port.as_ref().unwrap();
-    assert_eq!(sp.face, "bottom");
-    assert_eq!(tp.face, "top");
+    assert_eq!(sp.face, PortFace::Bottom);
+    assert_eq!(tp.face, PortFace::Top);
     assert_eq!(sp.group_size, 1);
     assert_eq!(tp.group_size, 1);
 }

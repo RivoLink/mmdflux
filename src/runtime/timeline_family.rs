@@ -3,11 +3,13 @@
 //! Parallel to `graph_family` — computes SVG layout and serializes to MMDS
 //! JSON via the types defined in `mmds::sequence`.
 
+use crate::graph::GeometryLevel;
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::mmds::sequence::{
-    self, MmdsActivation, MmdsBlock, MmdsBlockDivider, MmdsBounds, MmdsMessage, MmdsNote,
-    MmdsParticipant, MmdsParticipantBox, MmdsPosition, MmdsRect, MmdsSize, SequenceDocument,
-    SequenceMetadata,
+    self, MmdsActivation, MmdsArrowHead, MmdsBlock, MmdsBlockDivider, MmdsBlockDividerKind,
+    MmdsBlockKind, MmdsBounds, MmdsLineStyle, MmdsMessage, MmdsNote, MmdsNotePlacement,
+    MmdsParticipant, MmdsParticipantBox, MmdsParticipantKind, MmdsPosition, MmdsRect, MmdsSize,
+    SequenceDiagramType, SequenceDocument, SequenceMetadata,
 };
 use crate::render::timeline::svg_layout::{
     self as svg_layout, SvgBlock, SvgRow, SvgSequenceLayout,
@@ -17,49 +19,49 @@ use crate::timeline::sequence::model::{
 };
 
 // ---------------------------------------------------------------------------
-// String helpers
+// MMDS vocabulary conversion helpers
 // ---------------------------------------------------------------------------
 
-fn line_style_str(s: LineStyle) -> &'static str {
+fn mmds_line_style(s: LineStyle) -> MmdsLineStyle {
     match s {
-        LineStyle::Solid => "solid",
-        LineStyle::Dashed => "dashed",
+        LineStyle::Solid => MmdsLineStyle::Solid,
+        LineStyle::Dashed => MmdsLineStyle::Dashed,
     }
 }
 
-fn arrow_head_str(a: ArrowHead) -> &'static str {
+fn mmds_arrow_head(a: ArrowHead) -> MmdsArrowHead {
     match a {
-        ArrowHead::None => "none",
-        ArrowHead::Filled => "filled",
-        ArrowHead::Cross => "cross",
-        ArrowHead::Async => "async",
+        ArrowHead::None => MmdsArrowHead::None,
+        ArrowHead::Filled => MmdsArrowHead::Filled,
+        ArrowHead::Cross => MmdsArrowHead::Cross,
+        ArrowHead::Async => MmdsArrowHead::Async,
     }
 }
 
-fn participant_kind_str(k: &ParticipantKind) -> &'static str {
+fn mmds_participant_kind(k: &ParticipantKind) -> MmdsParticipantKind {
     match k {
-        ParticipantKind::Participant => "participant",
-        ParticipantKind::Actor => "actor",
+        ParticipantKind::Participant => MmdsParticipantKind::Participant,
+        ParticipantKind::Actor => MmdsParticipantKind::Actor,
     }
 }
 
-fn block_kind_str(k: BlockKind) -> &'static str {
+fn mmds_block_kind(k: BlockKind) -> MmdsBlockKind {
     match k {
-        BlockKind::Loop => "loop",
-        BlockKind::Alt => "alt",
-        BlockKind::Opt => "opt",
-        BlockKind::Par => "par",
-        BlockKind::Critical => "critical",
-        BlockKind::Break => "break",
-        BlockKind::Rect => "rect",
+        BlockKind::Loop => MmdsBlockKind::Loop,
+        BlockKind::Alt => MmdsBlockKind::Alt,
+        BlockKind::Opt => MmdsBlockKind::Opt,
+        BlockKind::Par => MmdsBlockKind::Par,
+        BlockKind::Critical => MmdsBlockKind::Critical,
+        BlockKind::Break => MmdsBlockKind::Break,
+        BlockKind::Rect => MmdsBlockKind::Rect,
     }
 }
 
-fn block_divider_kind_str(k: BlockDividerKind) -> &'static str {
+fn mmds_block_divider_kind(k: BlockDividerKind) -> MmdsBlockDividerKind {
     match k {
-        BlockDividerKind::Else => "else",
-        BlockDividerKind::And => "and",
-        BlockDividerKind::Option => "option",
+        BlockDividerKind::Else => MmdsBlockDividerKind::Else,
+        BlockDividerKind::And => MmdsBlockDividerKind::And,
+        BlockDividerKind::Option => MmdsBlockDividerKind::Option,
     }
 }
 
@@ -84,9 +86,9 @@ fn build_document(model: &Sequence, svg: &SvgSequenceLayout) -> SequenceDocument
 
     SequenceDocument {
         version: 1,
-        geometry_level: "layout".to_string(),
+        geometry_level: GeometryLevel::Layout,
         metadata: SequenceMetadata {
-            diagram_type: "sequence".to_string(),
+            diagram_type: SequenceDiagramType::Sequence,
             bounds: MmdsBounds {
                 width: svg.width,
                 height: svg.height,
@@ -111,7 +113,7 @@ fn build_participants(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<MmdsPart
         .map(|(p, sp)| MmdsParticipant {
             id: p.id.clone(),
             label: p.label.clone(),
-            kind: participant_kind_str(&p.kind).to_string(),
+            kind: mmds_participant_kind(&p.kind),
             position: MmdsPosition {
                 x: sp.rect.x,
                 y: sp.rect.y,
@@ -141,8 +143,8 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
                     id: format!("m{msg_idx}"),
                     from,
                     to,
-                    line_style: line_style_str(m.line_style).to_string(),
-                    arrow_head: arrow_head_str(m.arrow_head).to_string(),
+                    line_style: mmds_line_style(m.line_style),
+                    arrow_head: mmds_arrow_head(m.arrow_head),
                     text: m.label.clone(),
                     y: m.y,
                 });
@@ -154,8 +156,8 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
                     id: format!("m{msg_idx}"),
                     from,
                     to: from,
-                    line_style: line_style_str(sm.line_style).to_string(),
-                    arrow_head: arrow_head_str(sm.arrow_head).to_string(),
+                    line_style: mmds_line_style(sm.line_style),
+                    arrow_head: mmds_arrow_head(sm.arrow_head),
                     text: sm.label.clone(),
                     y: sm.y,
                 });
@@ -165,7 +167,7 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
                 let participants = participants_for_note(&lifeline_xs, n);
                 let placement = placement_for_note(&lifeline_xs, n, &participants);
                 notes.push(MmdsNote {
-                    placement: placement.to_string(),
+                    placement,
                     participants,
                     text: n.text.clone(),
                     position: MmdsPosition {
@@ -220,19 +222,19 @@ fn placement_for_note(
     lifeline_xs: &[f64],
     note: &svg_layout::SvgNote,
     participants: &[usize],
-) -> &'static str {
+) -> MmdsNotePlacement {
     if participants.len() > 1 {
-        return "over";
+        return MmdsNotePlacement::Over;
     }
     let p_idx = participants[0];
     let lx = lifeline_xs[p_idx];
     let note_center = note.rect.x + note.rect.width / 2.0;
     if note_center < lx {
-        "left_of"
+        MmdsNotePlacement::LeftOf
     } else if note_center > lx {
-        "right_of"
+        MmdsNotePlacement::RightOf
     } else {
-        "over"
+        MmdsNotePlacement::Over
     }
 }
 
@@ -256,7 +258,7 @@ fn build_blocks(svg: &SvgSequenceLayout) -> Vec<MmdsBlock> {
     svg.blocks
         .iter()
         .map(|b: &SvgBlock| MmdsBlock {
-            kind: block_kind_str(b.kind).to_string(),
+            kind: mmds_block_kind(b.kind),
             label: b.label.clone(),
             rect: MmdsRect {
                 x: b.rect.x,
@@ -269,7 +271,7 @@ fn build_blocks(svg: &SvgSequenceLayout) -> Vec<MmdsBlock> {
                 .iter()
                 .map(|d| MmdsBlockDivider {
                     y: d.y,
-                    kind: block_divider_kind_str(d.kind).to_string(),
+                    kind: mmds_block_divider_kind(d.kind),
                     label: d.label.clone(),
                 })
                 .collect(),

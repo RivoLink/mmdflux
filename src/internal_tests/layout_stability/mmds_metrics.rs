@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{geometry_metrics, mutations};
-use crate::graph::geometry::{FPoint, FRect};
+use crate::graph::Direction;
+use crate::graph::attachment::PortFace;
+use crate::graph::geometry::{EdgeLabelSide, FPoint, FRect};
 use crate::mmds;
 
 pub(crate) const COORD_EPS: f64 = 0.01;
@@ -89,15 +91,15 @@ pub(crate) struct SubgraphMembershipDelta {
     pub(crate) after_children: Vec<String>,
     pub(crate) before_parent: Option<String>,
     pub(crate) after_parent: Option<String>,
-    pub(crate) before_direction: Option<String>,
-    pub(crate) after_direction: Option<String>,
+    pub(crate) before_direction: Option<Direction>,
+    pub(crate) after_direction: Option<Direction>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LabelSideDelta {
     pub(crate) edge_id: String,
-    pub(crate) before: Option<String>,
-    pub(crate) after: Option<String>,
+    pub(crate) before: Option<EdgeLabelSide>,
+    pub(crate) after: Option<EdgeLabelSide>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,8 +141,8 @@ pub(crate) struct LabelRectDelta {
 pub(crate) struct PortIntentDelta {
     pub(crate) edge_id: String,
     pub(crate) endpoint: Endpoint,
-    pub(crate) before_face: Option<String>,
-    pub(crate) after_face: Option<String>,
+    pub(crate) before_face: Option<PortFace>,
+    pub(crate) after_face: Option<PortFace>,
     pub(crate) before_fraction: Option<f64>,
     pub(crate) after_fraction: Option<f64>,
     pub(crate) before_group_size: Option<usize>,
@@ -162,7 +164,7 @@ pub(crate) struct PathPortDivergence {
     pub(crate) edge_id: String,
     pub(crate) endpoint: Endpoint,
     pub(crate) path_face: DerivedEndpointFace,
-    pub(crate) port_face: Option<String>,
+    pub(crate) port_face: Option<PortFace>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -434,8 +436,8 @@ fn subgraph_membership_changes(
             .unwrap_or_default();
         let before_parent = before.and_then(|subgraph| subgraph.parent.clone());
         let after_parent = after.and_then(|subgraph| subgraph.parent.clone());
-        let before_direction = before.and_then(|subgraph| subgraph.direction.clone());
-        let after_direction = after.and_then(|subgraph| subgraph.direction.clone());
+        let before_direction = before.and_then(|subgraph| subgraph.direction);
+        let after_direction = after.and_then(|subgraph| subgraph.direction);
 
         if before_children != after_children
             || before_parent != after_parent
@@ -482,8 +484,8 @@ fn label_side_changes(before: &mmds::Document, after: &mmds::Document) -> Vec<La
         if before_edge.label_side != after_edge.label_side {
             changes.push(LabelSideDelta {
                 edge_id: id,
-                before: before_edge.label_side.clone(),
-                after: after_edge.label_side.clone(),
+                before: before_edge.label_side,
+                after: after_edge.label_side,
             });
         }
     }
@@ -674,8 +676,8 @@ fn port_intent_deltas(
         Some(PortIntentDelta {
             edge_id: edge_id.to_string(),
             endpoint,
-            before_face: before.map(|port| port.face.clone()),
-            after_face: after.map(|port| port.face.clone()),
+            before_face: before.map(|port| port.face),
+            after_face: after.map(|port| port.face),
             before_fraction: before.map(|port| port.fraction),
             after_fraction: after.map(|port| port.fraction),
             before_group_size: before.map(|port| port.group_size),
@@ -741,18 +743,18 @@ fn path_port_divergence(
         (
             Endpoint::Source,
             endpoint_face(edge, nodes, Endpoint::Source),
-            edge.source_port.as_ref().map(|port| port.face.clone()),
+            edge.source_port.as_ref().map(|port| port.face),
         ),
         (
             Endpoint::Target,
             endpoint_face(edge, nodes, Endpoint::Target),
-            edge.target_port.as_ref().map(|port| port.face.clone()),
+            edge.target_port.as_ref().map(|port| port.face),
         ),
     ]
     .into_iter()
     .filter_map(|(endpoint, path_face, port_face)| {
         let diverged = match (&path_face, &port_face) {
-            (DerivedEndpointFace::Face(path), Some(port)) => path != port,
+            (DerivedEndpointFace::Face(path), Some(port)) => path != port.as_str(),
             (DerivedEndpointFace::Ambiguous, Some(_)) => true,
             _ => false,
         };

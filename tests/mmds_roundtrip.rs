@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::builtins::default_registry;
-use mmdflux::graph::{Direction, Graph, Shape};
-use mmdflux::mmds::{from_str, generate_mermaid_from_str};
+use mmdflux::graph::{Arrow, Direction, Graph, Shape, Stroke};
+use mmdflux::mmds::{MmdsToken, from_str, generate_mermaid_from_str};
 use mmdflux::payload::Diagram as Payload;
 
 fn fixture(name: &str) -> String {
@@ -36,9 +36,9 @@ struct SemanticEdge {
     source: String,
     target: String,
     label: Option<String>,
-    stroke: String,
-    arrow_start: String,
-    arrow_end: String,
+    stroke: Stroke,
+    arrow_start: Arrow,
+    arrow_end: Arrow,
     minlen: i32,
     from_subgraph: Option<String>,
     to_subgraph: Option<String>,
@@ -123,9 +123,9 @@ fn semantic_diagram(diagram: &Graph) -> SemanticDiagram {
             source: edge.from.clone(),
             target: edge.to.clone(),
             label: edge.label.clone(),
-            stroke: format!("{:?}", edge.stroke),
-            arrow_start: format!("{:?}", edge.arrow_start),
-            arrow_end: format!("{:?}", edge.arrow_end),
+            stroke: edge.stroke,
+            arrow_start: edge.arrow_start,
+            arrow_end: edge.arrow_end,
             minlen: edge.minlen,
             from_subgraph: edge.from_subgraph.clone(),
             to_subgraph: edge.to_subgraph.clone(),
@@ -136,9 +136,17 @@ fn semantic_diagram(diagram: &Graph) -> SemanticDiagram {
             .cmp(&right.source)
             .then(left.target.cmp(&right.target))
             .then(left.label.cmp(&right.label))
-            .then(left.stroke.cmp(&right.stroke))
-            .then(left.arrow_start.cmp(&right.arrow_start))
-            .then(left.arrow_end.cmp(&right.arrow_end))
+            .then(left.stroke.as_mmds_str().cmp(right.stroke.as_mmds_str()))
+            .then(
+                left.arrow_start
+                    .as_mmds_str()
+                    .cmp(right.arrow_start.as_mmds_str()),
+            )
+            .then(
+                left.arrow_end
+                    .as_mmds_str()
+                    .cmp(right.arrow_end.as_mmds_str()),
+            )
             .then(left.minlen.cmp(&right.minlen))
             .then(left.from_subgraph.cmp(&right.from_subgraph))
             .then(left.to_subgraph.cmp(&right.to_subgraph))

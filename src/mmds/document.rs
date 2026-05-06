@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
 use crate::errors::RenderError;
-use crate::graph::attachment::EdgePort;
+use crate::graph::attachment::{EdgePort, PortFace};
 use crate::graph::geometry::{
     EdgeLabelSide, GraphGeometry, PositionedNode, RoutedEdgeGeometry, RoutedGraphGeometry,
 };
@@ -18,8 +18,7 @@ use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::style::NodeStyle;
-use crate::graph::{GeometryLevel, Graph, Shape};
-use crate::mmds::MmdsToken;
+use crate::graph::{Arrow, Direction, GeometryLevel, Graph, Shape, Stroke};
 use crate::simplification::PathSimplification;
 
 pub const CORE_PROFILE: &str = "mmds-core-v1";
@@ -247,7 +246,7 @@ fn serialize_document(document: &Document) -> String {
 
 fn edge_port_to_mmds(port: &EdgePort) -> Port {
     Port {
-        face: port.face.as_str().to_string(),
+        face: port.face,
         fraction: port.fraction,
         position: Position {
             x: port.position.x,
@@ -257,28 +256,15 @@ fn edge_port_to_mmds(port: &EdgePort) -> Port {
     }
 }
 
-/// Map an `EdgeLabelSide` enum variant to its MMDS JSON string.
-fn edge_label_side_to_mmds_string(side: EdgeLabelSide) -> String {
-    match side {
-        EdgeLabelSide::Above => "above".into(),
-        EdgeLabelSide::Below => "below".into(),
-        EdgeLabelSide::Center => "center".into(),
-    }
-}
-
 /// Resolve `label_side` for an MMDS edge using the fallback chain:
 ///   `label_geometry.side` → `layout_edge.label_side`
 ///
 /// Returns `None` when no side has been assigned at either layer.
 fn mmds_edge_label_side(
     layout_edge: Option<&crate::graph::geometry::LayoutEdge>,
-) -> Option<String> {
+) -> Option<EdgeLabelSide> {
     let le = layout_edge?;
-    le.label_geometry
-        .as_ref()
-        .map(|g| g.side)
-        .or(le.label_side)
-        .map(edge_label_side_to_mmds_string)
+    le.label_geometry.as_ref().map(|g| g.side).or(le.label_side)
 }
 
 /// Resolve `label_rect` for an MMDS edge (routed level only).
@@ -305,7 +291,11 @@ fn build_document(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> Document {
-    let level = if routed.is_some() { "routed" } else { "layout" };
+    let level = if routed.is_some() {
+        GeometryLevel::Routed
+    } else {
+        GeometryLevel::Layout
+    };
     let styled_nodes = collect_styled_nodes(diagram);
 
     // At routed level, use the recomputed routed bounds (which cover all
@@ -313,7 +303,7 @@ fn build_document(
     let effective_bounds = routed.map_or(geometry.bounds, |r| r.bounds);
     let metadata = Metadata {
         diagram_type: diagram_type.to_string(),
-        direction: diagram.direction.as_mmds_str().to_string(),
+        direction: diagram.direction,
         bounds: Bounds {
             width: effective_bounds.width,
             height: effective_bounds.height,
@@ -342,9 +332,9 @@ fn build_document(
                 from_subgraph: edge.from_subgraph.clone(),
                 to_subgraph: edge.to_subgraph.clone(),
                 label: edge.label.clone(),
-                stroke: edge.stroke.as_mmds_str().to_string(),
-                arrow_start: edge.arrow_start.as_mmds_str().to_string(),
-                arrow_end: edge.arrow_end.as_mmds_str().to_string(),
+                stroke: edge.stroke,
+                arrow_start: edge.arrow_start,
+                arrow_end: edge.arrow_end,
                 minlen: edge.minlen,
                 path: None,
                 label_position: None,
@@ -413,7 +403,7 @@ fn build_document(
                 title: sg.title.clone(),
                 children: direct_children,
                 parent: sg.parent.clone(),
-                direction: sg.dir.map(|d| d.as_mmds_str().to_string()),
+                direction: sg.dir,
                 bounds,
                 invisible: sg.invisible,
                 concurrent_regions: sg.concurrent_regions.clone(),
@@ -446,7 +436,7 @@ fn build_document(
         profiles,
         extensions,
         defaults: Defaults::default(),
-        geometry_level: level.to_string(),
+        geometry_level: level,
         metadata,
         nodes,
         edges,
@@ -680,8 +670,8 @@ pub struct Document {
     pub extensions: BTreeMap<String, Map<String, Value>>,
     /// Document-level default values for omitted node/edge fields.
     pub defaults: Defaults,
-    /// Geometry level: "layout" or "routed".
-    pub geometry_level: String,
+    /// Geometry level: `layout` or `routed`.
+    pub geometry_level: GeometryLevel,
     /// Diagram metadata.
     pub metadata: Metadata,
     /// Node inventory with positions.
@@ -727,11 +717,11 @@ impl Default for NodeDefaults {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeDefaults {
     #[serde(default = "default_stroke")]
-    pub stroke: String,
+    pub stroke: Stroke,
     #[serde(default = "default_arrow_start")]
-    pub arrow_start: String,
+    pub arrow_start: Arrow,
     #[serde(default = "default_arrow_end")]
-    pub arrow_end: String,
+    pub arrow_end: Arrow,
     #[serde(default = "default_minlen")]
     pub minlen: i32,
 }
@@ -752,8 +742,8 @@ impl Default for EdgeDefaults {
 pub struct Metadata {
     /// Diagram type (e.g., "flowchart", "class").
     pub diagram_type: String,
-    /// Layout direction: "TD", "BT", "LR", or "RL".
-    pub direction: String,
+    /// Layout direction: `TD`, `BT`, `LR`, or `RL`.
+    pub direction: Direction,
     /// Overall diagram bounds in MMDS layout space.
     pub bounds: Bounds,
     /// Engine+algorithm identifier that produced this output (e.g., "flux-layered").
@@ -822,8 +812,8 @@ pub struct Size {
 /// Port attachment metadata for an edge endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Port {
-    /// Which face of the node the edge attaches to ("top", "bottom", "left", "right").
-    pub face: String,
+    /// Which face of the node the edge attaches to.
+    pub face: PortFace,
     /// Position within the face (0.0 = start, 1.0 = end).
     pub fraction: f64,
     /// Absolute position of the attachment point.
@@ -855,19 +845,19 @@ pub struct Edge {
     pub label: Option<String>,
     /// Stroke style.
     #[serde(default = "default_stroke", skip_serializing_if = "is_default_stroke")]
-    pub stroke: String,
+    pub stroke: Stroke,
     /// Arrow at source end.
     #[serde(
         default = "default_arrow_start",
         skip_serializing_if = "is_default_arrow_start"
     )]
-    pub arrow_start: String,
+    pub arrow_start: Arrow,
     /// Arrow at target end.
     #[serde(
         default = "default_arrow_end",
         skip_serializing_if = "is_default_arrow_end"
     )]
-    pub arrow_end: String,
+    pub arrow_end: Arrow,
     /// Minimum rank separation.
     #[serde(default = "default_minlen", skip_serializing_if = "is_default_minlen")]
     pub minlen: i32,
@@ -898,7 +888,7 @@ pub struct Edge {
     /// Populated from `EdgeLabelGeometry` when label-side assignment runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    pub label_side: Option<String>,
+    pub label_side: Option<EdgeLabelSide>,
     /// Padded label rectangle in MMDS coordinate space (routed level only).
     ///
     /// Includes `label_padding_x` / `label_padding_y` padding on each side.
@@ -923,10 +913,10 @@ pub struct Subgraph {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub parent: Option<String>,
-    /// Subgraph direction override ("TD", "BT", "LR", "RL"), if any.
+    /// Subgraph direction override, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    pub direction: Option<String>,
+    pub direction: Option<Direction>,
     /// Subgraph bounding box (routed level only).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -943,16 +933,16 @@ fn default_node_shape() -> Shape {
     Shape::Rectangle
 }
 
-fn default_stroke() -> String {
-    "solid".to_string()
+fn default_stroke() -> Stroke {
+    Stroke::Solid
 }
 
-fn default_arrow_start() -> String {
-    "none".to_string()
+fn default_arrow_start() -> Arrow {
+    Arrow::None
 }
 
-fn default_arrow_end() -> String {
-    "normal".to_string()
+fn default_arrow_end() -> Arrow {
+    Arrow::Normal
 }
 
 fn default_minlen() -> i32 {
@@ -963,16 +953,16 @@ fn is_default_node_shape(value: &Shape) -> bool {
     *value == Shape::Rectangle
 }
 
-fn is_default_stroke(value: &String) -> bool {
-    value == "solid"
+fn is_default_stroke(value: &Stroke) -> bool {
+    *value == Stroke::Solid
 }
 
-fn is_default_arrow_start(value: &String) -> bool {
-    value == "none"
+fn is_default_arrow_start(value: &Arrow) -> bool {
+    *value == Arrow::None
 }
 
-fn is_default_arrow_end(value: &String) -> bool {
-    value == "normal"
+fn is_default_arrow_end(value: &Arrow) -> bool {
+    *value == Arrow::Normal
 }
 
 fn is_default_minlen(value: &i32) -> bool {
@@ -986,7 +976,7 @@ mod tests {
     #[test]
     fn mmds_port_serializes_correctly() {
         let port = Port {
-            face: "bottom".to_string(),
+            face: PortFace::Bottom,
             fraction: 0.5,
             position: Position { x: 50.0, y: 35.0 },
             group_size: 1,
@@ -1006,9 +996,9 @@ mod tests {
             from_subgraph: None,
             to_subgraph: None,
             label: None,
-            stroke: "solid".into(),
-            arrow_start: "none".into(),
-            arrow_end: "normal".into(),
+            stroke: Stroke::Solid,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
             minlen: 1,
             path: None,
             label_position: None,
@@ -1026,7 +1016,7 @@ mod tests {
     #[test]
     fn mmds_edge_source_port_round_trips() {
         let port = Port {
-            face: "right".to_string(),
+            face: PortFace::Right,
             fraction: 0.3,
             position: Position { x: 100.0, y: 30.0 },
             group_size: 2,
@@ -1038,9 +1028,9 @@ mod tests {
             from_subgraph: None,
             to_subgraph: None,
             label: None,
-            stroke: "solid".into(),
-            arrow_start: "none".into(),
-            arrow_end: "normal".into(),
+            stroke: Stroke::Solid,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
             minlen: 1,
             path: None,
             label_position: None,
@@ -1053,7 +1043,7 @@ mod tests {
         let json = serde_json::to_string(&edge).unwrap();
         let deserialized: Edge = serde_json::from_str(&json).unwrap();
         let sp = deserialized.source_port.unwrap();
-        assert_eq!(sp.face, "right");
+        assert_eq!(sp.face, PortFace::Right);
         assert!((sp.fraction - 0.3).abs() < 1e-9);
         assert!((sp.position.x - 100.0).abs() < 1e-9);
         assert_eq!(sp.group_size, 2);

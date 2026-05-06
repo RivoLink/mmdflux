@@ -16,6 +16,7 @@ use crate::engines::graph::algorithms::layered::kernel::trace::{
     DummyTraceKey, DummyTraceRole, LayeredPhaseTrace, TraceDummySnapshot, TraceNodeSnapshot,
     TraceStage, TraceStageSnapshot,
 };
+use crate::graph::GeometryLevel;
 
 #[test]
 fn input_magnitude_keeps_incompatible_axes_separate() {
@@ -1458,10 +1459,22 @@ fn render_surfaces_include_text_svg_layout_and_routed_mmds() {
     assert!(!rendered.after.text.is_empty());
     assert!(rendered.before.svg.contains("<svg"));
     assert!(rendered.after.svg.contains("<svg"));
-    assert_eq!(rendered.before.layout_mmds.geometry_level, "layout");
-    assert_eq!(rendered.before.routed_mmds.geometry_level, "routed");
-    assert_eq!(rendered.after.layout_mmds.geometry_level, "layout");
-    assert_eq!(rendered.after.routed_mmds.geometry_level, "routed");
+    assert_eq!(
+        rendered.before.layout_mmds.geometry_level,
+        GeometryLevel::Layout
+    );
+    assert_eq!(
+        rendered.before.routed_mmds.geometry_level,
+        GeometryLevel::Routed
+    );
+    assert_eq!(
+        rendered.after.layout_mmds.geometry_level,
+        GeometryLevel::Layout
+    );
+    assert_eq!(
+        rendered.after.routed_mmds.geometry_level,
+        GeometryLevel::Routed
+    );
 }
 
 #[test]
@@ -1471,8 +1484,11 @@ fn render_surfaces_allow_lossless_routed_mmds_for_style_canaries() {
     let (_, lossless) =
         render_surfaces::render_lossless_routed_mmds(&rendered.after.source).unwrap();
 
-    assert_eq!(rendered.after.routed_mmds.geometry_level, "routed");
-    assert_eq!(lossless.geometry_level, "routed");
+    assert_eq!(
+        rendered.after.routed_mmds.geometry_level,
+        GeometryLevel::Routed
+    );
+    assert_eq!(lossless.geometry_level, GeometryLevel::Routed);
 }
 
 #[test]

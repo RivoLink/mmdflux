@@ -8,6 +8,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use serde::{Deserialize, Serialize};
+
 use crate::errors::RenderError;
 use crate::format::normalize_enum_token;
 pub use crate::graph::attachment::EdgePort;
@@ -16,7 +18,8 @@ pub use crate::graph::space::{FPoint, FRect};
 use crate::graph::{Direction, Shape};
 
 /// Requested graph-geometry detail level for downstream emitters and exports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GeometryLevel {
     /// Node geometry + edge topology only (no edge paths).
     #[default]
@@ -162,7 +165,8 @@ pub struct SelfEdgeGeometry {
 }
 
 /// Label side for positioned and routed edges.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EdgeLabelSide {
     Above,
     Below,

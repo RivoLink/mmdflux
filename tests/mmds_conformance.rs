@@ -18,8 +18,8 @@ use std::path::Path;
 use mmdflux::builtins::default_registry;
 use mmdflux::graph::Graph;
 use mmdflux::mmds::{
-    Bounds, Document, Edge, Node, Port, Position, Subgraph, from_str, generate_mermaid_from_str,
-    parse_input,
+    Bounds, Document, Edge, MmdsToken, Node, Port, Position, Subgraph, from_str,
+    generate_mermaid_from_str, parse_input,
 };
 use mmdflux::payload::Diagram as Payload;
 use mmdflux::{OutputFormat, RenderConfig, render_diagram};
@@ -306,7 +306,8 @@ fn compare_layout_payloads(direct: &Document, roundtrip: &Document) -> Vec<Strin
     if direct.metadata.direction != roundtrip.metadata.direction {
         mismatches.push(format!(
             "direction: {} vs {}",
-            direct.metadata.direction, roundtrip.metadata.direction
+            direct.metadata.direction.as_mmds_str(),
+            roundtrip.metadata.direction.as_mmds_str()
         ));
     }
     if direct.geometry_level != roundtrip.geometry_level {

@@ -6,6 +6,8 @@
 use std::error::Error;
 use std::fmt;
 
+use crate::graph::attachment::PortFace;
+use crate::graph::geometry::EdgeLabelSide;
 use crate::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 
 /// Conversion contract between graph-family Rust enums and MMDS schema tokens.
@@ -112,7 +114,7 @@ impl MmdsToken for Shape {
 impl MmdsToken for Direction {
     fn parse_mmds(value: &str) -> Result<Self, MmdsTokenError> {
         match value {
-            "TD" => Ok(Direction::TopDown),
+            "TD" | "TB" => Ok(Direction::TopDown),
             "BT" => Ok(Direction::BottomTop),
             "LR" => Ok(Direction::LeftRight),
             "RL" => Ok(Direction::RightLeft),
@@ -197,6 +199,41 @@ impl MmdsToken for GeometryLevel {
     }
 }
 
+impl MmdsToken for PortFace {
+    fn parse_mmds(value: &str) -> Result<Self, MmdsTokenError> {
+        match value {
+            "top" => Ok(PortFace::Top),
+            "bottom" => Ok(PortFace::Bottom),
+            "left" => Ok(PortFace::Left),
+            "right" => Ok(PortFace::Right),
+            _ => Err(MmdsTokenError::new("port face", value)),
+        }
+    }
+
+    fn as_mmds_str(&self) -> &'static str {
+        self.as_str()
+    }
+}
+
+impl MmdsToken for EdgeLabelSide {
+    fn parse_mmds(value: &str) -> Result<Self, MmdsTokenError> {
+        match value {
+            "above" => Ok(EdgeLabelSide::Above),
+            "below" => Ok(EdgeLabelSide::Below),
+            "center" => Ok(EdgeLabelSide::Center),
+            _ => Err(MmdsTokenError::new("edge label side", value)),
+        }
+    }
+
+    fn as_mmds_str(&self) -> &'static str {
+        match self {
+            EdgeLabelSide::Above => "above",
+            EdgeLabelSide::Below => "below",
+            EdgeLabelSide::Center => "center",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +263,8 @@ mod tests {
             assert_eq!(Direction::parse_mmds(token), Ok(direction));
             assert_eq!(direction.as_mmds_str(), token);
         }
+        assert_eq!(Direction::parse_mmds("TB"), Ok(Direction::TopDown));
+        assert_eq!(Direction::parse_mmds("TB").unwrap().as_mmds_str(), "TD");
         assert_eq!(
             Direction::parse_mmds("top_down").unwrap_err().kind,
             "direction"
@@ -273,6 +312,36 @@ mod tests {
         assert_eq!(
             GeometryLevel::parse_mmds("full").unwrap_err().kind,
             "geometry level"
+        );
+    }
+
+    #[test]
+    fn port_face_mmds_tokens_round_trip() {
+        for (token, face) in [
+            ("top", PortFace::Top),
+            ("bottom", PortFace::Bottom),
+            ("left", PortFace::Left),
+            ("right", PortFace::Right),
+        ] {
+            assert_eq!(PortFace::parse_mmds(token), Ok(face));
+            assert_eq!(face.as_mmds_str(), token);
+        }
+        assert_eq!(PortFace::parse_mmds("north").unwrap_err().kind, "port face");
+    }
+
+    #[test]
+    fn edge_label_side_mmds_tokens_round_trip() {
+        for (token, side) in [
+            ("above", EdgeLabelSide::Above),
+            ("below", EdgeLabelSide::Below),
+            ("center", EdgeLabelSide::Center),
+        ] {
+            assert_eq!(EdgeLabelSide::parse_mmds(token), Ok(side));
+            assert_eq!(side.as_mmds_str(), token);
+        }
+        assert_eq!(
+            EdgeLabelSide::parse_mmds("sideways").unwrap_err().kind,
+            "edge label side"
         );
     }
 }

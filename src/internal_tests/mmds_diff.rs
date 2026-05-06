@@ -15,8 +15,8 @@ fn mmds_diff_model_identical_outputs_have_no_events() {
     let diff = crate::mmds::diff::diff_documents(&before, &after);
 
     assert!(diff.changes.is_empty(), "{diff:#?}");
-    assert_eq!(diff.before_geometry_level, "routed");
-    assert_eq!(diff.after_geometry_level, "routed");
+    assert_eq!(diff.before_geometry_level, GeometryLevel::Routed);
+    assert_eq!(diff.after_geometry_level, GeometryLevel::Routed);
 
     assert!(!diff.has_change(crate::mmds::diff::ChangeKind::GeometryLevelChanged, ""));
 }

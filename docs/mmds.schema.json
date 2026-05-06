@@ -191,7 +191,7 @@
           "description": "Diagram type identifier (e.g., 'flowchart', 'class')."
         },
         "direction": {
-          "enum": ["TD", "BT", "LR", "RL"],
+          "enum": ["TD", "TB", "BT", "LR", "RL"],
           "description": "Layout direction."
         },
         "bounds": {
@@ -361,7 +361,7 @@
           "description": "Parent subgraph ID, if nested."
         },
         "direction": {
-          "enum": ["TD", "BT", "LR", "RL"],
+          "enum": ["TD", "TB", "BT", "LR", "RL"],
           "description": "Subgraph direction override."
         },
         "bounds": {
@@ -535,7 +535,7 @@
         "from": { "type": "integer", "minimum": 0, "description": "Source participant index." },
         "to": { "type": "integer", "minimum": 0, "description": "Target participant index." },
         "line_style": { "enum": ["solid", "dashed"], "description": "Line style." },
-        "arrow_head": { "enum": ["filled", "open", "cross", "async"], "description": "Arrowhead shape." },
+        "arrow_head": { "enum": ["filled", "none", "cross", "async"], "description": "Arrowhead shape." },
         "text": { "type": "string", "description": "Message label text." },
         "y": { "type": "number", "description": "Vertical position of the arrow." }
       }

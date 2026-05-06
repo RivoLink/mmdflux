@@ -2,23 +2,27 @@
 
 use std::collections::{HashMap, HashSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::edge::{Edge, Stroke};
 use super::node::Node;
 
 /// Direction of the diagram layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Direction {
     /// Top to bottom (vertical, downward).
+    #[serde(rename = "TD")]
+    #[serde(alias = "TB")]
     #[default]
     TopDown,
     /// Bottom to top (vertical, upward).
+    #[serde(rename = "BT")]
     BottomTop,
     /// Left to right (horizontal, rightward).
+    #[serde(rename = "LR")]
     LeftRight,
     /// Right to left (horizontal, leftward).
+    #[serde(rename = "RL")]
     RightLeft,
 }
 

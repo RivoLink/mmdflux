@@ -292,7 +292,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `defaults`              | object                   | Document-level defaults for omitted node/edge fields                                                                                 |
 | `geometry_level`        | `"layout"` or `"routed"` | Geometry detail level                                                                                                                |
 | `metadata.diagram_type` | string                   | `"flowchart"`, `"class"`, `"state"`, or `"sequence"`                                                                                 |
-| `metadata.direction`    | string                   | `"TD"`, `"BT"`, `"LR"`, or `"RL"`                                                                                                    |
+| `metadata.direction`    | string                   | `"TD"`, `"TB"`, `"BT"`, `"LR"`, or `"RL"`; `"TB"` deserializes as canonical `"TD"`                                                   |
 | `metadata.bounds`       | object                   | Overall diagram canvas extents (`width`, `height`) in unitless MMDS coordinate space (currently SVG-pixel-aligned in mmdflux output) |
 | `metadata.engine`       | string?                  | Engine+algorithm that produced this output (e.g., `"flux-layered"`). Omitted when not produced via the solve pipeline.               |
 | `subgraphs`             | array                    | Subgraph inventory (omitted when empty)                                                                                              |
@@ -418,7 +418,7 @@ the routed path.
 | `title`     | string            | both   | Display title                                         |
 | `children`  | string[]          | both   | Direct child node IDs                                 |
 | `parent`    | string?           | both   | Parent subgraph ID                                    |
-| `direction` | string?           | both   | Direction override: `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
+| `direction` | string?           | both   | Direction override: `"TD"`, `"TB"`, `"BT"`, `"LR"`, or `"RL"`; `"TB"` deserializes as canonical `"TD"` |
 | `bounds`    | `{width, height}` | routed | Bounding box dimensions                               |
 
 ## Schema
@@ -540,7 +540,7 @@ Positions come from the proportional SVG layout engine and are in the same unitl
 | `from`       | number | Source participant index                           |
 | `to`         | number | Target participant index (same as `from` for self) |
 | `line_style` | string | `"solid"` or `"dashed"`                            |
-| `arrow_head` | string | `"filled"`, `"open"`, `"cross"`, or `"async"`      |
+| `arrow_head` | string | `"filled"`, `"none"`, `"cross"`, or `"async"`      |
 | `text`       | string | Message label text                                 |
 | `y`          | number | Vertical position of the arrow                     |
 

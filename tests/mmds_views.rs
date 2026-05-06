@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use mmdflux::graph::Shape;
+use mmdflux::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 use mmdflux::mmds::{
     Bounds, Defaults, Document, Edge, Metadata, Node, Position, Size, Subgraph,
     TEXT_EXTENSION_NAMESPACE,
@@ -31,10 +31,10 @@ fn output(nodes: Vec<Node>, edges: Vec<Edge>, subgraphs: Vec<Subgraph>) -> Docum
         profiles: Vec::new(),
         extensions: BTreeMap::new(),
         defaults: Defaults::default(),
-        geometry_level: "layout".to_string(),
+        geometry_level: GeometryLevel::Layout,
         metadata: Metadata {
             diagram_type: "flowchart".to_string(),
-            direction: "TD".to_string(),
+            direction: Direction::TopDown,
             bounds: Bounds {
                 width: 200.0,
                 height: 200.0,
@@ -69,9 +69,9 @@ fn edge(id: &str, source: &str, target: &str) -> Edge {
         from_subgraph: None,
         to_subgraph: None,
         label: None,
-        stroke: "solid".to_string(),
-        arrow_start: "none".to_string(),
-        arrow_end: "normal".to_string(),
+        stroke: Stroke::Solid,
+        arrow_start: Arrow::None,
+        arrow_end: Arrow::Normal,
         minlen: 1,
         path: None,
         label_position: None,

@@ -380,7 +380,7 @@ fn mmds_command_apply_relayout_sets_geometry_level() {
     )
     .expect("set geometry level should apply");
 
-    assert_eq!(output.geometry_level, "layout");
+    assert_eq!(output.geometry_level, GeometryLevel::Layout);
     assert_primary_event(&events, ModelEventKind::GeometryLevelChanged, "");
     assert!(
         crate::mmds::diff::diff_documents(&before, &output)
@@ -401,7 +401,7 @@ fn mmds_command_apply_relayout_sets_direction() {
     )
     .expect("set direction should apply");
 
-    assert_eq!(output.metadata.direction, "LR");
+    assert_eq!(output.metadata.direction, Direction::LeftRight);
     assert_primary_event(&events, ModelEventKind::DirectionChanged, "");
     assert!(
         crate::mmds::diff::diff_documents(&before, &output)
@@ -433,7 +433,7 @@ fn mmds_command_apply_relayout_sets_engine() {
 #[test]
 fn mmds_command_apply_relayout_invalid_document_config_rolls_back() {
     let mut output = parse_routed_for_command_apply("graph TD\n    A --> B\n");
-    output.metadata.direction = "SIDEWAYS".to_string();
+    output.metadata.engine = Some("not-a-real-engine".to_string());
     let before = output.clone();
 
     let result = apply(
@@ -758,9 +758,9 @@ fn mmds_command_apply_relayout_changes_edge_style() {
     .expect("change edge style should apply");
 
     let edge = edge_by_id(&output, "e0");
-    assert_eq!(edge.stroke, "dotted");
-    assert_eq!(edge.arrow_start, "circle");
-    assert_eq!(edge.arrow_end, "diamond");
+    assert_eq!(edge.stroke, Stroke::Dotted);
+    assert_eq!(edge.arrow_start, Arrow::Circle);
+    assert_eq!(edge.arrow_end, Arrow::Diamond);
     assert_eq!(edge.minlen, 2);
     assert_primary_event(&events, ModelEventKind::EdgeStyleChanged, "e0");
     assert!(
@@ -805,9 +805,9 @@ fn mmds_command_apply_relayout_reconnect_preserves_edge_fields() {
             .iter_mut()
             .find(|edge| edge.id == "e0")
             .expect("edge e0 should exist");
-        edge.stroke = "dashed".to_string();
-        edge.arrow_start = "circle".to_string();
-        edge.arrow_end = "diamond".to_string();
+        edge.stroke = Stroke::Dashed;
+        edge.arrow_start = Arrow::Circle;
+        edge.arrow_end = Arrow::Diamond;
         edge.minlen = 2;
     }
 
@@ -825,9 +825,9 @@ fn mmds_command_apply_relayout_reconnect_preserves_edge_fields() {
     assert_eq!(edge.source, "A");
     assert_eq!(edge.target, "C");
     assert_eq!(edge.label.as_deref(), Some("calls"));
-    assert_eq!(edge.stroke, "dashed");
-    assert_eq!(edge.arrow_start, "circle");
-    assert_eq!(edge.arrow_end, "diamond");
+    assert_eq!(edge.stroke, Stroke::Dashed);
+    assert_eq!(edge.arrow_start, Arrow::Circle);
+    assert_eq!(edge.arrow_end, Arrow::Diamond);
     assert_eq!(edge.minlen, 2);
 }
 
@@ -898,8 +898,8 @@ fn mmds_command_apply_relayout_sets_subgraph_direction() {
     .expect("set subgraph direction should apply");
 
     assert_eq!(
-        subgraph_by_id(&output, "sg1").direction.as_deref(),
-        Some("LR")
+        subgraph_by_id(&output, "sg1").direction,
+        Some(Direction::LeftRight)
     );
     assert_primary_event(&events, ModelEventKind::SubgraphDirectionChanged, "sg1");
     assert!(
@@ -1169,14 +1169,14 @@ fn mmds_command_apply_failure_modes_are_structured() {
         },
         |error| matches!(error, CommandApplyError::SubjectAlreadyExists { id } if id == "A"),
     );
-    output.metadata.direction = "SIDEWAYS".to_string();
+    output.metadata.engine = Some("not-a-real-engine".to_string());
     assert_apply_error_preserves_output(
         &mut output,
         Command::ChangeNodeLabel {
             node: "A".to_string(),
             label: "Alpha".to_string(),
         },
-        |error| matches!(error, CommandApplyError::RelayoutFailed { stage, .. } if stage == "hydrate"),
+        |error| matches!(error, CommandApplyError::RelayoutFailed { stage, .. } if stage == "config"),
     );
 }
 

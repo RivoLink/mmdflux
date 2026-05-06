@@ -1,11 +1,11 @@
 //! Edge types including stroke styles and arrow heads.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::style::EdgeStyle;
 
 /// Style of the edge line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Stroke {
     /// Normal solid line: --
@@ -22,7 +22,7 @@ pub enum Stroke {
 }
 
 /// Type of arrow head.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Arrow {
     /// Arrow head pointing to target: >

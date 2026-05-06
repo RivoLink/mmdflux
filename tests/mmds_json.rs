@@ -8,10 +8,13 @@ mod common;
 
 use std::path::Path;
 
-use mmdflux::graph::{GeometryLevel, Shape};
+use mmdflux::graph::attachment::PortFace;
+use mmdflux::graph::geometry::EdgeLabelSide;
+use mmdflux::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 use mmdflux::mmds::{
-    Document, Edge as MmdsEdge, Port as MmdsPort, Position as MmdsPosition, Rect as MmdsRect,
-    SUPPORTED_PROFILES, evaluate_profiles, hydrate_routed_geometry_from_document, parse_input,
+    Document, Edge as MmdsEdge, MmdsToken, Port as MmdsPort, Position as MmdsPosition,
+    Rect as MmdsRect, SUPPORTED_PROFILES, evaluate_profiles, hydrate_routed_geometry_from_document,
+    parse_input,
 };
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{EngineAlgorithmId, OutputFormat, RenderConfig, TextColorMode, materialize_diagram};
@@ -244,7 +247,7 @@ fn mmds_default_has_version_1() {
 fn mmds_default_geometry_level_is_layout() {
     let json = render_json("graph TD\nA-->B");
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.geometry_level, "layout");
+    assert_eq!(output.geometry_level, GeometryLevel::Layout);
 }
 
 #[test]
@@ -252,7 +255,7 @@ fn mmds_has_metadata_with_direction() {
     let json = render_json("graph LR\nA-->B");
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.metadata.diagram_type, "flowchart");
-    assert_eq!(output.metadata.direction, "LR");
+    assert_eq!(output.metadata.direction, Direction::LeftRight);
 }
 
 #[test]
@@ -771,10 +774,10 @@ fn mmds_layout_edges_have_topology() {
     assert_eq!(edge.id, "e0");
     assert_eq!(edge.source, "A");
     assert_eq!(edge.target, "B");
-    assert_eq!(edge.stroke, "dotted");
+    assert_eq!(edge.stroke, Stroke::Dotted);
     assert_eq!(edge.label, Some("label".to_string()));
-    assert_eq!(edge.arrow_start, "none");
-    assert_eq!(edge.arrow_end, "normal");
+    assert_eq!(edge.arrow_start, Arrow::None);
+    assert_eq!(edge.arrow_end, Arrow::Normal);
 }
 
 #[test]
@@ -840,7 +843,7 @@ fn mmds_layout_subgraphs() {
 fn mmds_layout_subgraph_direction_override() {
     let json = render_json("graph TD\nsubgraph sg1[Group]\ndirection LR\nA-->B\nend");
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.subgraphs[0].direction.as_deref(), Some("LR"));
+    assert_eq!(output.subgraphs[0].direction, Some(Direction::LeftRight));
 }
 
 // -----------------------------------------------------------------------
@@ -851,7 +854,7 @@ fn mmds_layout_subgraph_direction_override() {
 fn mmds_routed_has_geometry_level_routed() {
     let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.geometry_level, "routed");
+    assert_eq!(output.geometry_level, GeometryLevel::Routed);
 }
 
 #[test]
@@ -969,9 +972,9 @@ fn mmds_deserializes_with_defaults() {
     let json = render_json("graph TD\nA-->B");
     let output: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(output.nodes[0].shape, Shape::Rectangle);
-    assert_eq!(output.edges[0].stroke, "solid");
-    assert_eq!(output.edges[0].arrow_start, "none");
-    assert_eq!(output.edges[0].arrow_end, "normal");
+    assert_eq!(output.edges[0].stroke, Stroke::Solid);
+    assert_eq!(output.edges[0].arrow_start, Arrow::None);
+    assert_eq!(output.edges[0].arrow_end, Arrow::Normal);
     assert_eq!(output.edges[0].minlen, 1);
     assert!(output.edges[0].from_subgraph.is_none());
     assert!(output.edges[0].to_subgraph.is_none());
@@ -984,12 +987,27 @@ fn mmds_deserializes_with_defaults() {
 
 #[test]
 fn mmds_direction_variants() {
-    for (dir_str, expected) in [("TD", "TD"), ("LR", "LR"), ("BT", "BT"), ("RL", "RL")] {
+    for (dir_str, expected) in [
+        ("TD", Direction::TopDown),
+        ("LR", Direction::LeftRight),
+        ("BT", Direction::BottomTop),
+        ("RL", Direction::RightLeft),
+    ] {
         let input = format!("graph {dir_str}\nA-->B");
         let json = render_json(&input);
         let output: Document = serde_json::from_str(&json).unwrap();
         assert_eq!(output.metadata.direction, expected);
     }
+}
+
+#[test]
+fn mmds_direction_tb_deserializes_to_canonical_top_down() {
+    let input = STYLED_MMDS_LAYOUT.replace(r#""direction": "TD""#, r#""direction": "TB""#);
+    let output = parse_input(&input).unwrap();
+    assert_eq!(output.metadata.direction, Direction::TopDown);
+
+    let value = serde_json::to_value(&output).unwrap();
+    assert_eq!(value["metadata"]["direction"], "TD");
 }
 
 // -----------------------------------------------------------------------
@@ -1003,7 +1021,7 @@ fn mmds_class_diagram_produces_json() {
     let parsed: Document = serde_json::from_str(&output).unwrap();
 
     assert_eq!(parsed.version, 1);
-    assert_eq!(parsed.geometry_level, "layout");
+    assert_eq!(parsed.geometry_level, GeometryLevel::Layout);
     assert_eq!(parsed.metadata.diagram_type, "class");
     assert!(!output.contains("\"path\""));
 }
@@ -1017,7 +1035,7 @@ fn mmds_class_diagram_routed_level() {
     let output = render_json_with_config("classDiagram\nA --> B", &config);
     let parsed: Document = serde_json::from_str(&output).unwrap();
 
-    assert_eq!(parsed.geometry_level, "routed");
+    assert_eq!(parsed.geometry_level, GeometryLevel::Routed);
     assert!(output.contains("\"path\""));
 }
 
@@ -1245,8 +1263,8 @@ fn mmds_routed_port_faces_correct_td() {
     let edge = &output.edges[0];
     let sp = edge.source_port.as_ref().unwrap();
     let tp = edge.target_port.as_ref().unwrap();
-    assert_eq!(sp.face, "bottom", "TD source should exit bottom");
-    assert_eq!(tp.face, "top", "TD target should enter top");
+    assert_eq!(sp.face, PortFace::Bottom, "TD source should exit bottom");
+    assert_eq!(tp.face, PortFace::Top, "TD target should enter top");
 }
 
 #[test]
@@ -1620,9 +1638,9 @@ fn plan_0145_edge_contract_stub() -> MmdsEdge {
         from_subgraph: None,
         to_subgraph: None,
         label: Some("x".into()),
-        stroke: "solid".into(),
-        arrow_start: "none".into(),
-        arrow_end: "normal".into(),
+        stroke: Stroke::Solid,
+        arrow_start: Arrow::None,
+        arrow_end: Arrow::Normal,
         minlen: 1,
         path: None,
         label_position: None,
@@ -1637,7 +1655,7 @@ fn plan_0145_edge_contract_stub() -> MmdsEdge {
 #[test]
 fn mmds_edge_supports_label_side_and_label_rect_fields() {
     let edge = MmdsEdge {
-        label_side: Some("above".into()),
+        label_side: Some(EdgeLabelSide::Above),
         label_rect: Some(MmdsRect {
             x: 10.0,
             y: 20.0,
@@ -1655,7 +1673,7 @@ fn mmds_edge_supports_label_side_and_label_rect_fields() {
     assert_eq!(json["label_rect"]["height"], 10.0);
 
     let roundtrip: MmdsEdge = serde_json::from_value(json).unwrap();
-    assert_eq!(roundtrip.label_side.as_deref(), Some("above"));
+    assert_eq!(roundtrip.label_side, Some(EdgeLabelSide::Above));
     let rect = roundtrip.label_rect.expect("label_rect should round-trip");
     assert_eq!(rect.x, 10.0);
     assert_eq!(rect.y, 20.0);
@@ -1743,12 +1761,13 @@ fn mmds_output_populates_label_side_at_layout_level() {
             .collect::<Vec<_>>()
     );
 
-    // Each label_side value must be a recognized string.
+    // Each label_side value must serialize to a recognized string.
     for edge in &output.edges {
         if let Some(side) = &edge.label_side {
             assert!(
-                ["above", "below", "center"].contains(&side.as_str()),
-                "unexpected label_side value: {side}"
+                ["above", "below", "center"].contains(&side.as_mmds_str()),
+                "unexpected label_side value: {}",
+                side.as_mmds_str()
             );
         }
     }
@@ -1853,7 +1872,7 @@ fn mmds_routed_to_layout_down_conversion_strips_routed_only_edge_fields() {
         },
     );
     let parsed: Document = serde_json::from_str(&layout_output).unwrap();
-    assert_eq!(parsed.geometry_level, "layout");
+    assert_eq!(parsed.geometry_level, GeometryLevel::Layout);
     for edge in &parsed.edges {
         assert!(edge.path.is_none(), "path must be stripped at layout level");
         assert!(

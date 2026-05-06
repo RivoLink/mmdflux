@@ -12,7 +12,7 @@
 //! Use [`apply`] when default relayout configuration is acceptable. Use
 //! [`apply_with_config`] when layout-affecting commands should preserve caller-owned
 //! [`RenderConfig`] fields. In both cases, document-owned fields remain authoritative:
-//! the document `geometry_level` is parsed into the effective relayout config, and
+//! the document `geometry_level` replaces the effective relayout config, and
 //! `metadata.engine` overrides the caller engine when it is present.
 //!
 //! Edge commands can use [`EdgeSelector::Id`] for exact edge identity or
@@ -44,8 +44,7 @@ use crate::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 use crate::mmds::diff::ChangeKind;
 use crate::mmds::events::{ModelEvent, ModelEventKind};
 use crate::mmds::{
-    Document, Edge, MmdsToken, NODE_STYLE_EXTENSION_NAMESPACE, Node, Position, Size, Subgraph,
-    Subject,
+    Document, Edge, NODE_STYLE_EXTENSION_NAMESPACE, Node, Position, Size, Subgraph, Subject,
 };
 use crate::runtime::config::RenderConfig;
 
@@ -449,9 +448,9 @@ pub fn apply_with_config(
                         from_subgraph: from_subgraph.clone(),
                         to_subgraph: to_subgraph.clone(),
                         label: label.clone(),
-                        stroke: stroke.as_mmds_str().to_string(),
-                        arrow_start: arrow_start.as_mmds_str().to_string(),
-                        arrow_end: arrow_end.as_mmds_str().to_string(),
+                        stroke: *stroke,
+                        arrow_start: *arrow_start,
+                        arrow_end: *arrow_end,
                         minlen: *minlen,
                         path: None,
                         label_position: None,
@@ -541,14 +540,13 @@ pub fn apply_with_config(
                 |candidate| {
                     let edge_index = resolve_edge_index(candidate, edge)?;
                     if let Some(stroke) = stroke {
-                        candidate.edges[edge_index].stroke = stroke.as_mmds_str().to_string();
+                        candidate.edges[edge_index].stroke = *stroke;
                     }
                     if let Some(arrow_start) = arrow_start {
-                        candidate.edges[edge_index].arrow_start =
-                            arrow_start.as_mmds_str().to_string();
+                        candidate.edges[edge_index].arrow_start = *arrow_start;
                     }
                     if let Some(arrow_end) = arrow_end {
-                        candidate.edges[edge_index].arrow_end = arrow_end.as_mmds_str().to_string();
+                        candidate.edges[edge_index].arrow_end = *arrow_end;
                     }
                     if let Some(minlen) = minlen {
                         candidate.edges[edge_index].minlen = *minlen;
@@ -562,7 +560,7 @@ pub fn apply_with_config(
             config,
             ModelEventKind::GeometryLevelChanged,
             |candidate| {
-                candidate.geometry_level = level.as_mmds_str().to_string();
+                candidate.geometry_level = *level;
                 Ok(())
             },
         ),
@@ -571,7 +569,7 @@ pub fn apply_with_config(
             config,
             ModelEventKind::DirectionChanged,
             |candidate| {
-                candidate.metadata.direction = direction.as_mmds_str().to_string();
+                candidate.metadata.direction = *direction;
                 Ok(())
             },
         ),
@@ -728,9 +726,7 @@ pub fn apply_with_config(
                         title: title.clone().unwrap_or_else(|| id.clone()),
                         children: Vec::new(),
                         parent: parent.clone(),
-                        direction: direction
-                            .as_ref()
-                            .map(|direction| direction.as_mmds_str().to_string()),
+                        direction: *direction,
                         bounds: None,
                         invisible: *invisible,
                         concurrent_regions: concurrent_regions.clone(),
@@ -783,9 +779,7 @@ pub fn apply_with_config(
                 subgraph_event(ModelEventKind::SubgraphDirectionChanged, subgraph.clone()),
                 |candidate| {
                     let subgraph_index = subgraph_index(candidate, subgraph)?;
-                    candidate.subgraphs[subgraph_index].direction = direction
-                        .as_ref()
-                        .map(|direction| direction.as_mmds_str().to_string());
+                    candidate.subgraphs[subgraph_index].direction = *direction;
                     Ok(())
                 },
             )
@@ -1075,13 +1069,13 @@ fn semantic_selector_matches(edge: &Edge, selector: &EdgeSelector) -> bool {
             .is_none_or(|expected| edge.label.as_ref() == Some(expected))
         && stroke
             .as_ref()
-            .is_none_or(|expected| edge.stroke == expected.as_mmds_str())
+            .is_none_or(|expected| edge.stroke == *expected)
         && arrow_start
             .as_ref()
-            .is_none_or(|expected| edge.arrow_start == expected.as_mmds_str())
+            .is_none_or(|expected| edge.arrow_start == *expected)
         && arrow_end
             .as_ref()
-            .is_none_or(|expected| edge.arrow_end == expected.as_mmds_str())
+            .is_none_or(|expected| edge.arrow_end == *expected)
         && minlen.is_none_or(|expected| edge.minlen == expected)
 }
 
@@ -1098,12 +1092,8 @@ fn relayout_output_for_command_apply_with_config(
 ) -> Result<Document, CommandApplyError> {
     let mut diagram = crate::mmds::from_document(output)
         .map_err(|err| relayout_failed("hydrate", err.to_string()))?;
-    let geometry_level = output
-        .geometry_level
-        .parse::<GeometryLevel>()
-        .map_err(|err| relayout_failed("config", err.to_string()))?;
     let mut config = config.clone();
-    config.geometry_level = geometry_level;
+    config.geometry_level = output.geometry_level;
     if let Some(engine) = output.metadata.engine.as_deref() {
         config.layout_engine =
             Some(engine.parse().map_err(|err: crate::errors::RenderError| {

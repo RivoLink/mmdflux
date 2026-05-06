@@ -7,11 +7,14 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::graph::Direction;
 use crate::graph::space::{FPoint, FRect};
 
 /// Which face of a node boundary an edge port attaches to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PortFace {
     Top,
     Bottom,

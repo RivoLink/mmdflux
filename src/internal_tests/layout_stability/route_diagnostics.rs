@@ -491,11 +491,11 @@ fn route_decision_input_from_metrics(
                 endpoint: delta.endpoint,
                 before_face: delta
                     .before_face
-                    .clone()
+                    .map(|face| face.as_str().to_string())
                     .unwrap_or_else(|| "none".to_string()),
                 after_face: delta
                     .after_face
-                    .clone()
+                    .map(|face| face.as_str().to_string())
                     .unwrap_or_else(|| "none".to_string()),
             });
     }

@@ -51,16 +51,7 @@ pub(crate) fn render_document(
     svg_theme: Option<&ResolvedSvgTheme>,
 ) -> Result<String, RenderError> {
     let diagram_id = resolve_logical_diagram_id(payload)?;
-    let has_routed_geometry = payload.geometry_level == "routed";
-
-    if !matches!(payload.geometry_level.as_str(), "layout" | "routed") {
-        return Err(RenderError {
-            message: format!(
-                "MMDS validation error: invalid geometry_level '{}'",
-                payload.geometry_level
-            ),
-        });
-    }
+    let has_routed_geometry = payload.geometry_level == GeometryLevel::Routed;
 
     if matches!(format, OutputFormat::Mmds) {
         let output = if has_routed_geometry && geometry_level == GeometryLevel::Layout {
@@ -156,7 +147,7 @@ fn prefixed_display_error(prefix: &str, error: impl Display) -> RenderError {
 
 fn strip_routed_fields(payload: &Document) -> Document {
     let mut output = payload.clone();
-    output.geometry_level = "layout".to_string();
+    output.geometry_level = crate::graph::GeometryLevel::Layout;
     for edge in &mut output.edges {
         edge.path = None;
         edge.label_position = None;

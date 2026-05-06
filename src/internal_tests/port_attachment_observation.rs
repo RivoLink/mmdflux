@@ -544,7 +544,7 @@ fn assert_endpoint_available(
 
 fn port_observation(port: &Port) -> EndpointObservation {
     EndpointObservation {
-        face: Some(port.face.clone()),
+        face: Some(port.face.as_str().to_string()),
         fraction: Some(port.fraction),
         position: Some((port.position.x, port.position.y)),
     }
