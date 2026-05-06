@@ -1,6 +1,14 @@
 # Changelog
 
 - - -
+## [mmdflux-v2.4.2](https://github.com/kevinswiber/mmdflux/compare/04ac33670b8dd34764533caf65b4844b74a28bff..mmdflux-v2.4.2) - 2026-05-06
+#### Bug Fixes
+- strengthen MMDS vocabulary types - ([04ac336](https://github.com/kevinswiber/mmdflux/commit/04ac33670b8dd34764533caf65b4844b74a28bff)) - [@kevinswiber](https://github.com/kevinswiber)
+#### Refactoring
+- rename internal sequence MMDS types - ([3a0b30d](https://github.com/kevinswiber/mmdflux/commit/3a0b30d6f35af0d51d0881b65f0c9e435a283bb3)) - [@kevinswiber](https://github.com/kevinswiber)
+
+- - -
+
 ## [mmdflux-v2.4.1](https://github.com/kevinswiber/mmdflux/compare/0b4b73ae1be700ac73cb499f90738289d1aa353b..mmdflux-v2.4.1) - 2026-05-06
 #### Bug Fixes
 - type MMDS node shapes - ([0b4b73a](https://github.com/kevinswiber/mmdflux/commit/0b4b73ae1be700ac73cb499f90738289d1aa353b)) - [@kevinswiber](https://github.com/kevinswiber)
