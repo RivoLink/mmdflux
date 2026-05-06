@@ -1,6 +1,12 @@
 # Changelog
 
 - - -
+## [mmdflux-v2.4.1](https://github.com/kevinswiber/mmdflux/compare/0b4b73ae1be700ac73cb499f90738289d1aa353b..mmdflux-v2.4.1) - 2026-05-06
+#### Bug Fixes
+- type MMDS node shapes - ([0b4b73a](https://github.com/kevinswiber/mmdflux/commit/0b4b73ae1be700ac73cb499f90738289d1aa353b)) - [@kevinswiber](https://github.com/kevinswiber)
+
+- - -
+
 ## [mmdflux-v2.4.0](https://github.com/kevinswiber/mmdflux/compare/c87ea4dcca820288a58751113d1fdd649832c9d5..mmdflux-v2.4.0) - 2026-05-06
 #### Features
 - type mmds command tokens - ([0530d4c](https://github.com/kevinswiber/mmdflux/commit/0530d4ce8ab490ddd848c4bd587bfc07f775a11b)) - [@kevinswiber](https://github.com/kevinswiber)
