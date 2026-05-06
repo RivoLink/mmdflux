@@ -103,10 +103,7 @@ fn subgraph(id: &str, children: &[&str], parent: Option<&str>) -> Subgraph {
 }
 
 fn view(statements: Vec<ViewStatement>) -> ViewSpec {
-    ViewSpec {
-        statements,
-        ..ViewSpec::default()
-    }
+    ViewSpec::new(statements)
 }
 
 fn text_projection_extension() -> Map<String, Value> {
@@ -594,13 +591,10 @@ fn view_apply_preserves_ancestor_subgraph_containers() {
 #[test]
 fn view_apply_rejects_unimplemented_layout_modes() {
     let payload = output(vec![node("gateway", "rectangle", None)], vec![], vec![]);
-    let spec = ViewSpec {
-        layout: LayoutMode::Compact,
-        statements: vec![ViewStatement::Include(Selector::Anchor(AnchorRef::Node(
-            "gateway".to_string(),
-        )))],
-        ..ViewSpec::default()
-    };
+    let mut spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Anchor(
+        AnchorRef::Node("gateway".to_string()),
+    ))]);
+    spec.layout = LayoutMode::Compact;
 
     let error = project(&payload, &spec).expect_err("compact mode is deferred");
 
@@ -882,11 +876,12 @@ fn view_canary_deferred_primitives_return_not_implemented() {
     let payload = canary_canonical_output();
     let cases = [
         (
-            ViewSpec {
-                boundary: mmdflux::views::BoundaryPolicy::Stub {
+            {
+                let mut spec = canary_view_spec();
+                spec.boundary = mmdflux::views::BoundaryPolicy::Stub {
                     aggregate_threshold: 3,
-                },
-                ..canary_view_spec()
+                };
+                spec
             },
             "boundary stubs",
         ),
@@ -897,27 +892,18 @@ fn view_canary_deferred_primitives_return_not_implemented() {
             "tag predicates",
         ),
         (
-            view(vec![ViewStatement::Include(Selector::Anchor(
-                AnchorRef::Edge(mmdflux::views::EdgeAnchor {
-                    source: "service_a".to_string(),
-                    target: "service_b".to_string(),
-                    ordinal: 0,
-                    label: None,
-                }),
-            ))]),
-            "edge anchors",
-        ),
-        (
-            ViewSpec {
-                layout: LayoutMode::Compact,
-                ..canary_view_spec()
+            {
+                let mut spec = canary_view_spec();
+                spec.layout = LayoutMode::Compact;
+                spec
             },
             "non-shared-coordinate layout modes",
         ),
         (
-            ViewSpec {
-                compound: mmdflux::views::CompoundPolicy::Flatten,
-                ..canary_view_spec()
+            {
+                let mut spec = canary_view_spec();
+                spec.compound = mmdflux::views::CompoundPolicy::Flatten;
+                spec
             },
             "compound flattening",
         ),

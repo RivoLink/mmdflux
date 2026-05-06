@@ -33,8 +33,15 @@ Adapter-oriented workflows can use the low-level API:
   and Mermaid generation
 - `mmdflux::views` for materialized read-side views over canonical MMDS payloads
 
-The current Rust replay example lives at `examples/mmds_replay.rs`.
-The materialized-view example lives at `examples/materialized_view.rs`.
+Rust examples for MMDS-oriented adapter workflows:
+
+- `examples/mmds_replay.rs` — profile negotiation, replay, and Mermaid
+  regeneration from an MMDS document
+- `examples/materialized_view.rs` — focused read-side view projection and replay
+- `examples/commands_events_views.rs` — command application, model events, view
+  projection, and rendering
+- `examples/snapshot_diff.rs` — snapshot comparison between two materialized
+  MMDS documents
 
 Fixture-backed payloads used throughout the Rust contract tests live at:
 

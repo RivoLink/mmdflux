@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Reason an element is absent from a materialized view.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ElisionReason {
     /// The element did not match the active view selectors.
@@ -12,6 +13,7 @@ pub enum ElisionReason {
 }
 
 /// Diagnostic event emitted while materializing a view.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ViewEvent {
     /// A canonical node was omitted from the materialized view.

@@ -86,6 +86,39 @@ fn assert_exports_exclude(exports: &BTreeSet<String>, forbidden: &[&str], contex
     }
 }
 
+fn lines_before(source: &str, needle: &str, count: usize) -> String {
+    let index = source
+        .find(needle)
+        .unwrap_or_else(|| panic!("{needle} should exist"));
+    let mut lines: Vec<_> = source[..index].lines().rev().take(count).collect();
+    lines.reverse();
+    lines.join("\n")
+}
+
+fn assert_hidden_deprecated_item(source: &str, needle: &str, replacement: &str) {
+    let attrs = lines_before(source, needle, 8);
+    assert!(
+        attrs.contains("#[doc(hidden)]"),
+        "{needle} should be hidden from public docs"
+    );
+    assert!(
+        attrs.contains("#[deprecated("),
+        "{needle} should be deprecated"
+    );
+    assert!(
+        attrs.contains(replacement),
+        "{needle} should name replacement {replacement:?}"
+    );
+}
+
+fn assert_non_exhaustive(source: &str, needle: &str) {
+    let attrs = lines_before(source, needle, 8);
+    assert!(
+        attrs.contains("#[non_exhaustive]"),
+        "{needle} should be #[non_exhaustive]"
+    );
+}
+
 #[test]
 fn crate_root_only_exports_supported_public_modules() {
     let modules = public_modules_for_test();
@@ -149,12 +182,8 @@ fn view_contract_types_compile() {
         direction: TraversalDirection::Downstream,
         hops: 2,
     });
-    let edge_anchor = AnchorRef::Edge(EdgeAnchor {
-        source: "gateway".to_string(),
-        target: "auth".to_string(),
-        ordinal: 0,
-        label: Some("calls".to_string()),
-    });
+    let anchor = AnchorRef::Node("gateway".to_string());
+    let edge_anchor_type = std::any::type_name::<EdgeAnchor>();
     let stub_policy = BoundaryPolicy::Stub {
         aggregate_threshold: 4,
     };
@@ -163,7 +192,8 @@ fn view_contract_types_compile() {
     let _ = (
         spec,
         statement,
-        edge_anchor,
+        anchor,
+        edge_anchor_type,
         stub_policy,
         tag_predicate,
         LayoutMode::SharedCoordinates,
@@ -177,6 +207,236 @@ fn view_contract_types_compile() {
         },
         project,
     );
+}
+
+#[test]
+fn mmds_public_api_surface_is_explicit_before_2_4_0() {
+    let _ = mmdflux::render_diagram;
+    let _ = mmdflux::materialize_diagram;
+    let _ = mmdflux::render_document;
+    let _ = mmdflux::detect_diagram;
+    let _ = mmdflux::validate_diagram;
+
+    let _ = mmdflux::commands::apply;
+    let _ = mmdflux::commands::apply_with_config;
+    let _ = std::any::type_name::<mmdflux::commands::Command>();
+    let _ = std::any::type_name::<mmdflux::commands::EdgeSelector>();
+    let _ = std::any::type_name::<mmdflux::commands::CommandApplyError>();
+
+    let _ = std::any::type_name::<mmdflux::mmds::events::ModelEvent>();
+    let _ = std::any::type_name::<mmdflux::mmds::events::ModelEventKind>();
+    let _ = mmdflux::mmds::diff::diff_documents;
+    let _ = std::any::type_name::<mmdflux::mmds::diff::Diff>();
+    let _ = std::any::type_name::<mmdflux::mmds::diff::Change>();
+    let _ = std::any::type_name::<mmdflux::mmds::diff::ChangeKind>();
+    let _ = std::any::type_name::<mmdflux::mmds::Document>();
+    let _ = std::any::type_name::<mmdflux::mmds::Subject>();
+    let _ = std::any::type_name::<mmdflux::mmds::MmdsTokenError>();
+    let _parse_shape: fn(&str) -> Result<Shape, MmdsTokenError> = <Shape as MmdsToken>::parse_mmds;
+
+    let _ = mmdflux::views::project;
+    let _ = std::any::type_name::<mmdflux::views::ViewSpec>();
+    let _ = std::any::type_name::<mmdflux::views::ViewStatement>();
+    let _ = std::any::type_name::<mmdflux::views::Selector>();
+    let _ = std::any::type_name::<mmdflux::views::ViewEvent>();
+    let _ = std::any::type_name::<mmdflux::views::ViewError>();
+
+    let _render_document: fn(
+        &mmdflux::mmds::Document,
+        mmdflux::OutputFormat,
+        &mmdflux::RenderConfig,
+    ) -> Result<String, mmdflux::RenderError> = mmdflux::render_document;
+}
+
+#[test]
+fn early_mmds_surface_is_non_exhaustive() {
+    let commands = repo_file("src/commands.rs");
+    assert_non_exhaustive(&commands, "pub enum Command");
+    assert_non_exhaustive(&commands, "pub enum EdgeSelector");
+    assert_non_exhaustive(&commands, "pub enum CommandApplyError");
+
+    let events = repo_file("src/mmds/events.rs");
+    assert_non_exhaustive(&events, "pub struct ModelEvent");
+    assert_non_exhaustive(&events, "pub enum ModelEventKind");
+
+    let diff = repo_file("src/mmds/diff.rs");
+    assert_non_exhaustive(&diff, "pub struct Diff");
+    assert_non_exhaustive(&diff, "pub struct Change");
+    assert_non_exhaustive(&diff, "pub enum ChangeKind");
+
+    let mmds = repo_file("src/mmds/mod.rs");
+    assert_non_exhaustive(&mmds, "pub enum Subject");
+
+    let token = repo_file("src/mmds/token.rs");
+    assert_non_exhaustive(&token, "pub struct MmdsTokenError");
+
+    let view_spec = repo_file("src/views/spec.rs");
+    assert_non_exhaustive(&view_spec, "pub struct ViewSpec");
+    assert_non_exhaustive(&view_spec, "pub enum ViewStatement");
+    assert_non_exhaustive(&view_spec, "pub enum Selector");
+    assert_non_exhaustive(&view_spec, "pub enum AnchorRef");
+    assert_non_exhaustive(&view_spec, "pub struct EdgeAnchor");
+    assert_non_exhaustive(&view_spec, "pub enum NodePredicate");
+    assert_non_exhaustive(&view_spec, "pub enum LayoutMode");
+    assert_non_exhaustive(&view_spec, "pub enum BoundaryPolicy");
+    assert_non_exhaustive(&view_spec, "pub enum CompoundPolicy");
+
+    let view_events = repo_file("src/views/events.rs");
+    assert_non_exhaustive(&view_events, "pub enum ElisionReason");
+    assert_non_exhaustive(&view_events, "pub enum ViewEvent");
+
+    let view_error = repo_file("src/views/error.rs");
+    assert_non_exhaustive(&view_error, "pub enum ViewError");
+}
+
+#[test]
+fn crate_root_does_not_flatten_mmds_command_diff_event_or_view_types() {
+    let exports = public_exports_for_test();
+
+    assert_exports_exclude(
+        &exports,
+        &[
+            "Command",
+            "EdgeSelector",
+            "CommandApplyError",
+            "ModelEvent",
+            "ModelEventKind",
+            "Diff",
+            "Change",
+            "ChangeKind",
+            "Subject",
+            "MmdsToken",
+            "MmdsTokenError",
+            "ViewSpec",
+            "ViewStatement",
+            "Selector",
+            "ViewEvent",
+            "ViewError",
+        ],
+        "the crate-root export surface (MMDS commands, events, diffs, tokens, and views stay in home modules)",
+    );
+}
+
+#[test]
+fn deprecated_mmds_public_helpers_have_explicit_release_policy() {
+    let mmds_mod = repo_file("src/mmds/mod.rs");
+    let document = repo_file("src/mmds/document.rs");
+    let hydrate = repo_file("src/mmds/hydrate.rs");
+
+    let deprecated_count = [&mmds_mod, &document, &hydrate]
+        .iter()
+        .map(|source| source.matches("#[deprecated(").count())
+        .sum::<usize>();
+    assert_eq!(
+        deprecated_count, 6,
+        "the deprecated MMDS compatibility inventory should stay explicit"
+    );
+
+    assert_hidden_deprecated_item(&document, "pub type Output = Document;", "mmds::Document");
+    assert_hidden_deprecated_item(
+        &document,
+        "pub fn to_json_typed_with_routing(",
+        "materialize_diagram plus serde_json serialization",
+    );
+    assert_hidden_deprecated_item(
+        &mmds_mod,
+        "pub fn evaluate_profiles_for_output(",
+        "evaluate_profiles_for_document",
+    );
+    assert_hidden_deprecated_item(&hydrate, "pub fn from_output(", "from_document");
+    assert_hidden_deprecated_item(
+        &hydrate,
+        "pub fn hydrate_graph_geometry_from_output_with_diagram(",
+        "hydrate_graph_geometry_from_document_with_diagram",
+    );
+    assert_hidden_deprecated_item(
+        &hydrate,
+        "pub fn hydrate_routed_geometry_from_output(",
+        "hydrate_routed_geometry_from_document",
+    );
+}
+
+#[test]
+fn crate_root_rustdoc_names_public_workflows_without_unreleased_migration_guide() {
+    let source = lib_rs_source();
+
+    for required in [
+        "Supported diagram types: **flowchart**, **class**, **state**, and **sequence**.",
+        "# Stability",
+        "## What is not covered",
+        "render_diagram",
+        "materialize_diagram",
+        "render_document",
+        "commands::apply",
+        "mmds::diff::diff_documents",
+        "views::project",
+        "## Commands and Model Events",
+        "## Views",
+        "## Snapshot Diffs",
+    ] {
+        assert!(
+            source.contains(required),
+            "{required} should be named in crate docs"
+        );
+    }
+
+    assert!(
+        !source.contains("migration guide for views")
+            && !source.contains("migration guide for commands")
+            && !source.contains("migration guide for events"),
+        "unreleased APIs should not be documented as migration-guide changes"
+    );
+    assert!(
+        !source.contains("## Commands, Diffs, and Views")
+            && !source.contains("## Commands and Views"),
+        "command/event, view, and snapshot diff examples should stay separated"
+    );
+}
+
+#[test]
+fn public_module_rustdocs_name_contract_caveats() {
+    let commands = repo_file("src/commands.rs");
+    let diff = repo_file("src/mmds/diff.rs");
+    let events = repo_file("src/mmds/events.rs");
+    let mmds = repo_file("src/mmds/mod.rs");
+    let token = repo_file("src/mmds/token.rs");
+    let views = repo_file("src/views/mod.rs");
+
+    for source in [&commands, &diff, &events, &mmds, &token, &views] {
+        assert!(
+            source.contains("[Stability](crate#stability)"),
+            "early public modules should link to the crate-level stability policy"
+        );
+    }
+
+    assert!(commands.contains("model events"));
+    assert!(commands.contains("not snapshot diff"));
+    assert!(diff.contains("snapshot diff"));
+    assert!(events.contains("not snapshot diffs"));
+    assert!(token.contains("MMDS string token"));
+    assert!(views.contains("projection"));
+}
+
+#[test]
+fn readme_and_docs_list_public_rust_api_examples() {
+    let readme = repo_file("README.md");
+    let mmds_docs = repo_file("docs/mmds.md");
+
+    for example in [
+        "commands_events_views",
+        "snapshot_diff",
+        "materialized_view",
+        "mmds_replay",
+    ] {
+        assert!(
+            readme.contains(example),
+            "{example} should be discoverable from README"
+        );
+        assert!(
+            mmds_docs.contains(example),
+            "{example} should be discoverable from docs/mmds.md"
+        );
+    }
 }
 
 #[test]

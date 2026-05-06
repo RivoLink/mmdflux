@@ -54,6 +54,7 @@ fn describe_change(change: &Change) -> String {
         Subject::Node(id) => format!("node {id}"),
         Subject::Edge(id) => format!("edge {id}"),
         Subject::Subgraph(id) => format!("subgraph {id}"),
+        _ => "<unknown>".to_string(),
     };
 
     if change.evidence.is_empty() {

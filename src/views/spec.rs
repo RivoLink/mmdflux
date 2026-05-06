@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Materialized view request over a canonical MMDS payload.
+#[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewSpec {
     /// Ordered include/exclude statements used to build the view keep-set.
@@ -27,7 +28,18 @@ pub struct ViewSpec {
     pub compound: CompoundPolicy,
 }
 
+impl ViewSpec {
+    /// Build a view spec from the ordered selector statements that define it.
+    pub fn new(statements: Vec<ViewStatement>) -> Self {
+        Self {
+            statements,
+            ..Self::default()
+        }
+    }
+}
+
 /// Include or exclude a selector from the view keep-set.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ViewStatement {
     /// Add the selector result to the current keep-set.
@@ -37,6 +49,7 @@ pub enum ViewStatement {
 }
 
 /// Selector expression for v1 and forward-compatible follow-up view slices.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Selector {
     /// Select every node and subgraph in the payload.
@@ -61,6 +74,7 @@ pub enum Selector {
 }
 
 /// Stable anchor reference used by view selectors.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AnchorRef {
     /// Anchor on a node ID.
@@ -75,6 +89,7 @@ pub enum AnchorRef {
 }
 
 /// Edge anchor shape reserved for a later edge-aware view slice.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EdgeAnchor {
     /// Source node ID.
@@ -100,6 +115,7 @@ pub enum TraversalDirection {
 }
 
 /// Node predicate for selector filters.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodePredicate {
     /// Select nodes whose MMDS `shape` equals the supplied value.
@@ -113,6 +129,7 @@ pub enum NodePredicate {
 }
 
 /// Layout policy for the materialized view.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutMode {
     /// Preserve canonical coordinates and mark the payload as a shared-coordinate view.
@@ -133,6 +150,7 @@ pub enum LayoutMode {
 }
 
 /// Boundary policy for elements connected to elided endpoints.
+#[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BoundaryPolicy {
     /// Drop edges whose source or target node is outside the view.
@@ -148,6 +166,7 @@ pub enum BoundaryPolicy {
 }
 
 /// Compound/subgraph handling policy.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompoundPolicy {
     /// Preserve retained subgraphs and their ancestor chain.

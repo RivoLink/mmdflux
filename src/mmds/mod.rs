@@ -1,5 +1,8 @@
 //! MMDS interchange contract and document-generation namespace.
 //!
+//! See the crate-level [Stability](crate#stability) section for the
+//! variant-addition and field-addition policy on the public types in this module.
+//!
 //! This module owns the typed graph-family MMDS document, profile vocabulary,
 //! Mermaid regeneration helpers, validation, and hydration to `Diagram` for
 //! adapter workflows. Replay rendering lives in `runtime::mmds`.
@@ -56,6 +59,7 @@ pub use token::{MmdsToken, MmdsTokenError};
 mod regression_tests;
 
 /// Subject associated with an MMDS model event or snapshot diff change.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Subject {
     Document,

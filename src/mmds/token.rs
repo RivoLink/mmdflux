@@ -1,4 +1,7 @@
 //! Canonical MMDS string token contracts for graph-family enums.
+//!
+//! See the crate-level [Stability](crate#stability) section for the
+//! variant-addition and field-addition policy on the public types in this module.
 
 use std::error::Error;
 use std::fmt;
@@ -15,6 +18,7 @@ pub trait MmdsToken: Sized {
 }
 
 /// Error returned when an MMDS string token does not match a graph vocabulary.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MmdsTokenError {
     /// Vocabulary being parsed, such as `"shape"` or `"direction"`.

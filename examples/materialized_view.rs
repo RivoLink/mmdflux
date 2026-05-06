@@ -14,14 +14,11 @@ service_a --> audit[Audit]
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let canonical: Document = materialize_diagram(SOURCE, &RenderConfig::default())?;
-    let spec = ViewSpec {
-        statements: vec![ViewStatement::Include(Selector::Traversal {
-            anchor: AnchorRef::Node("service_a".to_string()),
-            direction: TraversalDirection::Downstream,
-            hops: 2,
-        })],
-        ..ViewSpec::default()
-    };
+    let spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Traversal {
+        anchor: AnchorRef::Node("service_a".to_string()),
+        direction: TraversalDirection::Downstream,
+        hops: 2,
+    })]);
 
     let (view, events) = project(&canonical, &spec)?;
     let text = render_document(&view, OutputFormat::Text, &RenderConfig::default())?;

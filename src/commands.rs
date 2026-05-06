@@ -1,8 +1,11 @@
 //! Command vocabulary and synchronous MMDS command application.
 //!
+//! See the crate-level [Stability](crate#stability) section for the
+//! variant-addition and field-addition policy on the public types in this module.
+//!
 //! This module applies one [`Command`] to a fully materialized MMDS [`Document`] and
-//! returns model events. Model events describe accepted model mutations. They are
-//! intentionally different from the snapshot diff returned by
+//! returns model events, not snapshot diff changes. Model events describe accepted
+//! model mutations. They are intentionally different from the snapshot diff returned by
 //! [`crate::mmds::diff::diff_documents`], which compares two document states and can
 //! collapse, reorder, or expand command headlines.
 //!
@@ -95,6 +98,7 @@ const GEOMETRY_CHANGE_KINDS: &[ChangeKind] = &[
 /// Commands describe intent, not transport. Applying a command can update semantic
 /// fields directly or run a full relayout depending on the variant, but the returned
 /// events remain model events rather than snapshot diff changes.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     SetGeometryLevel {
@@ -217,6 +221,7 @@ pub enum Command {
 /// [`EdgeSelector::Semantic`] when selecting by source, target, and optional edge
 /// attributes is acceptable. Semantic selectors intentionally return ambiguity errors
 /// instead of guessing when multiple parallel edges match.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EdgeSelector {
     Id(String),
@@ -242,6 +247,7 @@ pub(crate) enum ChangeKindLayer {
 ///
 /// Variants are part of the public command contract and can be matched directly.
 /// The type also implements [`std::error::Error`] through `thiserror`.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CommandApplyError {
     #[error("node not found: {id}")]

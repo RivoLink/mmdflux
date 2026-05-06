@@ -1,8 +1,8 @@
 //! mmdflux — Mermaid diagrams to text, SVG, and MMDS
 //!
 //! mmdflux parses [Mermaid](https://mermaid.js.org/) diagram syntax and
-//! renders it as Unicode/ASCII text, SVG, or structured JSON ([MMDS](https://mmds.dev/)).
-//! Supported diagram types: **flowchart**, **class**, and **sequence**.
+//! renders it as Unicode/ASCII text, SVG, or structured JSON (MMDS).
+//! Supported diagram types: **flowchart**, **class**, **state**, and **sequence**.
 //!
 //! # High-Level API
 //!
@@ -22,6 +22,38 @@
 //! [`materialize_diagram`] when you want the typed [`mmds::Document`], and use
 //! [`render_document`] when you already have one, such as after
 //! [`views::project`].
+//! For document-level workflows, use `commands::apply` to mutate a document,
+//! `mmds::diff::diff_documents` to compare two snapshots, and
+//! `views::project` to produce a read-side view.
+//!
+//! # Stability
+//!
+//! The `commands`, `mmds::events`, `mmds::diff`, and `views` modules are early
+//! surfaces. The following kinds of changes will land in minor versions and are
+//! not considered breaking under this crate's SemVer policy:
+//!
+//! - new variants on the early-surface enums marked `#[non_exhaustive]`
+//!   (including `commands::Command`, `commands::EdgeSelector`,
+//!   `commands::CommandApplyError`, `mmds::events::ModelEventKind`,
+//!   `mmds::diff::ChangeKind`, `mmds::Subject`, `views::ViewStatement`,
+//!   `views::Selector`, `views::ViewEvent`, `views::ViewError`, and the
+//!   supporting view vocabulary)
+//! - new fields on early-surface structs marked `#[non_exhaustive]` (including
+//!   `mmds::events::ModelEvent`, `mmds::diff::Change`, `mmds::diff::Diff`,
+//!   `mmds::MmdsTokenError`, and `views::ViewSpec`)
+//!
+//! ## What is not covered
+//!
+//! - Renaming, removing, or changing the meaning of an existing variant or field
+//!   remains a breaking change.
+//! - Adding fields to existing struct-like enum variants
+//!   (for example, `Command::AddNode { ... }`) is still breaking; individual
+//!   variants are not currently marked `#[non_exhaustive]`.
+//! - The runtime facade (`render_diagram`, `materialize_diagram`,
+//!   `render_document`, `detect_diagram`, `validate_diagram`, `OutputFormat`,
+//!   `RenderConfig`, `RenderError`) follows standard SemVer.
+//! - `views::TraversalDirection` is intentionally exhaustive because its
+//!   vocabulary is closed.
 //!
 //! ```
 //! use mmdflux::{OutputFormat, RenderConfig, render_diagram};
@@ -139,7 +171,7 @@
 //!
 //! ## MMDS interchange
 //!
-//! [MMDS](https://mmds.dev/) is a structured JSON format for diagram geometry.
+//! MMDS is mmdflux's structured JSON format for diagram geometry.
 //! Use the [`mmds`] module to parse MMDS input, hydrate it to a
 //! [`graph::Graph`], or regenerate Mermaid source. To render MMDS input to
 //! text/SVG, pass it to [`render_diagram`] which auto-detects MMDS:
@@ -178,87 +210,74 @@
 //! assert!(mermaid.contains("flowchart TD"));
 //! ```
 //!
-//! ## Commands, Diffs, and Views
+//! ## Commands and Model Events
 //!
-//! Public MMDS commands emit model events, while [`mmds::diff::diff_documents`]
-//! reports a snapshot diff between two document states. Model events and diff
-//! changes are related, but they are not interchangeable:
+//! Public MMDS commands mutate a document and emit model events that describe
+//! the accepted state transition:
 //!
 //! ```
 //! use mmdflux::commands::{Command, apply};
-//! use mmdflux::graph::{Arrow, Shape, Stroke};
+//! use mmdflux::graph::Shape;
 //! use mmdflux::mmds::Subject;
-//! use mmdflux::mmds::diff::{ChangeKind, diff_documents};
 //! use mmdflux::mmds::events::ModelEventKind;
-//! use mmdflux::views::{Selector, ViewSpec, ViewStatement, project};
 //! use mmdflux::{RenderConfig, materialize_diagram};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let initial = materialize_diagram(
+//! let mut document = materialize_diagram(
 //!     "graph TD\n    A[Gateway] --> B[Billing]",
 //!     &RenderConfig::default(),
 //! )?;
-//! let mut current = initial.clone();
 //!
-//! apply(
+//! let model_events = apply(
 //!     &Command::AddNode {
 //!         id: "C".to_string(),
 //!         label: "Auth".to_string(),
 //!         shape: Shape::Rectangle,
 //!         parent: None,
 //!     },
-//!     &mut current,
-//! )?;
-//! apply(
-//!     &Command::AddEdge {
-//!         id: None,
-//!         source: "A".to_string(),
-//!         target: "C".to_string(),
-//!         from_subgraph: None,
-//!         to_subgraph: None,
-//!         label: Some("routes".to_string()),
-//!         stroke: Stroke::Solid,
-//!         arrow_start: Arrow::None,
-//!         arrow_end: Arrow::Normal,
-//!         minlen: 1,
-//!     },
-//!     &mut current,
-//! )?;
-//! let model_events = apply(
-//!     &Command::ChangeNodeLabel {
-//!         node: "C".to_string(),
-//!         label: "Auth Service".to_string(),
-//!     },
-//!     &mut current,
-//! )?;
-//!
-//! let snapshot_diff = diff_documents(&initial, &current);
-//! let (view, _view_events) = project(
-//!     &current,
-//!     &ViewSpec {
-//!         statements: vec![ViewStatement::Include(Selector::All)],
-//!         ..ViewSpec::default()
-//!     },
+//!     &mut document,
 //! )?;
 //!
 //! assert!(model_events.iter().any(|event| {
-//!     event.kind == ModelEventKind::NodeLabelChanged
+//!     event.kind == ModelEventKind::NodeAdded
 //!         && matches!(&event.subject, Subject::Node(id) if id == "C")
 //! }));
-//! assert!(snapshot_diff.changes.iter().any(|event| {
-//!     event.kind == ChangeKind::NodeAdded
-//!         && matches!(&event.subject, Subject::Node(id) if id == "C")
-//! }));
-//! assert!(!snapshot_diff.changes.iter().any(|event| {
-//!     event.kind == ChangeKind::NodeLabelChanged
-//!         && matches!(&event.subject, Subject::Node(id) if id == "C")
-//! }));
-//! assert_eq!(view.nodes.len(), current.nodes.len());
+//! assert!(document.nodes.iter().any(|node| node.id == "C"));
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## Materialized MMDS views
+//! ## Snapshot Diffs
+//!
+//! [`mmds::diff::diff_documents`] compares two document states and reports a
+//! snapshot diff. Diff changes describe what is different between snapshots;
+//! they do not describe edit intent or command history:
+//!
+//! ```
+//! use mmdflux::mmds::Subject;
+//! use mmdflux::mmds::diff::{ChangeKind, diff_documents};
+//! use mmdflux::{RenderConfig, materialize_diagram};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let before = materialize_diagram(
+//!     "graph TD\n    A[Gateway] --> B[Billing]",
+//!     &RenderConfig::default(),
+//! )?;
+//! let after = materialize_diagram(
+//!     "graph TD\n    A[Gateway] --> B[Billing]\n    A --> C[Auth]",
+//!     &RenderConfig::default(),
+//! )?;
+//!
+//! let diff = diff_documents(&before, &after);
+//! assert!(diff.changes.iter().any(|change| {
+//!     change.kind == ChangeKind::NodeAdded
+//!         && matches!(&change.subject, Subject::Node(id) if id == "C")
+//! }));
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Views
 //!
 //! Use [`views`] when an adapter needs a focused read model over a canonical
 //! MMDS payload. V1 views preserve shared coordinates, keep surviving edge IDs
@@ -279,14 +298,11 @@
 //! A --> D[Audit]
 //! ";
 //! let canonical: Document = materialize_diagram(source, &RenderConfig::default()).unwrap();
-//! let spec = ViewSpec {
-//!     statements: vec![ViewStatement::Include(Selector::Traversal {
+//! let spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Traversal {
 //!         anchor: AnchorRef::Node("A".to_string()),
 //!         direction: TraversalDirection::Downstream,
 //!         hops: 1,
-//!     })],
-//!     ..ViewSpec::default()
-//! };
+//!     })]);
 //!
 //! let (view, events) = project(&canonical, &spec).unwrap();
 //! let text = render_document(&view, OutputFormat::Text, &RenderConfig::default()).unwrap();

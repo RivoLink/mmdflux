@@ -316,6 +316,10 @@ public contract.
   negotiation, replay, and Mermaid regeneration
 - [`examples/materialized_view.rs`](examples/materialized_view.rs) —
   materialize a focused MMDS view and replay it as text
+- [`examples/commands_events_views.rs`](examples/commands_events_views.rs) —
+  apply MMDS commands, inspect model events, project a view, and render it
+- [`examples/snapshot_diff.rs`](examples/snapshot_diff.rs) — compare two
+  materialized MMDS documents with the snapshot diff API
 
 Verify the examples compile with `cargo test --examples`.
 

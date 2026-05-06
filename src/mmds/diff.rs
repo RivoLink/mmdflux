@@ -1,5 +1,8 @@
 //! Snapshot diff for MMDS documents.
 //!
+//! See the crate-level [Stability](crate#stability) section for the
+//! variant-addition and field-addition policy on the public types in this module.
+//!
 //! [`diff_documents`] compares two fully materialized MMDS [`Document`] values and returns a
 //! snapshot diff: the changes describe what differs between the two states, regardless of
 //! the command sequence or editing path that produced them.
@@ -33,6 +36,7 @@ use super::{Bounds, Document, Edge, Node, Port, Position, Rect, Subgraph, Subjec
 const COORD_EPS: f64 = 0.01;
 const DISPLAY_EPS: f64 = 1.0;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diff {
     /// Geometry level recorded on the `before` document.
@@ -43,6 +47,7 @@ pub struct Diff {
     pub changes: Vec<Change>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Change {
     /// Change classification.
@@ -56,6 +61,7 @@ pub struct Change {
 }
 
 /// Kind of change observed in an MMDS snapshot diff.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangeKind {
     GeometryLevelChanged,

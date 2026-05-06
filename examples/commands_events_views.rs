@@ -50,14 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("- {}", describe_model_event(event));
     }
 
-    let spec = ViewSpec {
-        statements: vec![ViewStatement::Include(Selector::Traversal {
-            anchor: AnchorRef::Node("api".to_string()),
-            direction: TraversalDirection::Downstream,
-            hops: 1,
-        })],
-        ..ViewSpec::default()
-    };
+    let spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Traversal {
+        anchor: AnchorRef::Node("api".to_string()),
+        direction: TraversalDirection::Downstream,
+        hops: 1,
+    })]);
     let (view, view_events) = project(&document, &spec)?;
 
     println!("\nview nodes:");
@@ -84,6 +81,7 @@ fn describe_model_event(event: &ModelEvent) -> String {
         Subject::Node(id) => format!("node {id}"),
         Subject::Edge(id) => format!("edge {id}"),
         Subject::Subgraph(id) => format!("subgraph {id}"),
+        _ => "<unknown>".to_string(),
     };
 
     format!("{:?} on {subject}", event.kind)

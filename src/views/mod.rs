@@ -1,10 +1,13 @@
 //! Materialized diagram views over canonical MMDS payloads.
 //!
+//! See the crate-level [Stability](crate#stability) section for the
+//! variant-addition and field-addition policy on the public types in this module.
+//!
 //! This module owns the read-side `ViewSpec` contract. It intentionally works
 //! over `mmds::Document` rather than renderer or engine internals.
 //!
-//! The v1 surface is intentionally small: materialize a filtered MMDS payload
-//! from a `ViewSpec` and emit events for elements that leave the view.
+//! The v1 surface is intentionally small: project a filtered MMDS payload
+//! from a `ViewSpec` and emit projection events for elements that leave the view.
 //! Rendering remains a runtime concern; pass the returned document to
 //! [`crate::render_document`] when a text, SVG, or MMDS rendering is
 //! needed.
@@ -28,14 +31,11 @@
 //! ";
 //!
 //! let canonical: Document = materialize_diagram(source, &RenderConfig::default())?;
-//! let spec = ViewSpec {
-//!     statements: vec![ViewStatement::Include(Selector::Traversal {
+//! let spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Traversal {
 //!         anchor: AnchorRef::Node("service_a".to_string()),
 //!         direction: TraversalDirection::Downstream,
 //!         hops: 2,
-//!     })],
-//!     ..ViewSpec::default()
-//! };
+//!     })]);
 //!
 //! let (view, events) = project(&canonical, &spec)?;
 //! assert!(view.nodes.iter().any(|node| node.id == "service_c"));
