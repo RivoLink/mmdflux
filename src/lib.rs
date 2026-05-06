@@ -26,35 +26,6 @@
 //! `mmds::diff::diff_documents` to compare two snapshots, and
 //! `views::project` to produce a read-side view.
 //!
-//! # Stability
-//!
-//! The `commands`, `mmds::events`, `mmds::diff`, and `views` modules are early
-//! surfaces. The following kinds of changes will land in minor versions and are
-//! not considered breaking under this crate's SemVer policy:
-//!
-//! - new variants on the early-surface enums marked `#[non_exhaustive]`
-//!   (including `commands::Command`, `commands::EdgeSelector`,
-//!   `commands::CommandApplyError`, `mmds::events::ModelEventKind`,
-//!   `mmds::diff::ChangeKind`, `mmds::Subject`, `views::ViewStatement`,
-//!   `views::Selector`, `views::ViewEvent`, `views::ViewError`, and the
-//!   supporting view vocabulary)
-//! - new fields on early-surface structs marked `#[non_exhaustive]` (including
-//!   `mmds::events::ModelEvent`, `mmds::diff::Change`, `mmds::diff::Diff`,
-//!   `mmds::MmdsTokenError`, and `views::ViewSpec`)
-//!
-//! ## What is not covered
-//!
-//! - Renaming, removing, or changing the meaning of an existing variant or field
-//!   remains a breaking change.
-//! - Adding fields to existing struct-like enum variants
-//!   (for example, `Command::AddNode { ... }`) is still breaking; individual
-//!   variants are not currently marked `#[non_exhaustive]`.
-//! - The runtime facade (`render_diagram`, `materialize_diagram`,
-//!   `render_document`, `detect_diagram`, `validate_diagram`, `OutputFormat`,
-//!   `RenderConfig`, `RenderError`) follows standard SemVer.
-//! - `views::TraversalDirection` is intentionally exhaustive because its
-//!   vocabulary is closed.
-//!
 //! ```
 //! use mmdflux::{OutputFormat, RenderConfig, render_diagram};
 //!
@@ -313,6 +284,35 @@
 //!     mmdflux::views::ViewEvent::NodeLeftView { id, .. } if id == "C"
 //! )));
 //! ```
+//!
+//! # Stability
+//!
+//! The `commands`, `mmds::events`, `mmds::diff`, and `views` modules are early
+//! surfaces. The following kinds of changes will land in minor versions and are
+//! not considered breaking under this crate's SemVer policy:
+//!
+//! - new variants on the early-surface enums marked `#[non_exhaustive]`
+//!   (including `commands::Command`, `commands::EdgeSelector`,
+//!   `commands::CommandApplyError`, `mmds::events::ModelEventKind`,
+//!   `mmds::diff::ChangeKind`, `mmds::Subject`, `views::ViewStatement`,
+//!   `views::Selector`, `views::ViewEvent`, `views::ViewError`, and the
+//!   supporting view vocabulary)
+//! - new fields on early-surface structs marked `#[non_exhaustive]` (including
+//!   `mmds::events::ModelEvent`, `mmds::diff::Change`, `mmds::diff::Diff`,
+//!   `mmds::MmdsTokenError`, and `views::ViewSpec`)
+//!
+//! What is not covered:
+//!
+//! - Renaming, removing, or changing the meaning of an existing variant or field
+//!   remains a breaking change.
+//! - Adding fields to existing struct-like enum variants
+//!   (for example, `Command::AddNode { ... }`) is still breaking; individual
+//!   variants are not currently marked `#[non_exhaustive]`.
+//! - The runtime facade (`render_diagram`, `materialize_diagram`,
+//!   `render_document`, `detect_diagram`, `validate_diagram`, `OutputFormat`,
+//!   `RenderConfig`, `RenderError`) follows standard SemVer.
+//! - `views::TraversalDirection` is intentionally exhaustive because its
+//!   vocabulary is closed.
 
 pub mod builtins;
 pub mod commands;
