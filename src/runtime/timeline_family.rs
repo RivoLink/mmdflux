@@ -6,62 +6,63 @@
 use crate::graph::GeometryLevel;
 use crate::graph::measure::ProportionalTextMetrics;
 use crate::mmds::sequence::{
-    self, MmdsActivation, MmdsArrowHead, MmdsBlock, MmdsBlockDivider, MmdsBlockDividerKind,
-    MmdsBlockKind, MmdsBounds, MmdsLineStyle, MmdsMessage, MmdsNote, MmdsNotePlacement,
-    MmdsParticipant, MmdsParticipantBox, MmdsParticipantKind, MmdsPosition, MmdsRect, MmdsSize,
-    SequenceDiagramType, SequenceDocument, SequenceMetadata,
+    self, Activation, ArrowHead, Block, BlockDivider, BlockDividerKind, BlockKind, Bounds,
+    LineStyle, Message, Note, NotePlacement, Participant, ParticipantBox, ParticipantKind,
+    Position, Rect, SequenceDiagramType, SequenceDocument, SequenceMetadata, Size,
 };
 use crate::render::timeline::svg_layout::{
     self as svg_layout, SvgBlock, SvgRow, SvgSequenceLayout,
 };
 use crate::timeline::sequence::model::{
-    ArrowHead, BlockDividerKind, BlockKind, LineStyle, ParticipantKind, Sequence,
+    ArrowHead as TimelineArrowHead, BlockDividerKind as TimelineBlockDividerKind,
+    BlockKind as TimelineBlockKind, LineStyle as TimelineLineStyle,
+    ParticipantKind as TimelineParticipantKind, Sequence,
 };
 
 // ---------------------------------------------------------------------------
 // MMDS vocabulary conversion helpers
 // ---------------------------------------------------------------------------
 
-fn mmds_line_style(s: LineStyle) -> MmdsLineStyle {
+fn mmds_line_style(s: TimelineLineStyle) -> LineStyle {
     match s {
-        LineStyle::Solid => MmdsLineStyle::Solid,
-        LineStyle::Dashed => MmdsLineStyle::Dashed,
+        TimelineLineStyle::Solid => LineStyle::Solid,
+        TimelineLineStyle::Dashed => LineStyle::Dashed,
     }
 }
 
-fn mmds_arrow_head(a: ArrowHead) -> MmdsArrowHead {
+fn mmds_arrow_head(a: TimelineArrowHead) -> ArrowHead {
     match a {
-        ArrowHead::None => MmdsArrowHead::None,
-        ArrowHead::Filled => MmdsArrowHead::Filled,
-        ArrowHead::Cross => MmdsArrowHead::Cross,
-        ArrowHead::Async => MmdsArrowHead::Async,
+        TimelineArrowHead::None => ArrowHead::None,
+        TimelineArrowHead::Filled => ArrowHead::Filled,
+        TimelineArrowHead::Cross => ArrowHead::Cross,
+        TimelineArrowHead::Async => ArrowHead::Async,
     }
 }
 
-fn mmds_participant_kind(k: &ParticipantKind) -> MmdsParticipantKind {
+fn mmds_participant_kind(k: &TimelineParticipantKind) -> ParticipantKind {
     match k {
-        ParticipantKind::Participant => MmdsParticipantKind::Participant,
-        ParticipantKind::Actor => MmdsParticipantKind::Actor,
+        TimelineParticipantKind::Participant => ParticipantKind::Participant,
+        TimelineParticipantKind::Actor => ParticipantKind::Actor,
     }
 }
 
-fn mmds_block_kind(k: BlockKind) -> MmdsBlockKind {
+fn mmds_block_kind(k: TimelineBlockKind) -> BlockKind {
     match k {
-        BlockKind::Loop => MmdsBlockKind::Loop,
-        BlockKind::Alt => MmdsBlockKind::Alt,
-        BlockKind::Opt => MmdsBlockKind::Opt,
-        BlockKind::Par => MmdsBlockKind::Par,
-        BlockKind::Critical => MmdsBlockKind::Critical,
-        BlockKind::Break => MmdsBlockKind::Break,
-        BlockKind::Rect => MmdsBlockKind::Rect,
+        TimelineBlockKind::Loop => BlockKind::Loop,
+        TimelineBlockKind::Alt => BlockKind::Alt,
+        TimelineBlockKind::Opt => BlockKind::Opt,
+        TimelineBlockKind::Par => BlockKind::Par,
+        TimelineBlockKind::Critical => BlockKind::Critical,
+        TimelineBlockKind::Break => BlockKind::Break,
+        TimelineBlockKind::Rect => BlockKind::Rect,
     }
 }
 
-fn mmds_block_divider_kind(k: BlockDividerKind) -> MmdsBlockDividerKind {
+fn mmds_block_divider_kind(k: TimelineBlockDividerKind) -> BlockDividerKind {
     match k {
-        BlockDividerKind::Else => MmdsBlockDividerKind::Else,
-        BlockDividerKind::And => MmdsBlockDividerKind::And,
-        BlockDividerKind::Option => MmdsBlockDividerKind::Option,
+        TimelineBlockDividerKind::Else => BlockDividerKind::Else,
+        TimelineBlockDividerKind::And => BlockDividerKind::And,
+        TimelineBlockDividerKind::Option => BlockDividerKind::Option,
     }
 }
 
@@ -89,7 +90,7 @@ fn build_document(model: &Sequence, svg: &SvgSequenceLayout) -> SequenceDocument
         geometry_level: GeometryLevel::Layout,
         metadata: SequenceMetadata {
             diagram_type: SequenceDiagramType::Sequence,
-            bounds: MmdsBounds {
+            bounds: Bounds {
                 width: svg.width,
                 height: svg.height,
             },
@@ -105,20 +106,20 @@ fn build_document(model: &Sequence, svg: &SvgSequenceLayout) -> SequenceDocument
     }
 }
 
-fn build_participants(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<MmdsParticipant> {
+fn build_participants(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<Participant> {
     model
         .participants
         .iter()
         .zip(svg.participants.iter())
-        .map(|(p, sp)| MmdsParticipant {
+        .map(|(p, sp)| Participant {
             id: p.id.clone(),
             label: p.label.clone(),
             kind: mmds_participant_kind(&p.kind),
-            position: MmdsPosition {
+            position: Position {
                 x: sp.rect.x,
                 y: sp.rect.y,
             },
-            size: MmdsSize {
+            size: Size {
                 width: sp.rect.width,
                 height: sp.rect.height,
             },
@@ -127,7 +128,7 @@ fn build_participants(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<MmdsPart
         .collect()
 }
 
-fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<MmdsNote>) {
+fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<Message>, Vec<Note>) {
     let mut messages = Vec::new();
     let mut notes = Vec::new();
     let mut msg_idx = 0usize;
@@ -139,7 +140,7 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
             SvgRow::Message(m) => {
                 let from = nearest_participant(&lifeline_xs, m.from_x);
                 let to = nearest_participant(&lifeline_xs, m.to_x);
-                messages.push(MmdsMessage {
+                messages.push(Message {
                     id: format!("m{msg_idx}"),
                     from,
                     to,
@@ -152,7 +153,7 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
             }
             SvgRow::SelfMessage(sm) => {
                 let from = nearest_participant(&lifeline_xs, sm.x);
-                messages.push(MmdsMessage {
+                messages.push(Message {
                     id: format!("m{msg_idx}"),
                     from,
                     to: from,
@@ -166,15 +167,15 @@ fn build_messages_and_notes(svg: &SvgSequenceLayout) -> (Vec<MmdsMessage>, Vec<M
             SvgRow::Note(n) => {
                 let participants = participants_for_note(&lifeline_xs, n);
                 let placement = placement_for_note(&lifeline_xs, n, &participants);
-                notes.push(MmdsNote {
+                notes.push(Note {
                     placement,
                     participants,
                     text: n.text.clone(),
-                    position: MmdsPosition {
+                    position: Position {
                         x: n.rect.x,
                         y: n.rect.y,
                     },
-                    size: MmdsSize {
+                    size: Size {
                         width: n.rect.width,
                         height: n.rect.height,
                     },
@@ -217,34 +218,34 @@ fn participants_for_note(lifeline_xs: &[f64], note: &svg_layout::SvgNote) -> Vec
     covered
 }
 
-/// Determine note placement string from its position relative to participants.
+/// Determine note placement from its position relative to participants.
 fn placement_for_note(
     lifeline_xs: &[f64],
     note: &svg_layout::SvgNote,
     participants: &[usize],
-) -> MmdsNotePlacement {
+) -> NotePlacement {
     if participants.len() > 1 {
-        return MmdsNotePlacement::Over;
+        return NotePlacement::Over;
     }
     let p_idx = participants[0];
     let lx = lifeline_xs[p_idx];
     let note_center = note.rect.x + note.rect.width / 2.0;
     if note_center < lx {
-        MmdsNotePlacement::LeftOf
+        NotePlacement::LeftOf
     } else if note_center > lx {
-        MmdsNotePlacement::RightOf
+        NotePlacement::RightOf
     } else {
-        MmdsNotePlacement::Over
+        NotePlacement::Over
     }
 }
 
-fn build_activations(svg: &SvgSequenceLayout) -> Vec<MmdsActivation> {
+fn build_activations(svg: &SvgSequenceLayout) -> Vec<Activation> {
     let lifeline_xs: Vec<f64> = svg.participants.iter().map(|p| p.center_x).collect();
     svg.activations
         .iter()
         .map(|a| {
             let participant = nearest_participant(&lifeline_xs, a.x);
-            MmdsActivation {
+            Activation {
                 participant,
                 y_start: a.y_start,
                 y_end: a.y_end,
@@ -254,13 +255,13 @@ fn build_activations(svg: &SvgSequenceLayout) -> Vec<MmdsActivation> {
         .collect()
 }
 
-fn build_blocks(svg: &SvgSequenceLayout) -> Vec<MmdsBlock> {
+fn build_blocks(svg: &SvgSequenceLayout) -> Vec<Block> {
     svg.blocks
         .iter()
-        .map(|b: &SvgBlock| MmdsBlock {
+        .map(|b: &SvgBlock| Block {
             kind: mmds_block_kind(b.kind),
             label: b.label.clone(),
-            rect: MmdsRect {
+            rect: Rect {
                 x: b.rect.x,
                 y: b.rect.y,
                 width: b.rect.width,
@@ -269,7 +270,7 @@ fn build_blocks(svg: &SvgSequenceLayout) -> Vec<MmdsBlock> {
             dividers: b
                 .dividers
                 .iter()
-                .map(|d| MmdsBlockDivider {
+                .map(|d| BlockDivider {
                     y: d.y,
                     kind: mmds_block_divider_kind(d.kind),
                     label: d.label.clone(),
@@ -279,16 +280,16 @@ fn build_blocks(svg: &SvgSequenceLayout) -> Vec<MmdsBlock> {
         .collect()
 }
 
-fn build_participant_boxes(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<MmdsParticipantBox> {
+fn build_participant_boxes(model: &Sequence, svg: &SvgSequenceLayout) -> Vec<ParticipantBox> {
     model
         .participant_boxes
         .iter()
         .zip(svg.participant_boxes.iter())
-        .map(|(pb, spb)| MmdsParticipantBox {
+        .map(|(pb, spb)| ParticipantBox {
             label: pb.label.clone(),
             color: pb.color.clone(),
             participants: pb.participants.clone(),
-            rect: MmdsRect {
+            rect: Rect {
                 x: spb.rect.x,
                 y: spb.rect.y,
                 width: spb.rect.width,
