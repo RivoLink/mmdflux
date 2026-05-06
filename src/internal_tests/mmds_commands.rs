@@ -549,7 +549,7 @@ fn mmds_command_apply_relayout_changes_node_shape() {
     )
     .expect("change node shape should apply");
 
-    assert_eq!(node_shape(&output, "A"), "stadium");
+    assert_eq!(node_shape(&output, "A"), Shape::Stadium);
     assert_primary_event(&events, ModelEventKind::NodeShapeChanged, "A");
     assert!(
         crate::mmds::diff::diff_documents(&before, &output)
@@ -2140,14 +2140,13 @@ fn node_label(output: &crate::mmds::Document, id: &str) -> String {
         .clone()
 }
 
-fn node_shape(output: &crate::mmds::Document, id: &str) -> String {
+fn node_shape(output: &crate::mmds::Document, id: &str) -> Shape {
     output
         .nodes
         .iter()
         .find(|node| node.id == id)
         .unwrap_or_else(|| panic!("node {id} should exist"))
         .shape
-        .clone()
 }
 
 fn node_parent(output: &crate::mmds::Document, id: &str) -> Option<String> {

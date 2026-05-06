@@ -82,7 +82,7 @@ The primary entry point is:
 - `Selector::Anchor(AnchorRef::Node(id))`
 - `Selector::Anchor(AnchorRef::Subgraph(id))` for the subgraph container only
 - `Selector::Traversal` from a node anchor with upstream, downstream, or neighbor hops
-- `Selector::Predicate(NodePredicate::Shape(value))`
+- `Selector::Predicate(NodePredicate::Shape(shape))` with `mmdflux::graph::Shape`
 - `Selector::Predicate(NodePredicate::Parent(subgraph_id))`
 - `Selector::SubgraphDescendants(id)` for recursive subgraph contents
 - ordered `Include` and `Exclude` statements

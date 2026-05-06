@@ -6,6 +6,8 @@ use std::error::Error;
 use std::fmt;
 
 use super::{Document, Edge, Node, Subgraph, parse_input};
+use crate::graph::Shape;
+use crate::mmds::MmdsToken;
 
 /// Error produced when MMDS-to-Mermaid regeneration fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -267,35 +269,36 @@ fn emit_edges(
 fn render_node(node_id: &str, node: &Node) -> Result<String, GenerationError> {
     let label = format_structural_label(&node.label);
 
-    match node.shape.as_str() {
-        "rectangle" => Ok(format!("{node_id}[{label}]")),
-        "round" => Ok(format!("{node_id}({label})")),
-        "diamond" => Ok(format!("{node_id}{{{label}}}")),
-        "stadium" => Ok(format!("{node_id}([{label}])")),
-        "subroutine" => Ok(format!("{node_id}[[{label}]]")),
-        "cylinder" => Ok(format!("{node_id}[({label})]")),
-        "circle" => Ok(format!("{node_id}(({label}))")),
-        "double_circle" => Ok(format!("{node_id}((({label})))")),
-        "hexagon" => Ok(format!("{node_id}{{{{{label}}}}}")),
-        "trapezoid" => Ok(format!(r#"{node_id}[/{label}\]"#)),
-        "inv_trapezoid" => Ok(format!(r#"{node_id}[\{label}/]"#)),
-        "asymmetric" => Ok(format!("{node_id}>{label}]")),
-        "document" => Ok(render_at_shape(node_id, "doc", &node.label)),
-        "documents" => Ok(render_at_shape(node_id, "docs", &node.label)),
-        "tagged_document" => Ok(render_at_shape(node_id, "tag-doc", &node.label)),
-        "card" => Ok(render_at_shape(node_id, "card", &node.label)),
-        "tagged_rect" => Ok(render_at_shape(node_id, "tag-rect", &node.label)),
-        "parallelogram" => Ok(render_at_shape(node_id, "lean-r", &node.label)),
-        "inv_parallelogram" => Ok(render_at_shape(node_id, "lean-l", &node.label)),
-        "manual_input" => Ok(render_at_shape(node_id, "sl-rect", &node.label)),
-        "small_circle" => Ok(render_at_shape(node_id, "sm-circ", &node.label)),
-        "framed_circle" => Ok(render_at_shape(node_id, "fr-circ", &node.label)),
-        "crossed_circle" => Ok(render_at_shape(node_id, "cross-circ", &node.label)),
-        "text_block" => Ok(render_at_shape(node_id, "text", &node.label)),
-        "fork_join" => Ok(render_at_shape(node_id, "fork", &node.label)),
-        value => Err(GenerationError::new(format!(
+    match node.shape {
+        Shape::Rectangle => Ok(format!("{node_id}[{label}]")),
+        Shape::Round => Ok(format!("{node_id}({label})")),
+        Shape::Diamond => Ok(format!("{node_id}{{{label}}}")),
+        Shape::Stadium => Ok(format!("{node_id}([{label}])")),
+        Shape::Subroutine => Ok(format!("{node_id}[[{label}]]")),
+        Shape::Cylinder => Ok(format!("{node_id}[({label})]")),
+        Shape::Circle => Ok(format!("{node_id}(({label}))")),
+        Shape::DoubleCircle => Ok(format!("{node_id}((({label})))")),
+        Shape::Hexagon => Ok(format!("{node_id}{{{{{label}}}}}")),
+        Shape::Trapezoid => Ok(format!(r#"{node_id}[/{label}\]"#)),
+        Shape::InvTrapezoid => Ok(format!(r#"{node_id}[\{label}/]"#)),
+        Shape::Asymmetric => Ok(format!("{node_id}>{label}]")),
+        Shape::Document => Ok(render_at_shape(node_id, "doc", &node.label)),
+        Shape::Documents => Ok(render_at_shape(node_id, "docs", &node.label)),
+        Shape::TaggedDocument => Ok(render_at_shape(node_id, "tag-doc", &node.label)),
+        Shape::Card => Ok(render_at_shape(node_id, "card", &node.label)),
+        Shape::TaggedRect => Ok(render_at_shape(node_id, "tag-rect", &node.label)),
+        Shape::Parallelogram => Ok(render_at_shape(node_id, "lean-r", &node.label)),
+        Shape::InvParallelogram => Ok(render_at_shape(node_id, "lean-l", &node.label)),
+        Shape::ManualInput => Ok(render_at_shape(node_id, "sl-rect", &node.label)),
+        Shape::SmallCircle => Ok(render_at_shape(node_id, "sm-circ", &node.label)),
+        Shape::FramedCircle => Ok(render_at_shape(node_id, "fr-circ", &node.label)),
+        Shape::CrossedCircle => Ok(render_at_shape(node_id, "cross-circ", &node.label)),
+        Shape::TextBlock => Ok(render_at_shape(node_id, "text", &node.label)),
+        Shape::ForkJoin => Ok(render_at_shape(node_id, "fork", &node.label)),
+        Shape::NoteRect => Err(GenerationError::new(format!(
             "unsupported node shape '{value}' for node '{}'",
-            node.id
+            node.id,
+            value = node.shape.as_mmds_str()
         ))),
     }
 }

@@ -601,7 +601,7 @@ pub fn apply_with_config(
                     candidate.nodes.push(Node {
                         id: id.clone(),
                         label: label.clone(),
-                        shape: shape.as_mmds_str().to_string(),
+                        shape: *shape,
                         parent: parent.clone(),
                         position: Position { x: 0.0, y: 0.0 },
                         size: Size {
@@ -634,7 +634,7 @@ pub fn apply_with_config(
                 node_event(ModelEventKind::NodeShapeChanged, node.clone()),
                 |candidate| {
                     let index = node_index(candidate, node)?;
-                    candidate.nodes[index].shape = shape.as_mmds_str().to_string();
+                    candidate.nodes[index].shape = *shape;
                     Ok(())
                 },
             )

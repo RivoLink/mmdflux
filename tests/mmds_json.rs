@@ -8,7 +8,7 @@ mod common;
 
 use std::path::Path;
 
-use mmdflux::graph::GeometryLevel;
+use mmdflux::graph::{GeometryLevel, Shape};
 use mmdflux::mmds::{
     Document, Edge as MmdsEdge, Port as MmdsPort, Position as MmdsPosition, Rect as MmdsRect,
     SUPPORTED_PROFILES, evaluate_profiles, hydrate_routed_geometry_from_document, parse_input,
@@ -387,7 +387,7 @@ fn mmds_layout_nodes_have_positions_and_sizes() {
 
     let node_a = output.nodes.iter().find(|n| n.id == "A").unwrap();
     assert_eq!(node_a.label, "Start");
-    assert_eq!(node_a.shape, "rectangle");
+    assert_eq!(node_a.shape, Shape::Rectangle);
     assert!(node_a.size.width > 0.0);
     assert!(node_a.size.height > 0.0);
 }
@@ -405,15 +405,15 @@ fn mmds_layout_node_shapes() {
     let json = render_json("graph TD\nA[Rect]\nB(Round)\nC{Diamond}\nD([Stadium])");
     let output: Document = serde_json::from_str(&json).unwrap();
 
-    let shapes: std::collections::HashMap<String, String> = output
+    let shapes: std::collections::HashMap<String, Shape> = output
         .nodes
         .iter()
-        .map(|n| (n.id.clone(), n.shape.clone()))
+        .map(|n| (n.id.clone(), n.shape))
         .collect();
-    assert_eq!(shapes["A"], "rectangle");
-    assert_eq!(shapes["B"], "round");
-    assert_eq!(shapes["C"], "diamond");
-    assert_eq!(shapes["D"], "stadium");
+    assert_eq!(shapes["A"], Shape::Rectangle);
+    assert_eq!(shapes["B"], Shape::Round);
+    assert_eq!(shapes["C"], Shape::Diamond);
+    assert_eq!(shapes["D"], Shape::Stadium);
 }
 
 #[test]
@@ -968,7 +968,7 @@ fn mmds_routed_still_includes_paths() {
 fn mmds_deserializes_with_defaults() {
     let json = render_json("graph TD\nA-->B");
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.nodes[0].shape, "rectangle");
+    assert_eq!(output.nodes[0].shape, Shape::Rectangle);
     assert_eq!(output.edges[0].stroke, "solid");
     assert_eq!(output.edges[0].arrow_start, "none");
     assert_eq!(output.edges[0].arrow_end, "normal");

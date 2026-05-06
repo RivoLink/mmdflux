@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use mmdflux::graph::Shape;
 use mmdflux::mmds::{
     Bounds, Defaults, Document, Edge, Metadata, Node, Position, Size, Subgraph,
     TEXT_EXTENSION_NAMESPACE,
@@ -46,11 +47,11 @@ fn output(nodes: Vec<Node>, edges: Vec<Edge>, subgraphs: Vec<Subgraph>) -> Docum
     }
 }
 
-fn node(id: &str, shape: &str, parent: Option<&str>) -> Node {
+fn node(id: &str, shape: Shape, parent: Option<&str>) -> Node {
     Node {
         id: id.to_string(),
         label: id.to_string(),
-        shape: shape.to_string(),
+        shape,
         parent: parent.map(str::to_string),
         position: Position { x: 0.0, y: 0.0 },
         size: Size {
@@ -144,11 +145,11 @@ fn view_replay_payloads() -> (Document, Document, Document) {
         vec![
             Node {
                 position: Position { x: 0.0, y: 0.0 },
-                ..node("gateway", "rectangle", None)
+                ..node("gateway", Shape::Rectangle, None)
             },
             Node {
                 position: Position { x: 20.0, y: 10.0 },
-                ..node("auth", "rectangle", None)
+                ..node("auth", Shape::Rectangle, None)
             },
         ],
         vec![edge("e0", "gateway", "auth")],
@@ -230,10 +231,10 @@ fn subgraph_ids(payload: &Document) -> BTreeSet<String> {
 fn view_selector_downstream_hops_include_anchor() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
-            node("monitor", "rectangle", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
+            node("monitor", Shape::Rectangle, None),
         ],
         vec![
             edge("e0", "gateway", "auth"),
@@ -258,10 +259,10 @@ fn view_selector_downstream_hops_include_anchor() {
 fn view_selector_upstream_hops_follow_incoming_edges() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("client", "rectangle", None),
-            node("monitor", "rectangle", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("client", Shape::Rectangle, None),
+            node("monitor", Shape::Rectangle, None),
         ],
         vec![
             edge("e0", "client", "gateway"),
@@ -288,10 +289,10 @@ fn view_selector_upstream_hops_follow_incoming_edges() {
 fn view_selector_neighbors_combines_directions() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("client", "rectangle", None),
-            node("monitor", "rectangle", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("client", Shape::Rectangle, None),
+            node("monitor", Shape::Rectangle, None),
         ],
         vec![
             edge("e0", "client", "gateway"),
@@ -318,10 +319,10 @@ fn view_selector_neighbors_combines_directions() {
 fn view_selector_subgraph_descendants_recurse() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", Some("root")),
-            node("auth", "rectangle", Some("payments")),
-            node("charge", "rectangle", Some("payments")),
-            node("unrelated", "rectangle", None),
+            node("gateway", Shape::Rectangle, Some("root")),
+            node("auth", Shape::Rectangle, Some("payments")),
+            node("charge", Shape::Rectangle, Some("payments")),
+            node("unrelated", Shape::Rectangle, None),
         ],
         vec![],
         vec![
@@ -343,8 +344,8 @@ fn view_selector_subgraph_descendants_recurse() {
 fn view_selector_subgraph_anchor_keeps_container_without_descendants() {
     let payload = output(
         vec![
-            node("auth", "rectangle", Some("payments")),
-            node("charge", "rectangle", Some("payments")),
+            node("auth", Shape::Rectangle, Some("payments")),
+            node("charge", Shape::Rectangle, Some("payments")),
         ],
         vec![],
         vec![subgraph("payments", &["auth", "charge"], None)],
@@ -365,9 +366,9 @@ fn view_selector_subgraph_anchor_keeps_container_without_descendants() {
 fn view_selector_parent_and_shape_predicates_filter_nodes() {
     let payload = output(
         vec![
-            node("auth", "rectangle", Some("payments")),
-            node("db", "cylinder", Some("payments")),
-            node("cache", "cylinder", Some("internal")),
+            node("auth", Shape::Rectangle, Some("payments")),
+            node("db", Shape::Cylinder, Some("payments")),
+            node("cache", Shape::Cylinder, Some("internal")),
         ],
         vec![],
         vec![
@@ -379,9 +380,7 @@ fn view_selector_parent_and_shape_predicates_filter_nodes() {
         ViewStatement::Include(Selector::Predicate(NodePredicate::Parent(
             "payments".to_string(),
         ))),
-        ViewStatement::Exclude(Selector::Predicate(NodePredicate::Shape(
-            "rectangle".to_string(),
-        ))),
+        ViewStatement::Exclude(Selector::Predicate(NodePredicate::Shape(Shape::Rectangle))),
     ]);
 
     let (view_payload, _) = project(&payload, &spec).expect("view should materialize");
@@ -390,8 +389,28 @@ fn view_selector_parent_and_shape_predicates_filter_nodes() {
 }
 
 #[test]
+fn view_shape_predicate_serializes_as_graph_shape_token() {
+    let spec = view(vec![ViewStatement::Include(Selector::Predicate(
+        NodePredicate::Shape(Shape::Cylinder),
+    ))]);
+    let json = serde_json::to_value(&spec).expect("view spec should serialize");
+
+    assert_eq!(
+        json["statements"][0]["Include"]["Predicate"]["Shape"],
+        "cylinder"
+    );
+
+    let round_trip: ViewSpec = serde_json::from_value(json).expect("view spec should deserialize");
+    assert_eq!(round_trip, spec);
+}
+
+#[test]
 fn view_selector_unknown_anchor_returns_error() {
-    let payload = output(vec![node("gateway", "rectangle", None)], vec![], vec![]);
+    let payload = output(
+        vec![node("gateway", Shape::Rectangle, None)],
+        vec![],
+        vec![],
+    );
     let spec = view(vec![ViewStatement::Include(Selector::Traversal {
         anchor: AnchorRef::Node("missing".to_string()),
         direction: TraversalDirection::Downstream,
@@ -418,9 +437,9 @@ fn view_apply_keeps_node_positions_and_canonical_bounds() {
                     width: 44.0,
                     height: 22.0,
                 },
-                ..node("gateway", "rectangle", None)
+                ..node("gateway", Shape::Rectangle, None)
             },
-            node("internal", "rectangle", None),
+            node("internal", Shape::Rectangle, None),
         ],
         vec![],
         vec![],
@@ -455,10 +474,10 @@ fn view_apply_keeps_node_positions_and_canonical_bounds() {
 fn view_apply_preserves_sparse_surviving_edge_ids() {
     let payload = output(
         vec![
-            node("external", "rectangle", None),
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
+            node("external", Shape::Rectangle, None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
         ],
         vec![
             edge("e0", "external", "gateway"),
@@ -487,9 +506,9 @@ fn view_apply_preserves_sparse_surviving_edge_ids() {
 fn view_apply_drops_edges_with_elided_endpoints() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
         ],
         vec![edge("e0", "gateway", "auth"), edge("e1", "auth", "db")],
         vec![],
@@ -507,9 +526,9 @@ fn view_apply_drops_edges_with_elided_endpoints() {
 fn view_apply_emits_node_and_edge_elision_events() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
         ],
         vec![
             edge_with_label("e0", "gateway", "auth", "first"),
@@ -552,9 +571,9 @@ fn view_apply_emits_node_and_edge_elision_events() {
 fn view_apply_preserves_ancestor_subgraph_containers() {
     let payload = output(
         vec![
-            node("gateway", "rectangle", Some("root")),
-            node("auth", "rectangle", Some("payments")),
-            node("charge", "rectangle", Some("payments")),
+            node("gateway", Shape::Rectangle, Some("root")),
+            node("auth", Shape::Rectangle, Some("payments")),
+            node("charge", Shape::Rectangle, Some("payments")),
         ],
         vec![],
         vec![
@@ -590,7 +609,11 @@ fn view_apply_preserves_ancestor_subgraph_containers() {
 
 #[test]
 fn view_apply_rejects_unimplemented_layout_modes() {
-    let payload = output(vec![node("gateway", "rectangle", None)], vec![], vec![]);
+    let payload = output(
+        vec![node("gateway", Shape::Rectangle, None)],
+        vec![],
+        vec![],
+    );
     let mut spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Anchor(
         AnchorRef::Node("gateway".to_string()),
     ))]);
@@ -608,7 +631,11 @@ fn view_apply_rejects_unimplemented_layout_modes() {
 
 #[test]
 fn view_apply_marks_shared_coordinates_view_payload() {
-    let payload = output(vec![node("gateway", "rectangle", None)], vec![], vec![]);
+    let payload = output(
+        vec![node("gateway", Shape::Rectangle, None)],
+        vec![],
+        vec![],
+    );
     let spec = view(vec![ViewStatement::Include(Selector::Anchor(
         AnchorRef::Node("gateway".to_string()),
     ))]);
@@ -633,8 +660,8 @@ fn view_apply_marks_shared_coordinates_view_payload() {
 fn view_apply_preserves_text_projection_under_render_namespace() {
     let mut payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
         ],
         vec![edge("e0", "gateway", "auth")],
         vec![],
@@ -664,10 +691,10 @@ fn view_apply_preserves_text_projection_under_render_namespace() {
 fn view_apply_prunes_node_ranks_to_retained_nodes() {
     let mut payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
-            node("internal", "rectangle", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
+            node("internal", Shape::Rectangle, None),
         ],
         vec![edge("e0", "gateway", "auth"), edge("e1", "auth", "db")],
         vec![],
@@ -696,7 +723,11 @@ fn view_apply_prunes_node_ranks_to_retained_nodes() {
 
 #[test]
 fn view_apply_does_not_emit_legacy_text_namespace() {
-    let mut payload = output(vec![node("gateway", "rectangle", None)], vec![], vec![]);
+    let mut payload = output(
+        vec![node("gateway", Shape::Rectangle, None)],
+        vec![],
+        vec![],
+    );
     payload.extensions.insert(
         TEXT_EXTENSION_NAMESPACE.to_string(),
         text_projection_extension(),
@@ -718,9 +749,9 @@ fn view_apply_does_not_emit_legacy_text_namespace() {
 fn view_apply_drops_edge_indexed_text_projection_keys() {
     let mut payload = output(
         vec![
-            node("gateway", "rectangle", None),
-            node("auth", "rectangle", None),
-            node("db", "cylinder", None),
+            node("gateway", Shape::Rectangle, None),
+            node("auth", Shape::Rectangle, None),
+            node("db", Shape::Cylinder, None),
         ],
         vec![edge("e0", "gateway", "auth"), edge("e1", "auth", "db")],
         vec![],

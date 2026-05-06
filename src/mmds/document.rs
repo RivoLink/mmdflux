@@ -18,7 +18,7 @@ use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::style::NodeStyle;
-use crate::graph::{GeometryLevel, Graph};
+use crate::graph::{GeometryLevel, Graph, Shape};
 use crate::mmds::MmdsToken;
 use crate::simplification::PathSimplification;
 
@@ -647,7 +647,7 @@ fn node(pn: &PositionedNode) -> Node {
     Node {
         id: pn.id.clone(),
         label: pn.label.clone(),
-        shape: pn.shape.as_mmds_str().to_string(),
+        shape: pn.shape,
         parent: pn.parent.clone(),
         position: Position {
             x: pn.rect.x + pn.rect.width / 2.0,
@@ -712,7 +712,7 @@ pub struct Defaults {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDefaults {
     #[serde(default = "default_node_shape")]
-    pub shape: String,
+    pub shape: Shape,
 }
 
 impl Default for NodeDefaults {
@@ -789,12 +789,12 @@ pub struct Node {
     pub id: String,
     /// Display label.
     pub label: String,
-    /// Shape name (snake_case).
+    /// Node shape.
     #[serde(
         default = "default_node_shape",
         skip_serializing_if = "is_default_node_shape"
     )]
-    pub shape: String,
+    pub shape: Shape,
     /// Parent subgraph ID, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -939,8 +939,8 @@ pub struct Subgraph {
     pub concurrent_regions: Vec<String>,
 }
 
-fn default_node_shape() -> String {
-    "rectangle".to_string()
+fn default_node_shape() -> Shape {
+    Shape::Rectangle
 }
 
 fn default_stroke() -> String {
@@ -959,8 +959,8 @@ fn default_minlen() -> i32 {
     1
 }
 
-fn is_default_node_shape(value: &String) -> bool {
-    value == "rectangle"
+fn is_default_node_shape(value: &Shape) -> bool {
+    *value == Shape::Rectangle
 }
 
 fn is_default_stroke(value: &String) -> bool {

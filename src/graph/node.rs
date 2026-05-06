@@ -1,11 +1,11 @@
 //! Node types and shape definitions.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::style::NodeStyle;
 
 /// Shape of a node in the diagram.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Shape {
     // === Box-style shapes ===

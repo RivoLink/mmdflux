@@ -82,7 +82,11 @@ fn hydration_rejects_invalid_enum_value() {
     let payload = invalid_fixture("invalid-shape.json");
     let err = from_str(&payload).unwrap_err();
 
-    assert!(matches!(err, HydrationError::InvalidShape { .. }));
+    let HydrationError::Parse { message } = err else {
+        panic!("invalid shape should fail during typed MMDS parse");
+    };
+    assert!(message.contains("unknown variant"));
+    assert!(message.contains("triangle"));
 }
 
 #[test]

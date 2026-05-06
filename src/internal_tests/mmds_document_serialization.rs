@@ -9,7 +9,7 @@ use crate::engines::graph::contracts::MeasurementMode;
 use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::measure::default_proportional_text_metrics;
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
-use crate::graph::{GeometryLevel, Graph};
+use crate::graph::{GeometryLevel, Graph, Shape};
 use crate::mmds::document::{Document, to_json, to_layout, to_routed};
 use crate::simplification::PathSimplification;
 
@@ -48,7 +48,7 @@ fn layout_json_has_metadata() {
     let (diagram, geom) = layout_geometry("graph TD\nA-->B");
     let json = to_layout(&diagram, &geom);
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.defaults.node.shape, "rectangle");
+    assert_eq!(output.defaults.node.shape, Shape::Rectangle);
     assert_eq!(output.defaults.edge.stroke, "solid");
     assert_eq!(output.defaults.edge.arrow_start, "none");
     assert_eq!(output.defaults.edge.arrow_end, "normal");
@@ -68,7 +68,7 @@ fn layout_json_has_nodes_with_positions() {
     assert_eq!(output.nodes.len(), 2);
     let node_a = output.nodes.iter().find(|n| n.id == "A").unwrap();
     assert_eq!(node_a.label, "Start");
-    assert_eq!(node_a.shape, "rectangle");
+    assert_eq!(node_a.shape, Shape::Rectangle);
     assert!(node_a.size.width > 0.0);
     assert!(node_a.size.height > 0.0);
 }
@@ -190,7 +190,7 @@ fn layout_deserializes_with_defaults() {
     )
     .unwrap();
     let output: Document = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.nodes[0].shape, "rectangle");
+    assert_eq!(output.nodes[0].shape, Shape::Rectangle);
     assert_eq!(output.edges[0].stroke, "solid");
     assert_eq!(output.edges[0].arrow_start, "none");
     assert_eq!(output.edges[0].arrow_end, "normal");

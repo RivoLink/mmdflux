@@ -123,12 +123,14 @@ collapsed back into singleton roots:
    `mmds/` also owns the canonical MMDS string token contract for graph-family
    enums. The `MmdsToken` trait maps graph-owned typed vocabulary such as
    `Shape`, `Direction`, `Stroke`, `Arrow`, and `GeometryLevel` to and from
-   MMDS schema tokens via `parse_mmds` / `as_mmds_str`. `mmds::Document` fields
-   retain the string form for adapter-friendly interchange, while command inputs
-   use the typed form so Rust callers get vocabulary validation before relayout.
-   Engine IDs are the exception: they stay string-backed at the command boundary
-   because engine selector types live behind the runtime/engine facade, not in
-   graph-owned vocabulary.
+   MMDS schema tokens via `parse_mmds` / `as_mmds_str`. Rust fields use the
+   graph-owned typed form where the public `Document` contract can expose a
+   closed vocabulary without losing adapter-friendly JSON interchange (for
+   example node shapes and node shape defaults); remaining schema tokens stay
+   string-backed until they are promoted deliberately. Engine IDs are the
+   exception: they stay string-backed at the command boundary because engine
+   selector types live behind the runtime/engine facade, not in graph-owned
+   vocabulary.
 
 10. **MMDS is a frontend, not a logical diagram type** — MMDS input handling
     is detected through `src/frontends.rs`, while the MMDS parse, hydration,
@@ -138,11 +140,12 @@ collapsed back into singleton roots:
 11. **views/ owns read-side materialized diagram views** — `src/views/` owns
     the `ViewSpec`, selector, `ViewEvent`, and `project` contracts for
     filtering canonical `mmds::Document` payloads into materialized view
-    payloads. In the v1 view slice, `views` depends on `mmds` only and derives
-    any adjacency directly from `Document.edges`; it must not import `graph`,
-    `render`, `engines`, `runtime`, Mermaid parser modules, or command/diff
-    machinery. Runtime may consume `views` for replay hooks, but `views` does
-    not own rendering or orchestration.
+    payloads. In the v1 view slice, `views` depends on `mmds` plus graph-owned
+    typed vocabulary such as `Shape`, and derives any adjacency directly from
+    `Document.edges`; it must not import `render`, `engines`, `runtime`,
+    Mermaid parser modules, or command/diff machinery. Runtime may consume
+    `views` for replay hooks, but `views` does not own rendering or
+    orchestration.
 
 12. **commands.rs owns MMDS command application orchestration** —
     `src/commands.rs` owns the public `Command`, `EdgeSelector`,

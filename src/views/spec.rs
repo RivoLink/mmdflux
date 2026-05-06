@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::graph::Shape;
+
 /// Materialized view request over a canonical MMDS payload.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,8 +120,8 @@ pub enum TraversalDirection {
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodePredicate {
-    /// Select nodes whose MMDS `shape` equals the supplied value.
-    Shape(String),
+    /// Select nodes whose MMDS `shape` equals the supplied graph shape.
+    Shape(Shape),
     /// Select nodes whose `parent` subgraph ID equals the supplied value.
     Parent(String),
     /// Select nodes by tag metadata.

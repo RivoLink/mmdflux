@@ -17,7 +17,7 @@ use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::style::{ColorToken, NodeStyle};
-use crate::graph::{Arrow, Direction, Edge as GraphEdge, Graph, Node, Shape, Stroke, Subgraph};
+use crate::graph::{Arrow, Direction, Edge as GraphEdge, Graph, Node, Stroke, Subgraph};
 use crate::mmds::{
     Document, Edge, MmdsToken, NODE_STYLE_EXTENSION_NAMESPACE, TEXT_EXTENSION_NAMESPACE,
     parse_input,
@@ -76,14 +76,9 @@ pub fn from_document(output: &Document) -> Result<Graph, HydrationError> {
         if node.id.trim().is_empty() {
             return Err(HydrationError::MissingNodeId { index });
         }
-        let shape = Shape::parse_mmds(&node.shape).map_err(|_| HydrationError::InvalidShape {
-            node_id: node.id.clone(),
-            value: node.shape.clone(),
-        })?;
-
         let mut hydrated = Node::new(node.id.clone())
             .with_label(node.label.clone())
-            .with_shape(shape);
+            .with_shape(node.shape);
         hydrated.parent = node.parent.clone();
         diagram.add_node(hydrated);
     }

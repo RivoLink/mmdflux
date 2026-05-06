@@ -18,6 +18,12 @@ fn test_shape_serializes_as_snake_case() {
 }
 
 #[test]
+fn test_shape_deserializes_from_snake_case() {
+    let shape: Shape = serde_json::from_str("\"double_circle\"").unwrap();
+    assert_eq!(shape, Shape::DoubleCircle);
+}
+
+#[test]
 fn test_edge_serializes_to_json() {
     let edge = Edge::new("A", "B").with_label("yes");
     let json = serde_json::to_string(&edge).unwrap();

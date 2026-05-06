@@ -168,7 +168,7 @@ id = "allow-views"
 type = "allow"
 [rules.config]
 source = "views"
-allowed = ["mmds"]
+allowed = ["graph", "mmds"]
 
 [[rules]]
 id = "allow-frontends"
