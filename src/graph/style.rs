@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Serialize, Serializer};
 
 /// Parsed CSS-like style properties for a diagram node (fill, stroke, color).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct NodeStyle {
     #[serde(skip_serializing_if = "Option::is_none")]

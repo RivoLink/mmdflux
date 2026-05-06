@@ -8,6 +8,10 @@
 
 use crate::graph::{Direction, Node, Shape};
 
+/// Compatibility profile for the existing function-backed proportional heuristic.
+pub const COMPATIBILITY_TEXT_METRICS_PROFILE_ID: &str = "mmdflux-heuristic-proportional-v1";
+/// Default graph-family SVG font family used by proportional measurement.
+pub const DEFAULT_GRAPH_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial, sans-serif";
 /// Default font size used for proportional measurement.
 pub const DEFAULT_PROPORTIONAL_FONT_SIZE: f64 = 16.0;
 /// Default horizontal node padding used for proportional measurement.
@@ -22,10 +26,13 @@ pub const DEFAULT_PROPORTIONAL_NODE_PADDING_Y: f64 = 15.0;
 pub const DEFAULT_LABEL_PADDING_X: f64 = 4.0;
 /// Default vertical padding applied around edge labels (per side).
 pub const DEFAULT_LABEL_PADDING_Y: f64 = 2.0;
+/// Default maximum width used for graph-family edge-label wrapping.
+pub const DEFAULT_EDGE_LABEL_MAX_WIDTH: f64 = 200.0;
 /// Scale factor applied to approximate Mermaid's measured text widths.
 const TEXT_WIDTH_SCALE: f64 = 1.16;
 
-#[derive(Debug, Clone)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProportionalTextMetrics {
     pub font_size: f64,
     pub line_height: f64,
@@ -100,6 +107,138 @@ impl ProportionalTextMetrics {
             _ => 0.46,
         }
     }
+}
+
+/// Caller-provided inputs for resolving a concrete text metrics profile.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextMetricsProfileConfig<'a> {
+    pub profile_id: Option<&'a str>,
+    pub node_padding_x: f64,
+    pub node_padding_y: f64,
+    pub edge_label_max_width: Option<f64>,
+}
+
+impl Default for TextMetricsProfileConfig<'_> {
+    fn default() -> Self {
+        Self {
+            profile_id: None,
+            node_padding_x: DEFAULT_PROPORTIONAL_NODE_PADDING_X,
+            node_padding_y: DEFAULT_PROPORTIONAL_NODE_PADDING_Y,
+            edge_label_max_width: Some(DEFAULT_EDGE_LABEL_MAX_WIDTH),
+        }
+    }
+}
+
+/// Fully resolved text metrics identity and measurement implementation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedTextMetrics {
+    pub descriptor: TextMetricsProfileDescriptor,
+    pub metrics: ProportionalTextMetrics,
+}
+
+/// Persistable identity for the text metrics used by graph-family layout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextMetricsProfileDescriptor {
+    pub profile_id: String,
+    pub source: String,
+    pub version: u32,
+    pub default_text_style: TextMetricsStyleDescriptor,
+    pub layout_text: TextMetricsLayoutDescriptor,
+}
+
+/// Default text style associated with a text metrics profile.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextMetricsStyleDescriptor {
+    pub font_family: String,
+    pub font_size: f64,
+    pub font_style: String,
+    pub font_weight: String,
+    pub line_height: f64,
+}
+
+/// Layout-time padding and wrapping parameters associated with a profile.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextMetricsLayoutDescriptor {
+    pub node_padding_x: f64,
+    pub node_padding_y: f64,
+    pub label_padding_x: f64,
+    pub label_padding_y: f64,
+    pub edge_label_max_width: Option<f64>,
+}
+
+/// Error returned when a requested text metrics profile is not implemented.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnsupportedTextMetricsProfile {
+    profile_id: String,
+}
+
+impl UnsupportedTextMetricsProfile {
+    pub fn profile_id(&self) -> &str {
+        &self.profile_id
+    }
+}
+
+impl std::fmt::Display for UnsupportedTextMetricsProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unsupported text metrics profile '{}' (supported: {})",
+            self.profile_id, COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+        )
+    }
+}
+
+impl std::error::Error for UnsupportedTextMetricsProfile {}
+
+pub fn validate_text_metrics_profile_id(
+    profile_id: &str,
+) -> Result<(), UnsupportedTextMetricsProfile> {
+    if profile_id == COMPATIBILITY_TEXT_METRICS_PROFILE_ID {
+        Ok(())
+    } else {
+        Err(UnsupportedTextMetricsProfile {
+            profile_id: profile_id.to_string(),
+        })
+    }
+}
+
+pub fn resolve_text_metrics_profile(
+    config: TextMetricsProfileConfig<'_>,
+) -> Result<ResolvedTextMetrics, UnsupportedTextMetricsProfile> {
+    let profile_id = config
+        .profile_id
+        .unwrap_or(COMPATIBILITY_TEXT_METRICS_PROFILE_ID);
+    validate_text_metrics_profile_id(profile_id)?;
+
+    let metrics = ProportionalTextMetrics::new(
+        DEFAULT_PROPORTIONAL_FONT_SIZE,
+        config.node_padding_x,
+        config.node_padding_y,
+    );
+    let descriptor = TextMetricsProfileDescriptor {
+        profile_id: profile_id.to_string(),
+        source: "mmdflux".to_string(),
+        version: 1,
+        default_text_style: TextMetricsStyleDescriptor {
+            font_family: DEFAULT_GRAPH_FONT_FAMILY.to_string(),
+            font_size: metrics.font_size,
+            font_style: "normal".to_string(),
+            font_weight: "400".to_string(),
+            line_height: metrics.line_height,
+        },
+        layout_text: TextMetricsLayoutDescriptor {
+            node_padding_x: metrics.node_padding_x,
+            node_padding_y: metrics.node_padding_y,
+            label_padding_x: metrics.label_padding_x,
+            label_padding_y: metrics.label_padding_y,
+            edge_label_max_width: config.edge_label_max_width,
+        },
+    };
+
+    Ok(ResolvedTextMetrics {
+        descriptor,
+        metrics,
+    })
 }
 
 /// Greedy word-wrap that honors `max_width` in pixels using `metrics` for
@@ -350,6 +489,81 @@ mod tests {
 
         assert!(w > 16.0);
         assert!(h > 16.0);
+    }
+
+    #[test]
+    fn text_metrics_default_profile_identity_is_explicit() {
+        let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig::default())
+            .expect("default text metrics profile should resolve");
+
+        assert_eq!(
+            resolved.descriptor.profile_id,
+            COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+        );
+        assert_eq!(resolved.descriptor.source, "mmdflux");
+        assert_eq!(resolved.descriptor.version, 1);
+        assert_eq!(
+            resolved.descriptor.default_text_style.font_family,
+            DEFAULT_GRAPH_FONT_FAMILY
+        );
+        assert_eq!(resolved.descriptor.default_text_style.font_size, 16.0);
+        assert_eq!(resolved.descriptor.default_text_style.font_style, "normal");
+        assert_eq!(resolved.descriptor.default_text_style.font_weight, "400");
+        assert_eq!(resolved.descriptor.default_text_style.line_height, 24.0);
+        assert_eq!(resolved.descriptor.layout_text.node_padding_x, 15.0);
+        assert_eq!(resolved.descriptor.layout_text.node_padding_y, 15.0);
+        assert_eq!(resolved.descriptor.layout_text.label_padding_x, 4.0);
+        assert_eq!(resolved.descriptor.layout_text.label_padding_y, 2.0);
+        assert_eq!(
+            resolved.descriptor.layout_text.edge_label_max_width,
+            Some(200.0)
+        );
+    }
+
+    #[test]
+    fn text_metrics_compatibility_profile_matches_existing_heuristic_exactly() {
+        let direct = default_proportional_text_metrics();
+        let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig {
+            profile_id: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            ..TextMetricsProfileConfig::default()
+        })
+        .expect("compatibility text metrics profile should resolve");
+
+        assert_eq!(resolved.metrics.font_size, direct.font_size);
+        assert_eq!(resolved.metrics.line_height, direct.line_height);
+        assert_eq!(resolved.metrics.node_padding_x, direct.node_padding_x);
+        assert_eq!(resolved.metrics.node_padding_y, direct.node_padding_y);
+        assert_eq!(resolved.metrics.label_padding_x, direct.label_padding_x);
+        assert_eq!(resolved.metrics.label_padding_y, direct.label_padding_y);
+
+        for sample in ["ABC", "minimum width", "millimeter WWW", "A labeled edge"] {
+            assert_eq!(
+                resolved.metrics.measure_line_width(sample),
+                direct.measure_line_width(sample),
+                "resolved metrics drifted for sample {sample:?}"
+            );
+            assert_eq!(
+                resolved.metrics.measure_text_with_padding(sample, 3.0, 5.0),
+                direct.measure_text_with_padding(sample, 3.0, 5.0),
+                "resolved padded metrics drifted for sample {sample:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_metrics_unsupported_profile_is_explicit_error() {
+        let err = resolve_text_metrics_profile(TextMetricsProfileConfig {
+            profile_id: Some("mermaid-sans-v1"),
+            ..TextMetricsProfileConfig::default()
+        })
+        .expect_err("unsupported profile must not silently fall back");
+
+        assert_eq!(err.profile_id(), "mermaid-sans-v1");
+        assert!(
+            err.to_string()
+                .contains("unsupported text metrics profile 'mermaid-sans-v1'"),
+            "{err}"
+        );
     }
 
     #[test]

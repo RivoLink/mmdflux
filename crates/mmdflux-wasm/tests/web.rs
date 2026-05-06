@@ -60,6 +60,28 @@ fn renders_flowchart_svg() {
 }
 
 #[wasm_bindgen_test]
+fn renders_svg_with_font_metrics_profile_config() {
+    let output = render(
+        "graph TD\nA-->B",
+        "svg",
+        r#"{"fontMetricsProfile":"mmdflux-heuristic-proportional-v1"}"#,
+    )
+    .expect("font metrics profile config should render");
+    assert!(output.contains("<svg"));
+}
+
+#[wasm_bindgen_test]
+fn rejects_unsupported_font_metrics_profile_config() {
+    let error = render(
+        "graph TD\nA-->B",
+        "svg",
+        r#"{"fontMetricsProfile":"unknown-profile-v1"}"#,
+    )
+    .expect_err("unsupported font metrics profile should fail");
+    assert!(error_debug(error).contains("unsupported text metrics profile 'unknown-profile-v1'"));
+}
+
+#[wasm_bindgen_test]
 fn rejects_legacy_edge_routing_config_key() {
     let error = render(
         "graph TD\nA-->B",

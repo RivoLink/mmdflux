@@ -9,8 +9,9 @@ use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::label_wrap::prepare_wrapped_labels;
 use crate::graph::measure::{
-    DEFAULT_PROPORTIONAL_FONT_SIZE, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ProportionalTextMetrics,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_X, DEFAULT_PROPORTIONAL_NODE_PADDING_Y,
+    ProportionalTextMetrics, ResolvedTextMetrics, TextMetricsProfileConfig,
+    TextMetricsProfileDescriptor, resolve_text_metrics_profile,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -28,28 +29,32 @@ pub(crate) fn render_graph_family(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
-    let result = solve_graph_family_for_render(diagram_id, diagram, format, config)?;
+    let render_result = solve_graph_family_for_render(diagram_id, diagram, format, config)?;
 
     match format {
         OutputFormat::Mmds => render_mmds_from_solve_result(
             diagram_id,
             diagram,
-            &result,
+            &render_result.solve,
+            &render_result.text_metrics.descriptor,
             config.geometry_level,
             config.path_simplification,
         ),
         OutputFormat::Svg => {
             let options = config.svg_render_options();
             Ok(render_svg_from_solve_result(
-                diagram, &result, &options, config,
+                diagram,
+                &render_result.solve,
+                &options,
+                config,
             )?)
         }
         OutputFormat::Text | OutputFormat::Ascii => {
             let options = config.text_render_options(format);
             Ok(render_text_from_geometry(
                 diagram,
-                &result.geometry,
-                result.routed.as_ref(),
+                &render_result.solve.geometry,
+                render_result.solve.routed.as_ref(),
                 &options,
             ))
         }
@@ -64,14 +69,21 @@ pub(crate) fn materialize_graph_family(
     diagram: &mut Graph,
     config: &RenderConfig,
 ) -> Result<Document, RenderError> {
-    let result = solve_graph_family_for_render(diagram_id, diagram, OutputFormat::Mmds, config)?;
+    let render_result =
+        solve_graph_family_for_render(diagram_id, diagram, OutputFormat::Mmds, config)?;
     mmds_document_from_solve_result(
         diagram_id,
         diagram,
-        &result,
+        &render_result.solve,
+        &render_result.text_metrics.descriptor,
         config.geometry_level,
         config.path_simplification,
     )
+}
+
+struct GraphFamilyRenderResult {
+    solve: GraphSolveResult,
+    text_metrics: ResolvedTextMetrics,
 }
 
 fn solve_graph_family_for_render(
@@ -79,7 +91,7 @@ fn solve_graph_family_for_render(
     diagram: &mut Graph,
     format: OutputFormat,
     config: &RenderConfig,
-) -> Result<GraphSolveResult, RenderError> {
+) -> Result<GraphFamilyRenderResult, RenderError> {
     let engine_id = config
         .layout_engine
         .unwrap_or(EngineAlgorithmId::FLUX_LAYERED);
@@ -98,17 +110,22 @@ fn solve_graph_family_for_render(
     // Threshold comes from `RenderConfig.layout.edge_label_max_width`; the
     // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
     // default. Explicit `None` disables wrap (dagre-parity fallback).
-    let wrap_metrics = proportional_text_metrics_for_config(config);
+    let text_metrics = resolve_text_metrics_for_config(config)?;
     prepare_wrapped_labels(
         &mut diagram.edges,
-        &wrap_metrics,
+        &text_metrics.metrics,
         config.layout.edge_label_max_width,
     );
 
-    let request = graph_solve_request_for(format, config, diagram_id);
+    let request = graph_solve_request_for(format, config, diagram_id, &text_metrics.metrics);
     let engine_config = EngineConfig::Layered(config.layout.clone().into());
     let engine_id = resolve_graph_engine_for_request(engine_id, &request);
-    solve_graph_family(diagram, engine_id, &engine_config, &request)
+    let solve = solve_graph_family(diagram, engine_id, &engine_config, &request)?;
+
+    Ok(GraphFamilyRenderResult {
+        solve,
+        text_metrics,
+    })
 }
 
 fn subgraph_direction_policy_for(diagram_id: &str) -> SubgraphDirectionPolicy {
@@ -122,12 +139,13 @@ fn graph_solve_request_for(
     format: OutputFormat,
     config: &RenderConfig,
     diagram_id: &str,
+    text_metrics: &ProportionalTextMetrics,
 ) -> GraphSolveRequest {
     let routing_style = config
         .routing_style
         .or_else(|| config.edge_preset.map(|preset| preset.expand().0));
     GraphSolveRequest::new(
-        measurement_mode_for_format(format, config),
+        measurement_mode_for_format(format, text_metrics),
         geometry_contract_for_format(format),
         config.geometry_level,
         routing_style,
@@ -135,10 +153,13 @@ fn graph_solve_request_for(
     )
 }
 
-fn measurement_mode_for_format(format: OutputFormat, config: &RenderConfig) -> MeasurementMode {
+fn measurement_mode_for_format(
+    format: OutputFormat,
+    text_metrics: &ProportionalTextMetrics,
+) -> MeasurementMode {
     match format {
         OutputFormat::Svg | OutputFormat::Mmds => {
-            MeasurementMode::Proportional(proportional_text_metrics_for_config(config))
+            MeasurementMode::Proportional(text_metrics.clone())
         }
         _ => MeasurementMode::Grid,
     }
@@ -151,18 +172,24 @@ fn geometry_contract_for_format(format: OutputFormat) -> GraphGeometryContract {
     }
 }
 
-fn proportional_text_metrics_for_config(config: &RenderConfig) -> ProportionalTextMetrics {
+fn resolve_text_metrics_for_config(
+    config: &RenderConfig,
+) -> Result<ResolvedTextMetrics, RenderError> {
     let node_padding_x = config
         .svg_node_padding_x
         .unwrap_or(DEFAULT_PROPORTIONAL_NODE_PADDING_X);
     let node_padding_y = config
         .svg_node_padding_y
         .unwrap_or(DEFAULT_PROPORTIONAL_NODE_PADDING_Y);
-    ProportionalTextMetrics::new(
-        DEFAULT_PROPORTIONAL_FONT_SIZE,
+    resolve_text_metrics_profile(TextMetricsProfileConfig {
+        profile_id: config.font_metrics_profile.as_deref(),
         node_padding_x,
         node_padding_y,
-    )
+        edge_label_max_width: config.layout.edge_label_max_width,
+    })
+    .map_err(|error| RenderError {
+        message: error.to_string(),
+    })
 }
 
 fn resolve_graph_engine_for_request(
@@ -204,11 +231,18 @@ fn render_mmds_from_solve_result(
     diagram_type: &str,
     diagram: &Graph,
     result: &GraphSolveResult,
+    text_metrics_descriptor: &TextMetricsProfileDescriptor,
     level: GeometryLevel,
     path_simplification: PathSimplification,
 ) -> Result<String, RenderError> {
-    let document =
-        mmds_document_from_solve_result(diagram_type, diagram, result, level, path_simplification)?;
+    let document = mmds_document_from_solve_result(
+        diagram_type,
+        diagram,
+        result,
+        text_metrics_descriptor,
+        level,
+        path_simplification,
+    )?;
     serde_json::to_string_pretty(&document).map_err(|error| RenderError {
         message: format!("MMDS serialization error: {error}"),
     })
@@ -218,11 +252,12 @@ fn mmds_document_from_solve_result(
     diagram_type: &str,
     diagram: &Graph,
     result: &GraphSolveResult,
+    text_metrics_descriptor: &TextMetricsProfileDescriptor,
     level: GeometryLevel,
     path_simplification: PathSimplification,
 ) -> Result<Document, RenderError> {
     let engine_id = result.engine_id.to_string();
-    crate::mmds::document::to_document_typed_with_routing(
+    crate::mmds::document::to_document_typed_with_routing_and_text_metrics(
         diagram_type,
         diagram,
         &result.geometry,
@@ -230,6 +265,7 @@ fn mmds_document_from_solve_result(
         level,
         path_simplification,
         Some(engine_id.as_str()),
+        Some(text_metrics_descriptor),
     )
 }
 
@@ -306,10 +342,13 @@ mod tests {
     #[test]
     fn mmds_renderer_consumes_graph_solve_result() {
         let (diagram, result) = graph_solve_result_fixture();
+        let text_metrics = resolve_text_metrics_profile(TextMetricsProfileConfig::default())
+            .expect("default text metrics should resolve");
         let json = render_mmds_from_solve_result(
             "flowchart",
             &diagram,
             &result,
+            &text_metrics.descriptor,
             GeometryLevel::Routed,
             PathSimplification::default(),
         )

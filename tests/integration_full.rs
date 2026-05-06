@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::builtins::default_registry;
+use mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
 use mmdflux::mmds::generate_mermaid_from_str;
 use mmdflux::{OutputFormat, RenderConfig, render_diagram};
 
@@ -34,6 +35,24 @@ fn assert_render_trace_enabled_when_requested() {
 
 fn render_with_registry(input: &str, format: OutputFormat) -> String {
     render_diagram(input, format, &RenderConfig::default()).expect("should render")
+}
+
+#[test]
+fn font_metrics_explicit_compatibility_profile_matches_default_text_output() {
+    let input = "graph TD\nA[Collect metrics] --> B[Render output]";
+    let default = render_diagram(input, OutputFormat::Text, &RenderConfig::default())
+        .expect("default text render should succeed");
+    let explicit = render_diagram(
+        input,
+        OutputFormat::Text,
+        &RenderConfig {
+            font_metrics_profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID.to_string()),
+            ..RenderConfig::default()
+        },
+    )
+    .expect("explicit compatibility profile text render should succeed");
+
+    assert_eq!(explicit, default);
 }
 
 fn render_flowchart_svg(input: &str) -> String {

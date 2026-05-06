@@ -20,14 +20,14 @@ use writer::render_defs;
 use crate::format::{Curve, RoutingStyle};
 use crate::graph::direction_policy::build_override_node_map;
 use crate::graph::geometry::{FPoint, FRect, GraphGeometry};
-use crate::graph::measure::{DEFAULT_PROPORTIONAL_FONT_SIZE, ProportionalTextMetrics};
+use crate::graph::measure::{
+    DEFAULT_GRAPH_FONT_FAMILY, DEFAULT_PROPORTIONAL_FONT_SIZE, ProportionalTextMetrics,
+};
 use crate::graph::routing::EdgeRouting;
 use crate::graph::{Graph, Stroke};
 use crate::render::svg::SvgWriter;
 use crate::render::svg::theme::{ResolvedSvgTheme, SvgRootStyle};
 use crate::simplification::PathSimplification;
-
-const DEFAULT_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial, sans-serif";
 
 type Point = FPoint;
 type Rect = FRect;
@@ -137,7 +137,7 @@ impl Default for SvgRenderOptions {
         let font_size = DEFAULT_PROPORTIONAL_FONT_SIZE;
         Self {
             scale: 1.0,
-            font_family: DEFAULT_FONT_FAMILY.to_string(),
+            font_family: DEFAULT_GRAPH_FONT_FAMILY.to_string(),
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,

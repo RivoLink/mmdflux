@@ -13,6 +13,7 @@ use clap::{Parser, ValueEnum};
 use mmdflux::builtins::default_registry;
 use mmdflux::format::{Curve, EdgePreset, RoutingStyle};
 use mmdflux::graph::GeometryLevel;
+use mmdflux::graph::measure::validate_text_metrics_profile_id;
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
     ColorWhen, EngineAlgorithmId, LayoutConfig, OutputFormat, Ranker, RenderConfig, SvgThemeConfig,
@@ -253,6 +254,10 @@ struct Cli {
     /// SVG node padding on y-axis (px)
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
+
+    /// Text metrics profile (currently mmdflux-heuristic-proportional-v1).
+    #[arg(long)]
+    font_metrics_profile: Option<String>,
 
     /// Edge style preset (straight, polyline, step, smooth-step, curved-step, or basis).
     /// Expands to routing + curve defaults.
@@ -671,6 +676,17 @@ fn main() -> io::Result<()> {
         None => None,
     };
 
+    let font_metrics_profile = match cli.font_metrics_profile.as_deref() {
+        Some(profile_id) => match validate_text_metrics_profile_id(profile_id) {
+            Ok(()) => Some(profile_id.to_string()),
+            Err(err) => {
+                eprintln!("Error: {err}");
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
     // Build render config from CLI flags.
     let mut config = RenderConfig {
         layout: LayoutConfig {
@@ -694,6 +710,7 @@ fn main() -> io::Result<()> {
         edge_radius: cli.edge_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         svg_theme: svg_theme_from_cli(&cli),
+        font_metrics_profile,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_simplification: cli.path_simplification.map(Into::into).unwrap_or_default(),

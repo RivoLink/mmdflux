@@ -100,6 +100,45 @@ fn cli_debug_shows_detected_diagram_type() {
         .stderr(predicate::str::contains("Detected diagram type: flowchart"));
 }
 
+#[test]
+fn cli_font_metrics_profile_accepts_compatibility_profile() {
+    mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--font-metrics-profile",
+            "mmdflux-heuristic-proportional-v1",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<svg"));
+}
+
+#[test]
+fn cli_font_metrics_profile_rejects_unsupported_profile() {
+    mmdflux()
+        .args(["--font-metrics-profile", "mermaid-sans-v1"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unsupported text metrics profile 'mermaid-sans-v1'",
+        ));
+}
+
+#[test]
+fn cli_help_mentions_font_metrics_profile_flag() {
+    mmdflux()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--font-metrics-profile"))
+        .stdout(predicate::str::contains(
+            "mmdflux-heuristic-proportional-v1",
+        ));
+}
+
 // =============================================================================
 // Tracing Log Tests
 // =============================================================================

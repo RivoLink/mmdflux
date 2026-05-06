@@ -73,6 +73,8 @@ pub struct RenderConfig {
     pub svg_node_padding_y: Option<f64>,
     /// SVG theme selection and per-slot overrides.
     pub svg_theme: Option<SvgThemeConfig>,
+    /// Graph-family text metrics profile selector.
+    pub font_metrics_profile: Option<String>,
     /// Show node IDs alongside labels.
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.

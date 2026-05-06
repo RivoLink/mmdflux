@@ -38,7 +38,8 @@ pub use document::{
 // Profile vocabulary constants.
 pub use document::{
     CORE_PROFILE, NODE_STYLE_EXTENSION_NAMESPACE, NODE_STYLE_PROFILE, SUPPORTED_PROFILES,
-    SVG_PROFILE, TEXT_EXTENSION_NAMESPACE, TEXT_PROFILE,
+    SVG_PROFILE, TEXT_EXTENSION_NAMESPACE, TEXT_METRICS_EXTENSION_NAMESPACE, TEXT_METRICS_PROFILE,
+    TEXT_PROFILE,
 };
 pub use hydrate::{
     HydrationError, from_document, from_str, hydrate_graph_geometry_from_document_with_diagram,

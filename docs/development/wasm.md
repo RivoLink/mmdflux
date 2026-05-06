@@ -59,6 +59,7 @@ Supported top-level keys:
 - `svgDiagramPadding`
 - `svgNodePaddingX`
 - `svgNodePaddingY`
+- `fontMetricsProfile` (`mmdflux-heuristic-proportional-v1`)
 - `showIds`
 - `color` (`off`, `auto`, `always`)
 - `geometryLevel` (`layout`, `routed`)
@@ -73,6 +74,8 @@ Notes:
   WASM defaults to the `smooth-step` preset.
 - `color` only affects text/ascii output. `always` forces ANSI escapes, while `auto`
   resolves to plain text in WASM because there is no terminal-capability probe.
+- `fontMetricsProfile` currently accepts only
+  `mmdflux-heuristic-proportional-v1`. Unsupported profile IDs are rejected.
 - Release wasm artifacts use a size-optimized Cargo profile:
   `opt-level=z`, `codegen-units=1`, `lto=fat`, `panic=abort`.
 - Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
@@ -97,6 +100,7 @@ Example:
 {
   "layoutEngine": "flux-layered",
   "edgePreset": "smooth-step",
+  "fontMetricsProfile": "mmdflux-heuristic-proportional-v1",
   "edgeRadius": 6,
   "geometryLevel": "routed",
   "pathSimplification": "lossless",

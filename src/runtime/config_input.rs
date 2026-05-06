@@ -12,6 +12,7 @@ use crate::format::{
     ColorWhen, Curve, EdgePreset, OutputFormat, RoutingStyle, normalize_enum_token,
 };
 use crate::graph::GeometryLevel;
+use crate::graph::measure::validate_text_metrics_profile_id;
 use crate::runtime::config::{RenderConfig, SvgThemeConfig, SvgThemeMode};
 use crate::simplification::PathSimplification;
 
@@ -35,6 +36,7 @@ pub struct RuntimeConfigInput {
     pub svg_diagram_padding: Option<f64>,
     pub svg_node_padding_x: Option<f64>,
     pub svg_node_padding_y: Option<f64>,
+    pub font_metrics_profile: Option<String>,
     pub show_ids: Option<bool>,
     pub color: Option<String>,
     pub geometry_level: Option<String>,
@@ -84,6 +86,14 @@ impl RuntimeConfigInput {
 
         if let Some(svg_theme) = self.svg_theme {
             config.svg_theme = Some(svg_theme.into_svg_theme_config()?);
+        }
+        if let Some(font_metrics_profile) = self.font_metrics_profile {
+            validate_text_metrics_profile_id(&font_metrics_profile).map_err(|error| {
+                RenderError {
+                    message: error.to_string(),
+                }
+            })?;
+            config.font_metrics_profile = Some(font_metrics_profile);
         }
         if let Some(layout_engine) = self.layout_engine {
             config.layout_engine = Some(EngineAlgorithmId::parse(&layout_engine)?);

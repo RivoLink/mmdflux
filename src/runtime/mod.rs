@@ -17,6 +17,7 @@ use crate::builtins::default_registry;
 use crate::errors::{ParseDiagnostic, RenderError};
 use crate::format::OutputFormat;
 use crate::frontends::{InputFrontend, detect_input_frontend};
+use crate::graph::measure::validate_text_metrics_profile_id;
 use crate::mermaid::{ParseError, extract_theme_hint};
 use crate::render::svg::theme::{
     ResolvedSvgTheme, SvgThemeRenderMode, SvgThemeSpec, resolve_svg_theme,
@@ -48,6 +49,8 @@ pub fn render_diagram(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
+    validate_render_config(config)?;
+
     let frontend = detect_input_frontend(input);
     let render_span = tracing::debug_span!(
         "render_diagram",
@@ -75,6 +78,7 @@ pub fn render_diagram(
             &config.text_render_options(format),
             &config.svg_render_options(),
             svg_theme.as_ref(),
+            config.font_metrics_profile.as_deref(),
         );
     }
 
@@ -119,6 +123,8 @@ pub fn materialize_diagram(
     input: &str,
     config: &RenderConfig,
 ) -> Result<crate::mmds::Document, RenderError> {
+    validate_render_config(config)?;
+
     if matches!(detect_input_frontend(input), Some(InputFrontend::Mmds)) {
         return crate::mmds::parse_input(input).map_err(|error| RenderError {
             message: format!("parse error: {error}"),
@@ -161,6 +167,8 @@ pub fn render_document(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<String, RenderError> {
+    validate_render_config(config)?;
+
     let svg_theme = if matches!(format, OutputFormat::Svg) {
         resolve_configured_svg_theme(config)?
     } else {
@@ -174,7 +182,18 @@ pub fn render_document(
         &config.text_render_options(format),
         &config.svg_render_options(),
         svg_theme.as_ref(),
+        config.font_metrics_profile.as_deref(),
     )
+}
+
+fn validate_render_config(config: &RenderConfig) -> Result<(), RenderError> {
+    let Some(profile_id) = config.font_metrics_profile.as_deref() else {
+        return Ok(());
+    };
+
+    validate_text_metrics_profile_id(profile_id).map_err(|error| RenderError {
+        message: error.to_string(),
+    })
 }
 
 /// Validate Mermaid input and return structured diagnostics as JSON.

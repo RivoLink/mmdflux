@@ -14,7 +14,7 @@ use crate::graph::attachment::{EdgePort, PortFace};
 use crate::graph::geometry::{
     EdgeLabelSide, GraphGeometry, PositionedNode, RoutedEdgeGeometry, RoutedGraphGeometry,
 };
-use crate::graph::measure::default_proportional_text_metrics;
+use crate::graph::measure::{TextMetricsProfileDescriptor, default_proportional_text_metrics};
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::style::NodeStyle;
@@ -25,10 +25,17 @@ pub const CORE_PROFILE: &str = "mmds-core-v1";
 pub const SVG_PROFILE: &str = "mmdflux-svg-v1";
 pub const TEXT_PROFILE: &str = "mmdflux-text-v1";
 pub const NODE_STYLE_PROFILE: &str = "mmdflux-node-style-v1";
+pub const TEXT_METRICS_PROFILE: &str = "mmdflux-text-metrics-v1";
 pub const TEXT_EXTENSION_NAMESPACE: &str = "org.mmdflux.render.text.v1";
 pub const NODE_STYLE_EXTENSION_NAMESPACE: &str = "org.mmdflux.node-style.v1";
-pub const SUPPORTED_PROFILES: &[&str] =
-    &[CORE_PROFILE, SVG_PROFILE, TEXT_PROFILE, NODE_STYLE_PROFILE];
+pub const TEXT_METRICS_EXTENSION_NAMESPACE: &str = "org.mmdflux.text-metrics.v1";
+pub const SUPPORTED_PROFILES: &[&str] = &[
+    CORE_PROFILE,
+    SVG_PROFILE,
+    TEXT_PROFILE,
+    NODE_STYLE_PROFILE,
+    TEXT_METRICS_PROFILE,
+];
 
 /// Serialize a graph-family diagram to MMDS JSON at layout level.
 ///
@@ -131,6 +138,7 @@ pub(crate) fn to_json_typed(
     .map(|document| serialize_document(&document))
 }
 
+#[cfg(test)]
 pub(crate) fn to_document_typed(
     diagram_type: &str,
     diagram: &Graph,
@@ -140,6 +148,29 @@ pub(crate) fn to_document_typed(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> Result<Document, RenderError> {
+    to_document_typed_with_text_metrics(
+        diagram_type,
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_simplification,
+        engine_id,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn to_document_typed_with_text_metrics(
+    diagram_type: &str,
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    routed: Option<&RoutedGraphGeometry>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+    engine_id: Option<&str>,
+    text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
+) -> Result<Document, RenderError> {
     match level {
         GeometryLevel::Layout => Ok(build_document(
             diagram_type,
@@ -148,6 +179,7 @@ pub(crate) fn to_document_typed(
             None,
             path_simplification,
             engine_id,
+            text_metrics_descriptor,
         )),
         GeometryLevel::Routed => routed
             .ok_or_else(|| RenderError {
@@ -162,6 +194,7 @@ pub(crate) fn to_document_typed(
                     Some(routed),
                     path_simplification,
                     engine_id,
+                    text_metrics_descriptor,
                 )
             }),
     }
@@ -202,14 +235,7 @@ pub(crate) fn to_document_typed_with_routing(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
 ) -> Result<Document, RenderError> {
-    // MMDS fallback routing: default metrics are sufficient since this path
-    // only fires when no pre-routed geometry was provided (design §6.3).
-    let metrics = default_proportional_text_metrics();
-    let routed_owned = (routed.is_none() && matches!(level, GeometryLevel::Routed))
-        .then(|| route_graph_geometry(diagram, geometry, EdgeRouting::OrthogonalRoute, &metrics));
-    let routed = routed.or(routed_owned.as_ref());
-
-    to_document_typed(
+    to_document_typed_with_routing_and_text_metrics(
         diagram_type,
         diagram,
         geometry,
@@ -217,6 +243,37 @@ pub(crate) fn to_document_typed_with_routing(
         level,
         path_simplification,
         engine_id,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn to_document_typed_with_routing_and_text_metrics(
+    diagram_type: &str,
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    routed: Option<&RoutedGraphGeometry>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+    engine_id: Option<&str>,
+    text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
+) -> Result<Document, RenderError> {
+    // MMDS fallback routing: default metrics are sufficient since this path
+    // only fires when no pre-routed geometry was provided (design §6.3).
+    let metrics = default_proportional_text_metrics();
+    let routed_owned = (routed.is_none() && matches!(level, GeometryLevel::Routed))
+        .then(|| route_graph_geometry(diagram, geometry, EdgeRouting::OrthogonalRoute, &metrics));
+    let routed = routed.or(routed_owned.as_ref());
+
+    to_document_typed_with_text_metrics(
+        diagram_type,
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_simplification,
+        engine_id,
+        text_metrics_descriptor,
     )
 }
 
@@ -236,6 +293,7 @@ fn render_document_json(
         routed,
         path_simplification,
         engine_id,
+        None,
     );
     serialize_document(&document)
 }
@@ -290,6 +348,7 @@ fn build_document(
     routed: Option<&RoutedGraphGeometry>,
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
+    text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
 ) -> Document {
     let level = if routed.is_some() {
         GeometryLevel::Routed
@@ -428,6 +487,14 @@ fn build_document(
         extensions.insert(
             NODE_STYLE_EXTENSION_NAMESPACE.to_string(),
             node_style_extension(styled_nodes),
+        );
+    }
+    if let Some(text_metrics_descriptor) = text_metrics_descriptor {
+        push_profile(&mut profiles, CORE_PROFILE);
+        push_profile(&mut profiles, TEXT_METRICS_PROFILE);
+        extensions.insert(
+            TEXT_METRICS_EXTENSION_NAMESPACE.to_string(),
+            text_metrics_extension(text_metrics_descriptor),
         );
     }
 
@@ -631,6 +698,87 @@ fn serialize_node_style_extension(style: &NodeStyle) -> Map<String, Value> {
         payload.insert("rx".to_string(), Value::String(v.clone()));
     }
     payload
+}
+
+fn text_metrics_extension(descriptor: &TextMetricsProfileDescriptor) -> Map<String, Value> {
+    let mut metrics_profile = Map::new();
+    metrics_profile.insert(
+        "id".to_string(),
+        Value::String(descriptor.profile_id.clone()),
+    );
+    metrics_profile.insert(
+        "source".to_string(),
+        Value::String(descriptor.source.clone()),
+    );
+    metrics_profile.insert(
+        "version".to_string(),
+        Value::Number(Number::from(descriptor.version)),
+    );
+
+    let mut default_text_style = Map::new();
+    default_text_style.insert(
+        "font-family".to_string(),
+        Value::String(descriptor.default_text_style.font_family.clone()),
+    );
+    default_text_style.insert(
+        "font-size".to_string(),
+        finite_number_value(descriptor.default_text_style.font_size, "font-size"),
+    );
+    default_text_style.insert(
+        "font-style".to_string(),
+        Value::String(descriptor.default_text_style.font_style.clone()),
+    );
+    default_text_style.insert(
+        "font-weight".to_string(),
+        Value::String(descriptor.default_text_style.font_weight.clone()),
+    );
+    default_text_style.insert(
+        "line-height".to_string(),
+        finite_number_value(descriptor.default_text_style.line_height, "line-height"),
+    );
+
+    let mut layout_text = Map::new();
+    layout_text.insert(
+        "node-padding-x".to_string(),
+        finite_number_value(descriptor.layout_text.node_padding_x, "node-padding-x"),
+    );
+    layout_text.insert(
+        "node-padding-y".to_string(),
+        finite_number_value(descriptor.layout_text.node_padding_y, "node-padding-y"),
+    );
+    layout_text.insert(
+        "label-padding-x".to_string(),
+        finite_number_value(descriptor.layout_text.label_padding_x, "label-padding-x"),
+    );
+    layout_text.insert(
+        "label-padding-y".to_string(),
+        finite_number_value(descriptor.layout_text.label_padding_y, "label-padding-y"),
+    );
+    layout_text.insert(
+        "edge-label-max-width".to_string(),
+        descriptor
+            .layout_text
+            .edge_label_max_width
+            .map(|value| finite_number_value(value, "edge-label-max-width"))
+            .unwrap_or(Value::Null),
+    );
+
+    let mut extension = Map::new();
+    extension.insert("metricsProfile".to_string(), Value::Object(metrics_profile));
+    extension.insert(
+        "defaultTextStyle".to_string(),
+        Value::Object(default_text_style),
+    );
+    extension.insert("layoutText".to_string(), Value::Object(layout_text));
+    extension
+}
+
+fn finite_number_value(value: f64, context: &str) -> Value {
+    Value::Number(
+        Number::from_f64(value).unwrap_or_else(|| {
+            panic!("MMDS text metrics extension value {context} should be finite")
+        }),
+    )
 }
 
 fn node(pn: &PositionedNode) -> Node {

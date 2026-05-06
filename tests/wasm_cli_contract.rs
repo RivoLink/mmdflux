@@ -200,6 +200,38 @@ fn runtime_config_input_parses_nested_svg_theme() {
 }
 
 #[test]
+fn runtime_config_input_accepts_font_metrics_profile() {
+    use mmdflux::RuntimeConfigInput;
+    use mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
+
+    let input: RuntimeConfigInput = serde_json::from_str(&format!(
+        r#"{{"fontMetricsProfile":"{COMPATIBILITY_TEXT_METRICS_PROFILE_ID}"}}"#
+    ))
+    .unwrap();
+    let config = input.into_render_config().unwrap();
+
+    assert_eq!(
+        config.font_metrics_profile.as_deref(),
+        Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID)
+    );
+}
+
+#[test]
+fn runtime_config_input_rejects_unsupported_font_metrics_profile() {
+    use mmdflux::RuntimeConfigInput;
+
+    let input: RuntimeConfigInput =
+        serde_json::from_str(r#"{"fontMetricsProfile":"mermaid-sans-v1"}"#).unwrap();
+    let err = input.into_render_config().unwrap_err();
+
+    assert!(
+        err.message
+            .contains("unsupported text metrics profile 'mermaid-sans-v1'"),
+        "{err}"
+    );
+}
+
+#[test]
 fn runtime_config_input_rejects_cli_only_svg_theme_auto_field() {
     use mmdflux::RuntimeConfigInput;
 

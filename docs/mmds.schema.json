@@ -23,7 +23,7 @@
         "type": "string"
       },
       "default": [],
-      "description": "Optional behavior bundles used for profile negotiation (for example 'mmds-core-v1', 'mmdflux-svg-v1', or 'mmdflux-node-style-v1')."
+      "description": "Optional behavior bundles used for profile negotiation (for example 'mmds-core-v1', 'mmdflux-svg-v1', 'mmdflux-node-style-v1', or 'mmdflux-text-metrics-v1')."
     },
     "extensions": {
       "type": "object",
@@ -35,6 +35,9 @@
       "properties": {
         "org.mmdflux.node-style.v1": {
           "$ref": "#/$defs/NodeStyleExtension"
+        },
+        "org.mmdflux.text-metrics.v1": {
+          "$ref": "#/$defs/TextMetricsExtension"
         },
         "org.mmdflux.view.v1": {
           "$ref": "#/$defs/ViewExtension"
@@ -407,6 +410,102 @@
           }
         }
       }
+    },
+    "TextMetricsExtension": {
+      "type": "object",
+      "required": ["metricsProfile", "defaultTextStyle", "layoutText"],
+      "properties": {
+        "metricsProfile": {
+          "$ref": "#/$defs/TextMetricsProfile"
+        },
+        "defaultTextStyle": {
+          "$ref": "#/$defs/DefaultTextStyle"
+        },
+        "layoutText": {
+          "$ref": "#/$defs/LayoutTextMetrics"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Graph-family text metrics identity and layout-time values used for deterministic MMDS replay."
+    },
+    "TextMetricsProfile": {
+      "type": "object",
+      "required": ["id", "source", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Text metrics profile identifier, e.g. 'mmdflux-heuristic-proportional-v1'."
+        },
+        "source": {
+          "type": "string",
+          "description": "Profile provider namespace."
+        },
+        "version": {
+          "type": "integer",
+          "description": "Profile payload version."
+        }
+      },
+      "additionalProperties": false
+    },
+    "DefaultTextStyle": {
+      "type": "object",
+      "required": ["font-family", "font-size", "font-style", "font-weight", "line-height"],
+      "properties": {
+        "font-family": {
+          "type": "string",
+          "description": "CSS font-family stack used by the profile."
+        },
+        "font-size": {
+          "type": "number",
+          "description": "Default font size in pixels."
+        },
+        "font-style": {
+          "type": "string",
+          "description": "CSS font-style value."
+        },
+        "font-weight": {
+          "type": "string",
+          "description": "CSS font-weight value."
+        },
+        "line-height": {
+          "type": "number",
+          "description": "Line height in pixels."
+        }
+      },
+      "additionalProperties": false
+    },
+    "LayoutTextMetrics": {
+      "type": "object",
+      "required": [
+        "node-padding-x",
+        "node-padding-y",
+        "label-padding-x",
+        "label-padding-y",
+        "edge-label-max-width"
+      ],
+      "properties": {
+        "node-padding-x": {
+          "type": "number",
+          "description": "Horizontal node padding used for proportional graph-family layout."
+        },
+        "node-padding-y": {
+          "type": "number",
+          "description": "Vertical node padding used for proportional graph-family layout."
+        },
+        "label-padding-x": {
+          "type": "number",
+          "description": "Horizontal edge-label padding used for layout and SVG label backgrounds."
+        },
+        "label-padding-y": {
+          "type": "number",
+          "description": "Vertical edge-label padding used for layout and SVG label backgrounds."
+        },
+        "edge-label-max-width": {
+          "type": ["number", "null"],
+          "description": "Maximum edge-label wrap width in pixels, or null when wrapping is disabled."
+        }
+      },
+      "additionalProperties": false
     },
     "ViewExtension": {
       "type": "object",

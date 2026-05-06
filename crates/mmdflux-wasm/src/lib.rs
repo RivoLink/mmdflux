@@ -187,6 +187,47 @@ mod tests {
     }
 
     #[test]
+    fn parse_render_config_accepts_font_metrics_profile() {
+        let profile = mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
+        let config = parse_render_config(
+            OutputFormat::Svg,
+            &format!(r#"{{"fontMetricsProfile":"{profile}"}}"#),
+        )
+        .expect("font metrics profile config should parse");
+
+        assert_eq!(config.font_metrics_profile.as_deref(), Some(profile));
+    }
+
+    #[test]
+    fn render_accepts_font_metrics_profile_config() {
+        let profile = mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
+        let output = render(
+            "graph TD\nA-->B",
+            "svg",
+            &format!(r#"{{"fontMetricsProfile":"{profile}"}}"#),
+        )
+        .expect("render should accept compatibility font metrics profile");
+
+        assert!(output.contains("<svg"));
+    }
+
+    #[test]
+    fn parse_render_config_rejects_unsupported_font_metrics_profile() {
+        let input: RuntimeConfigInput =
+            serde_json::from_str(r#"{"fontMetricsProfile":"mermaid-sans-v1"}"#)
+                .expect("font metrics profile JSON should parse");
+        let err = input
+            .into_render_config()
+            .expect_err("unsupported font metrics profile should be rejected");
+
+        assert!(
+            err.message
+                .contains("unsupported text metrics profile 'mermaid-sans-v1'"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn parse_render_config_rejects_legacy_interpolation_style_field() {
         let err = serde_json::from_str::<RuntimeConfigInput>(r#"{"interpolationStyle":"linear"}"#)
             .unwrap_err()

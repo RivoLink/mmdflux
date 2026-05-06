@@ -307,6 +307,7 @@ MMDS keeps core graph semantics compact while allowing renderer- or adapter-spec
 - `mmdflux-svg-v1` — SVG-oriented controls and expectations.
 - `mmdflux-text-v1` — text/ASCII-oriented controls and expectations.
 - `mmdflux-node-style-v1` — node style extension contract for `fill`, `stroke`, and `color` replay.
+- `mmdflux-text-metrics-v1` — graph-family text metrics identity and layout text values for deterministic replay.
 
 ### Extension Namespace Rules
 
@@ -361,6 +362,54 @@ Rules:
 - `fill`, `stroke`, and `color` preserve the raw Mermaid/MMDS color token.
 - MMDS input hydration replays this extension back into internal node styles for text and SVG rendering.
 - Mermaid generation from MMDS style extensions is still deferred.
+
+### Text Metrics Extension
+
+Graph-family MMDS output carries the effective text metrics contract used for
+layout and replay:
+
+- profile: `mmdflux-text-metrics-v1`
+- extension namespace: `org.mmdflux.text-metrics.v1`
+- compatibility metrics profile: `mmdflux-heuristic-proportional-v1`
+
+Payload shape:
+
+```json
+{
+  "profiles": ["mmds-core-v1", "mmdflux-text-metrics-v1"],
+  "extensions": {
+    "org.mmdflux.text-metrics.v1": {
+      "metricsProfile": {
+        "id": "mmdflux-heuristic-proportional-v1",
+        "source": "mmdflux",
+        "version": 1
+      },
+      "defaultTextStyle": {
+        "font-family": "\"trebuchet ms\", verdana, arial, sans-serif",
+        "font-size": 16,
+        "font-style": "normal",
+        "font-weight": "400",
+        "line-height": 24
+      },
+      "layoutText": {
+        "node-padding-x": 15,
+        "node-padding-y": 15,
+        "label-padding-x": 4,
+        "label-padding-y": 2,
+        "edge-label-max-width": 200
+      }
+    }
+  }
+}
+```
+
+Rules:
+
+- New graph-family MMDS output emits this profile and extension.
+- Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
+- Replay is document-owned: a caller-supplied `fontMetricsProfile` must match the replay profile, and the replay profile plus persisted `layoutText` values override SVG font and node-padding config.
+- Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.
+- A recognized text metrics extension with an unsupported `metricsProfile.id` is a replay error.
 
 ### Node
 

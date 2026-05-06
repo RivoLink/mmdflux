@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::format::{CornerStyle, Curve, RoutingStyle};
+use mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
     EngineAlgorithmId, OutputFormat, RenderConfig, SvgThemeConfig, SvgThemeMode, render_diagram,
@@ -61,6 +62,40 @@ fn load_state_fixture(name: &str) -> String {
 
 fn render_svg(input: &str, config: &RenderConfig) -> String {
     render_diagram(input, OutputFormat::Svg, config).expect("SVG render should succeed")
+}
+
+#[test]
+fn font_metrics_explicit_compatibility_profile_matches_default_svg() {
+    let input = load_flowchart_fixture("labeled_edges.mmd");
+    let default_svg = render_svg(&input, &RenderConfig::default());
+    let explicit_svg = render_svg(
+        &input,
+        &RenderConfig {
+            font_metrics_profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID.to_string()),
+            ..RenderConfig::default()
+        },
+    );
+
+    assert_eq!(explicit_svg, default_svg);
+}
+
+#[test]
+fn font_metrics_unsupported_profile_fails_svg_before_output() {
+    let err = render_diagram(
+        "graph TD\nA-->B",
+        OutputFormat::Svg,
+        &RenderConfig {
+            font_metrics_profile: Some("mermaid-sans-v1".to_string()),
+            ..RenderConfig::default()
+        },
+    )
+    .expect_err("unsupported profile should fail before SVG output");
+
+    assert!(
+        err.message
+            .contains("unsupported text metrics profile 'mermaid-sans-v1'"),
+        "{err}"
+    );
 }
 
 #[test]

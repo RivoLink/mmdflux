@@ -4496,6 +4496,7 @@ fn render_svg_positioned_mmds_routed_basic_includes_paths_and_subgraph() {
         &config.text_render_options(OutputFormat::Svg),
         &config.svg_render_options(),
         None,
+        None,
     )
     .expect("routed MMDS should render SVG");
 
