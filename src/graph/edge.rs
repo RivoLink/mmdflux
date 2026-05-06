@@ -78,11 +78,11 @@ pub struct Edge {
     /// `ProportionalTextMetrics` and `LayoutConfig.edge_label_max_width`.
     ///
     /// Populated by `graph::label_wrap::prepare_wrapped_labels` in the runtime
-    /// wrap pass (plan 0147 Task 1.5b). `None` means "no wrap computed" —
-    /// callers fall back to single-line `label` in that case.
+    /// wrap pass. `None` means "no wrap computed" — callers fall back to
+    /// single-line `label` in that case.
     ///
-    /// See plan 0147 design.md §4.4 for why this lives on `diagram::Edge`
-    /// rather than `LayoutEdge`.
+    /// This lives on `diagram::Edge` rather than `LayoutEdge` so the wrap
+    /// decision can be shared by engine sizing, renderers, and MMDS replay.
     #[serde(skip)]
     pub wrapped_label_lines: Option<Vec<String>>,
 }
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(edge.minlen, 0);
     }
 
-    // -- Plan 0147, Task 1.5: wrapped_label_lines artifact on diagram::Edge --
+    // -- wrapped_label_lines artifact on diagram::Edge --
 
     #[test]
     fn edge_carries_wrapped_label_lines_none_by_default() {

@@ -210,8 +210,8 @@ fn test_compute_layout_simple_diagram_no_compound() {
 
 #[test]
 fn label_position_within_canvas_bounds() {
-    // Plan 0153 PR #B: `edge_label_positions` field removed; the render-time
-    // placer projects `label_geometry.center` at render time via
+    // `edge_label_positions` field removed; the render-time placer projects
+    // `label_geometry.center` at render time via
     // `layout.project_layout_point`. Reshape: route the diagram through the
     // routing pipeline so each labeled edge carries `label_geometry`, then
     // project the float-space label center through the graph-owned

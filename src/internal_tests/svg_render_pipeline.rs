@@ -951,7 +951,7 @@ fn parse_svg_viewbox(svg: &str) -> Option<(f64, f64, f64, f64)> {
 /// CSS path. This helper handles both so assertions built on it stay
 /// meaningful for both render modes.
 ///
-/// Prior to plan 0147 this helper only matched the class-based form —
+/// This helper must match both class-based and inline rectangle forms —
 /// default SVG returned an empty `Vec` and any assertion built on an
 /// empty `Vec` passed trivially. That silent no-op masked real
 /// overlap / viewBox violations on fixtures like `long_reciprocal_labels`.
@@ -5900,8 +5900,7 @@ mod plan_0145_q9_red {
     // viewBox. Tier A cannot shrink already-wrapped rects into narrow
     // lane budgets; resolving this needs Algorithm C adjusted_path bending
     // or a product tweak to `edge_label_max_width`. Marked `#[ignore]`
-    // pending a follow-up plan — see
-    // `.gumbo/plans/0147-elk-style-label-routing/findings/task-4.2-tier-a-insufficient.md`.
+    // pending a follow-up.
     // Plan 0149 out of scope: per-compartment re-wrap does not address
     // cross-compartment X overlap. The three concurrent regions each
     // place a reciprocal-pair compartment; intra-compartment overlap is
@@ -5941,8 +5940,7 @@ mod plan_0145_q9_red {
     // which regresses `label_rect_does_not_overlap_node_or_marker`.
     // The structural fix lives in the layered kernel's dummy-sizing
     // pass (reserve more rank space when multi-member compartments need
-    // it) — tracked as a follow-up. See
-    // `findings/plan-0149-completion.md`.
+    // it) — tracked as a follow-up.
     // Plan 0150 task 4.3: compound visual-path regression. Exercise the
     // post-Phase-4 float/sublayout pipeline on a compound (nested
     // subgraph) fixture with parallel labeled edges, under
@@ -6070,10 +6068,9 @@ mod plan_0147_task_4_2 {
         }
     }
 
-    /// Full ELK-like E2E gate. Plan 0149 resolved the viewBox half (via
-    /// label_geometry-aware bounds + transform-aware helper) and Plan 0150
-    /// resolved the pairwise-disjointness half via kernel rank-space
-    /// reservation for multi-member label compartments.
+    /// Full ELK-like E2E gate. Label-geometry-aware bounds and transform-
+    /// aware helper logic cover viewBox stability; rank-space reservation
+    /// covers pairwise disjointness for multi-member label compartments.
     #[test]
     fn long_reciprocal_labels_elk_like_e2e() {
         let svg = long_reciprocal_svg();

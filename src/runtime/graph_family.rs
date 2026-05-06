@@ -90,7 +90,7 @@ fn solve_graph_family_for_render(
             .or_else(|| config.edge_preset.map(|preset| preset.expand().0)),
     )?;
 
-    // Pre-engine wrap pass: plan 0147 Task 1.5b / 1.7. Populates
+    // Pre-engine wrap pass. Populates
     // `diagram::Edge.wrapped_label_lines` once per render so the kernel
     // sizing scan, label geometry, SVG text, and MMDS replay all agree on
     // the wrap decision. Uses Proportional metrics regardless of render

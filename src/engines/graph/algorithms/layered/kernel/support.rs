@@ -626,7 +626,7 @@ pub(crate) fn count_forward_edges_per_gap(lg: &LayoutGraph) -> HashMap<i32, usiz
 /// that rank. Only contains entries for gaps that exceed the threshold;
 /// gaps at or below the threshold use the base `config.rank_sep`.
 ///
-/// Based on research 0056 Q5 (routing-driven spacing, option B2).
+/// Routing-driven spacing based on per-gap edge density.
 pub(crate) fn compute_rank_sep_overrides(
     lg: &LayoutGraph,
     config: &LayoutConfig,

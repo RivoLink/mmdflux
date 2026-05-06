@@ -12,9 +12,9 @@
 //! the **visual** source (= the authored `to`) and the last at the visual
 //! target (= the authored `from`). Marker arrows are swapped to match.
 
-// Consumers land in Task 1.1 (assertion test), Task 1.4 (unfit-gap Red test),
-// and Task 2.1 (clamp pass) of plan 0146. Until those land, these helpers
-// are exercised only by the unit tests in this module.
+// Consumers are the assertion test, the unfit-gap red test, and the clamp
+// pass. Until those land, these helpers are exercised only by the unit tests
+// in this module.
 #![allow(dead_code)]
 
 use crate::graph::edge::{Arrow, Edge};

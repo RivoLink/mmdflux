@@ -599,7 +599,7 @@ mod lr_routing {
     }
 }
 
-/// Edge case tests for label-as-dummy-node (Plan 0024).
+/// Edge case tests for label-as-dummy-node behavior.
 mod label_edge_cases {
     use super::*;
 

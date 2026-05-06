@@ -243,9 +243,8 @@ pub(crate) fn denormalize(
                     .map(|d| d.is_label())
                     .unwrap_or(false);
 
-                // Plan 0147 Task 2.4 / 2.8: for label dummies under
-                // `LabelDummyRouting::Bend` emit two waypoints on the
-                // dummy rect's perpendicular faces (ELK
+                // For label dummies under `LabelDummyRouting::Bend`, emit
+                // two waypoints on the dummy rect's perpendicular faces (ELK
                 // `LongEdgeJoiner.joinAt(isPolyline=true)`); all other
                 // dummies keep the single center waypoint dagre parity
                 // demands. Emission is in forward-chain order — reversed

@@ -87,10 +87,10 @@ fn offset_perpendicular(point: Point, segment: &Segment) -> Point {
     }
 }
 
-// Plan 0153 PR #B: `PRECOMPUTED_LABEL_BASE_DRIFT` and
-// `allowed_precomputed_label_drift` deleted. The render-time placer sources
-// its footprint from Pass-3 segments, so "stale precomputed anchor" is no
-// longer a reachable state and the drift gate has no work to do.
+// `PRECOMPUTED_LABEL_BASE_DRIFT` and `allowed_precomputed_label_drift` were
+// deleted. The render-time placer sources its footprint from Pass-3 segments,
+// so "stale precomputed anchor" is no longer a reachable state and the drift
+// gate has no work to do.
 
 /// For each edge whose both endpoints live inside the same subgraph, return
 /// the tightest (innermost) horizontal containment range `(x_min, x_max)` so
@@ -243,8 +243,8 @@ pub fn render_edge(
 
     draw_edge_path_and_arrows(canvas, routed, charset);
 
-    // Draw label if present. Plan 0147 Task 1.6: use the pre-engine wrap
-    // artifact when populated so the grid label matches what SVG renders.
+    // Draw label if present. Use the pre-engine wrap artifact when populated
+    // so the grid label matches what SVG renders.
     if let Some(effective) = effective_edge_label(&routed.edge) {
         draw_edge_label_with_tracking(
             canvas,
@@ -1071,8 +1071,8 @@ pub fn render_all_edges_with_labels(
         draw_edge_path_and_arrows(canvas, routed, charset);
     }
 
-    // Plan 0153 PR #B: the render-time placer owns every body label. The
-    // wrapper builds the global Pass-3 segment footprint (seeded with
+    // The render-time placer owns every body label. The wrapper builds the
+    // global Pass-3 segment footprint (seeded with
     // subgraph obstacles + node cells), runs corridor-aware anchor
     // selection with `label_geometry.side` projected through the
     // graph-owned accessor, retries from the Pass-3 midpoint on

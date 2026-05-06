@@ -1,4 +1,4 @@
-//! Plan 0149 (#237): lane-aware edge-label re-wrap.
+//! Lane-aware edge-label re-wrap.
 //!
 //! # What this module does
 //!
@@ -579,10 +579,10 @@ mod tests {
 
     #[test]
     fn rewrap_fixed_point_grows_label_step_for_td_reciprocal_pair() {
-        // The reciprocal-pair TD case that motivated Plan 0149. After the
-        // first round of re-wrap the labels become taller (more lines),
-        // so `label_step` must grow on iteration 2; otherwise the two
-        // members would overlap in Y. Check the final label_step > initial.
+        // Reciprocal-pair TD case. After the first round of re-wrap the
+        // labels become taller (more lines), so `label_step` must grow on
+        // iteration 2; otherwise the two members would overlap in Y. Check
+        // the final label_step > initial.
         let label = "this is a deliberately long reply label";
         let g = graph_with_labels(&[("A", "B", label), ("B", "A", label)]);
         // Tall rect (h=60) vs small step (32) forces TD axis-extent

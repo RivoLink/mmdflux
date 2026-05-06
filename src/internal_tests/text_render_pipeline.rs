@@ -641,10 +641,9 @@ mod plan_0152_corridor_aware_placement {
 }
 
 mod plan_0147_task_3_2_text_grid_gate {
-    //! Plan 0147 Task 3.2: labeled backward-edge fixtures must still render
+    //! Labeled backward-edge fixtures must still render
     //! corridor-closure glyphs (`─┘` / `└─`) under Tier A's two-waypoint bend.
-    //! Plan 0145 task 3.9 previously broke this; Tier A's narrower bend is
-    //! expected to be safe — verify, don't assume.
+    //! Tier A's narrower bend is expected to be safe — verify, don't assume.
 
     use super::*;
 

@@ -375,13 +375,12 @@ pub fn hydrate_routed_geometry_from_document(
     let metrics = default_proportional_text_metrics();
     let mut routed = route_graph_geometry(&diagram, &geometry, edge_routing, &metrics);
 
-    // Plan 0151 Task 2.2: preserve authoritative routed label geometry by
-    // overwriting `label_geometry` on routed edges with the semantics carried
-    // by the MMDS payload. `route_graph_geometry` rebuilt `label_geometry`
-    // from `label_position` inside `populate_label_geometry`, which would
-    // silently lose the authoritative `label_rect` whenever `label_position`
-    // and `label_rect` disagree. See
-    // `.gumbo/plans/0151-routed-label-geometry-contract/findings/02-mmds-contract-choice.md`.
+    // Preserve authoritative routed label geometry by overwriting
+    // `label_geometry` on routed edges with the semantics carried by the MMDS
+    // payload. `route_graph_geometry` rebuilt `label_geometry` from
+    // `label_position` inside `populate_label_geometry`, which would silently
+    // lose the authoritative `label_rect` whenever `label_position` and
+    // `label_rect` disagree.
     if output.geometry_level == "routed" {
         overlay_authoritative_label_geometry(&mut routed, output, &metrics);
     }

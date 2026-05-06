@@ -507,7 +507,7 @@ fn flux_layout_profile_all_routing_styles_use_enhanced_profile() {
     }
 }
 
-// -- Plan 0147, Task 1.7: edge_label_max_width per-profile defaults --
+// -- edge_label_max_width per-profile defaults --
 
 #[test]
 fn kernel_layout_config_edge_label_max_width_defaults_to_none() {
@@ -544,8 +544,8 @@ fn flux_profile_uses_semantic_compound_feedback_policy() {
     );
 }
 
-// Plan 0147 Task 2.6: profile wiring — flux on WidestLayer + Bend,
-// mermaid on explicit Midpoint + Center (not via `..Default::default()`).
+// Profile wiring: flux on WidestLayer + Bend, mermaid on explicit Midpoint +
+// Center (not via `..Default::default()`).
 #[test]
 fn flux_profile_uses_widest_layer_placement_and_bend_routing() {
     let cfg = flux_layout_profile(&LayoutConfig::default(), EdgeRouting::PolylineRoute);

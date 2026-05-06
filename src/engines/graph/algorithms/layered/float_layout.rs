@@ -16,8 +16,8 @@ use crate::graph::measure::{ProportionalTextMetrics, proportional_node_dimension
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::{Direction, Edge, Graph, Stroke};
 
-/// Edge-label sizing that honors the pre-engine wrap artifact when present
-/// (plan 0147 Task 1.6). Falls back to single-line measurement otherwise.
+/// Edge-label sizing that honors the pre-engine wrap artifact when present.
+/// Falls back to single-line measurement otherwise.
 fn edge_label_dims_proportional(
     metrics: &ProportionalTextMetrics,
     edge: &Edge,
@@ -41,9 +41,8 @@ pub(super) fn edge_thickness(edge: &Edge) -> f64 {
 }
 
 /// Apply ELK `LabelDummyInserter` padding — inflate the rank-axis extent
-/// of the label dummy by `edge_label_spacing + thickness`. Plan 0147
-/// Task 2.5 / ELK `LabelDummyInserter.java:80-110`. Rank axis is vertical
-/// for TB/BT and horizontal for LR/RL.
+/// of the label dummy by `edge_label_spacing + thickness`. Rank axis is
+/// vertical for TB/BT and horizontal for LR/RL.
 pub(super) fn pad_edge_label_dims(
     dims: (f64, f64),
     spacing: f64,
@@ -58,7 +57,7 @@ pub(super) fn pad_edge_label_dims(
     }
 }
 
-/// Grid-mode variant of [`pad_edge_label_dims`] (#238 / Plan 0148).
+/// Grid-mode variant of [`pad_edge_label_dims`].
 ///
 /// Grid-mode cell-valued dims are fed to the layered solver as plain
 /// `f64`s alongside pixel-valued separations (`rank_sep = 50` etc.),
@@ -252,8 +251,7 @@ fn inject_routed_paths(
 /// **Load-bearing downgrade.** Copies routed-stage geometry back onto `LayoutEdge`
 /// so `Visual` SVG solve paths (where the engine returns `routed: None`) still see
 /// authoritative paths and label rectangles. Changes to `RoutedEdgeGeometry` fields
-/// that SVG / MMDS / bounds consume MUST be reflected here. See plan 0145
-/// `architecture/design.md` §2.2 for the data-flow contract.
+/// that SVG / MMDS / bounds consume MUST be reflected here.
 fn apply_routed_edge_paths(
     updated: &mut GraphGeometry,
     routed_edges: impl IntoIterator<Item = RoutedEdgeGeometry>,
@@ -264,8 +262,8 @@ fn apply_routed_edge_paths(
             layout_edge.label_position = edge.label_position;
             layout_edge.preserve_orthogonal_topology = edge.preserve_orthogonal_topology;
             layout_edge.label_geometry = edge.label_geometry;
-            // Plan 0149 (#237): forward the lane-aware re-wrap output
-            // from routing onto the `LayoutEdge` so Visual-SVG solve
+            // Forward the lane-aware re-wrap output from routing onto the
+            // `LayoutEdge` so Visual-SVG solve
             // paths (where the engine returns `routed: None` but routing
             // ran internally via `build_float_layout_with_flags`) still
             // see the narrower label lines. Without this the SVG

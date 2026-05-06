@@ -16,7 +16,7 @@ use crate::graph::space::{FPoint, FRect};
 use crate::graph::{Direction, Graph};
 
 /// Gap between adjacent label lanes within a compartment.
-// Exposed `pub(crate)` for Plan 0150 kernel drift-detection test in
+// Exposed `pub(crate)` for kernel drift-detection tests in
 // `kernel::compartment_spacing`. The kernel intentionally duplicates this
 // value as `INTER_TRACK_GAP` to avoid a kernel → routing dependency; the
 // drift-detection test pins the two together.
@@ -167,8 +167,8 @@ fn candidate_track_order(sign: i32) -> impl Iterator<Item = i32> {
 
 /// Per-edge outcome of the lane assignment pass.
 ///
-/// Plan 0149 extended this with `label_step`, `compartment_id`, and
-/// `midpoint` so the post-lane re-wrap pass in
+/// Includes `label_step`, `compartment_id`, and `midpoint` so the post-lane
+/// re-wrap pass in
 /// `crate::graph::routing::label_rewrap` can run its bounded fixed-point
 /// without re-entering descriptor building. If `label_rewrap` is refactored
 /// out or the fixed-point is removed, those three fields can be dropped.
@@ -531,8 +531,8 @@ pub(super) fn build_label_descriptors(
         }
 
         let midpoint = arc_length_midpoint(path).unwrap_or_else(|| path[path.len() / 2]);
-        // Plan 0149 (#237): descriptor must reflect the same dims the SVG
-        // renderer will emit, otherwise the packer sizes compartments
+        // Descriptor must reflect the same dims the SVG renderer will emit,
+        // otherwise the packer sizes compartments
         // against unwrapped single-line heights while the actual rects
         // stack multi-line rendered labels. Pre-fix, `label_step` was
         // 32 (unwrapped h=28 + LANE_GAP) but the rendered rect was 52

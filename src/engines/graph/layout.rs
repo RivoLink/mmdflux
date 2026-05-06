@@ -71,8 +71,8 @@ impl From<crate::engines::graph::algorithms::layered::Direction> for LayoutDirec
 }
 
 /// Placement strategy for edge-label dummies within long edge chains.
-/// Orthogonal to [`LabelDummyRouting`] — plan 0147 Task 2.3 split the
-/// legacy `LabelDummyStrategy` into placement + routing.
+/// Orthogonal to [`LabelDummyRouting`]: placement decides where the label
+/// dummy sits in the chain, while routing decides how the edge traverses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelDummyPlacement {
     #[default]
@@ -103,7 +103,7 @@ impl From<crate::engines::graph::algorithms::layered::LabelDummyPlacement> for L
 }
 
 /// Routing strategy for how an edge path traverses its label dummy's rect.
-/// Orthogonal to [`LabelDummyPlacement`] — plan 0147 Task 2.3.
+/// Orthogonal to [`LabelDummyPlacement`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelDummyRouting {
     #[default]
@@ -182,15 +182,14 @@ pub struct LayoutConfig {
     pub per_edge_label_spacing: bool,
     pub label_side_selection: bool,
     pub label_side_strategy: LabelSideStrategy,
-    /// Plan 0147 Task 2.3: orthogonal placement + routing enums replaced
-    /// the legacy `label_dummy_strategy`.
+    /// Orthogonal label-dummy placement and routing controls.
     pub label_dummy_placement: LabelDummyPlacement,
     pub label_dummy_routing: LabelDummyRouting,
     /// Pixel spacing between edge line and label, mirroring ELK
     /// `edgeLabelSpacing`. Applied in pixels by proportional measurement
     /// (SVG / MMDS) via `pad_edge_label_dims`, and in Grid-mode float
-    /// units by the Text renderer via `pad_edge_label_dims_grid` (Plan
-    /// 0148 / #238). The Grid path subtracts a 3.0 baseline (default
+    /// units by the Text renderer via `pad_edge_label_dims_grid`. The Grid
+    /// path subtracts a 3.0 baseline (default
     /// spacing 2.0 + default thickness 1.0) so the default configuration
     /// contributes zero padding and existing Text snapshots are
     /// byte-identical; larger values widen the rank gap around labeled
@@ -198,7 +197,7 @@ pub struct LayoutConfig {
     pub edge_label_spacing: f64,
     pub backward_edge_side_grouping: bool,
     /// Maximum edge-label width in pixels before greedy wrap kicks in.
-    /// `None` disables wrap (dagre-parity fallback). Plan 0147 Task 1.7.
+    /// `None` disables wrap (dagre-parity fallback).
     pub edge_label_max_width: Option<f64>,
 }
 
@@ -225,9 +224,9 @@ impl Default for LayoutConfig {
             label_dummy_routing: LabelDummyRouting::default(),
             edge_label_spacing: 2.0,
             backward_edge_side_grouping: false,
-            // Plan 0147 Task 1.7: user-facing default enables wrap at 200 px so
-            // long labels render wrapped out of the box. Set to `None` to opt
-            // out (dagre-parity / unwrapped measurement).
+            // User-facing default enables wrap at 200 px so long labels render
+            // wrapped out of the box. Set to `None` to opt out (dagre-parity /
+            // unwrapped measurement).
             edge_label_max_width: Some(200.0),
         }
     }

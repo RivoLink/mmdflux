@@ -140,9 +140,9 @@ pub fn route_graph_geometry(
                             .and_then(|(_, tp)| tp.clone()),
                         preserve_orthogonal_topology: false,
                         label_geometry: None,
-                        // Plan 0149 re-wrap output populated later by
+                        // Re-wrap output populated later by
                         // `label_rewrap::re_wrap_labels_for_lane_fit`
-                        // (called after lane-track assignment below).
+                        // after lane-track assignment below.
                         effective_wrapped_lines: None,
                     }
                 })
@@ -175,18 +175,17 @@ pub fn route_graph_geometry(
         }
     }
 
-    // Plan 0151 Task 1.2: for orthogonal backward side-offset labels, realign
-    // `label_position` against the final post-fan path before freezing it
-    // into `label_geometry`. Narrow predicate: OrthogonalRoute + is_backward
+    // For orthogonal backward side-offset labels, realign `label_position`
+    // against the final post-fan path before freezing it into
+    // `label_geometry`. Narrow predicate: OrthogonalRoute + is_backward
     // + label_side ∈ {Above, Below}. Forward orthogonal and non-orthogonal
     // branches already get their anchors re-validated or recomputed upstream.
-    // See `findings/01-producer-seam-choice.md`.
     align_backward_side_offset_labels(&mut edges, diagram, metrics, edge_routing);
 
     // Populate label_geometry on every routed edge with a non-empty label.
     // This is the single source of truth for padded label rectangles consumed
     // by SVG, MMDS, and bounds downstream. track: 0 until the lane assignment
-    // pass (plan 0145 PR 3 task 3.5).
+    // pass.
     populate_label_geometry(&mut edges, diagram, metrics);
 
     // Run label lane assignment pass. This shifts labels and middle path
@@ -267,15 +266,14 @@ pub fn route_graph_geometry(
         let _ = &outcome.adjusted_path;
     }
 
-    // Plan 0149 (#237): lane-aware re-wrap. Runs AFTER the wire-up loop
-    // above (so routed edges carry the post-lane rect geometry) and
-    // BEFORE self-edge construction / bounds recomputation below (so
-    // self-loop layout and final bounds are computed against the
-    // re-wrapped rects). Mutates `lane_outcomes` in place — primarily
-    // useful for tests that inspect the outcomes map; downstream passes
-    // (`clamp_label_geometry_to_node_bounds`, `recompute_routed_bounds`)
-    // read directly from the routed edges and see the new rects
-    // automatically. See `graph/routing/label_rewrap.rs` for the
+    // Lane-aware re-wrap. Runs AFTER the wire-up loop above (so routed edges
+    // carry the post-lane rect geometry) and BEFORE self-edge construction /
+    // bounds recomputation below (so self-loop layout and final bounds are
+    // computed against the re-wrapped rects). Mutates `lane_outcomes` in
+    // place — primarily useful for tests that inspect the outcomes map;
+    // downstream passes (`clamp_label_geometry_to_node_bounds`,
+    // `recompute_routed_bounds`) read directly from the routed edges and see
+    // the new rects automatically. See `graph/routing/label_rewrap.rs` for the
     // fixed-point design and caveats (kernel dummy heights stay frozen;
     // `<br>` semantics preserved).
     label_rewrap::re_wrap_labels_for_lane_fit(
@@ -303,11 +301,10 @@ pub fn route_graph_geometry(
         })
         .collect();
 
-    // Plan 0146 Task 2.1: clamp label rects so they sit beyond source/target
-    // node faces (plus marker avoidance) along the edge-parallel axis.
-    // Records unfit cases on `unfit_label_overlaps` for downstream consumers
-    // (MMDS diagnostics, CLI stderr — Task 2.3) instead of silently shipping
-    // overlapping output.
+    // Clamp label rects so they sit beyond source/target node faces (plus
+    // marker avoidance) along the edge-parallel axis. Records unfit cases on
+    // `unfit_label_overlaps` for downstream consumers (MMDS diagnostics, CLI
+    // stderr) instead of silently shipping overlapping output.
     let mut unfit_label_overlaps = Vec::new();
     label_clamp::clamp_label_geometry_to_node_bounds(
         &mut edges,
@@ -358,10 +355,9 @@ pub(crate) fn recompute_routed_bounds(
             max_y = max_y.max(p.y);
         }
         // Extend by the full padded label rectangle, not just the center
-        // anchor. After the label-lane pass (plan 0145), labels can be
-        // shifted into positions whose padded extent reaches outside the
-        // original anchor — including only the center would clip the
-        // viewBox.
+        // anchor. After the label-lane pass, labels can be shifted into
+        // positions whose padded extent reaches outside the original anchor
+        // — including only the center would clip the viewBox.
         if let Some(rect) = edge.label_geometry.as_ref().map(|g| g.rect) {
             min_x = min_x.min(rect.x);
             min_y = min_y.min(rect.y);
@@ -923,7 +919,7 @@ fn snap_to_primary_face(
 /// Uses the diagram's edge list to look up label text (by `routed_edge.index`
 /// into `diagram.edges`), then measures the padded rectangle via
 /// `metrics.edge_label_dimensions`. The `track` field is always `0` — lane
-/// assignment is deferred to the label-lane pass (plan 0145 PR 3, task 3.5).
+/// assignment is deferred to the label-lane pass.
 fn populate_label_geometry(
     edges: &mut [RoutedEdgeGeometry],
     diagram: &Graph,
@@ -940,8 +936,8 @@ fn populate_label_geometry(
         if label.is_empty() {
             continue;
         }
-        // Plan 0147 Task 1.6: prefer the pre-engine wrap artifact when present
-        // so the reserved rect matches what SVG text and the MMDS replay emit.
+        // Prefer the pre-engine wrap artifact when present so the reserved
+        // rect matches what SVG text and the MMDS replay emit.
         let (w, h) = match diagram_edge.and_then(|e| e.wrapped_label_lines.as_deref()) {
             Some(lines) => metrics.edge_label_dimensions_wrapped(lines),
             None => metrics.edge_label_dimensions(label),
@@ -973,8 +969,7 @@ fn populate_label_geometry(
 /// the actual routed path. `orthogonal::mod`'s own `revalidate_label_anchor`
 /// pass is skipped for `label_side != Center`, so the staleness persists.
 /// This helper re-projects the center onto the final post-fan path using a
-/// side-aware arc-length midpoint rule. See
-/// `.gumbo/plans/0151-routed-label-geometry-contract/findings/01-producer-seam-choice.md`.
+/// side-aware arc-length midpoint rule.
 fn align_backward_side_offset_labels(
     edges: &mut [RoutedEdgeGeometry],
     diagram: &Graph,

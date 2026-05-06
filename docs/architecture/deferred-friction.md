@@ -9,8 +9,8 @@ in the affected areas.
 ### `config.rs` re-exports engine layout vocabulary
 
 `config.rs` re-exports `LayoutConfig`, `Ranker`, `LayoutDirection`,
-`LabelDummyStrategy` from `engines::graph`. This couples the stable public
-contract to engine-internal vocabulary.
+`LabelDummyPlacement`, and `LabelDummyRouting` from `engines::graph`. This
+couples the stable public contract to engine-internal vocabulary.
 
 **Trigger:** A second engine family (e.g., force-directed) introduces
 conflicting config types that don't fit the current `LayoutConfig` shape.

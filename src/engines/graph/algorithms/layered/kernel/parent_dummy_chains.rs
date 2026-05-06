@@ -156,7 +156,7 @@ pub(crate) fn compute_postorder(graph: &LayoutGraph) -> Vec<PostorderRange> {
 ///
 /// Shares postorder semantics with [`find_path`]. Callers that also need the
 /// ascending/descending path should use `find_path`.
-#[allow(dead_code)] // Consumed by kernel::compartment_spacing (plan 0150 phase 2.4).
+#[allow(dead_code)] // Consumed by kernel::compartment_spacing.
 pub(crate) fn compute_lca(
     graph: &LayoutGraph,
     postorder: &[PostorderRange],
@@ -460,7 +460,7 @@ mod tests {
         }
 
         // Edge 2: E→A — dummies should get: rank 1 = None, rank 2 = Cloud, rank 3 = us-east
-        // (rank numbers may differ from research due to title nodes and normalization,
+        // (rank numbers may differ due to title nodes and normalization,
         // so we check by collecting all dummies for this edge and verifying the parent sequence)
         let mut e_to_a_parents: Vec<(i32, Option<String>)> = parents
             .iter()

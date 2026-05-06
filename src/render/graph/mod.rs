@@ -148,7 +148,7 @@ fn geometry_for_routed_svg(diagram: &Graph, routed: &RoutedGraphGeometry) -> Gra
                 layout_path_hint: Some(edge.path.clone()),
                 preserve_orthogonal_topology: edge.preserve_orthogonal_topology,
                 label_geometry: edge.label_geometry,
-                // Plan 0149: forward the lane-aware re-wrap output from
+                // Forward the lane-aware re-wrap output from
                 // `RoutedEdgeGeometry` onto `LayoutEdge` so the SVG renderer
                 // (which consumes `LayoutEdge` via this downgrade path) can
                 // emit text matching the post-rewrap rect. Without this

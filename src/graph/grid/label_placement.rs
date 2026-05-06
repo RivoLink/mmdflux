@@ -82,9 +82,7 @@ pub(crate) fn extend_grid_polyline_into(path: &[GridCell], dest: &mut PathFootpr
 /// Mirrors `extend_grid_polyline_into` semantics but derives the polyline
 /// implicitly from segment endpoints. Used at render time, where
 /// `RoutedEdge.segments` is the source-of-truth for what the renderer will
-/// actually paint. See
-/// `.gumbo/research/0067-corridor-aware-placer-render-time/q1-pass3-footprint-contract.md`
-/// §What for the spec and §Empirical for the 154-edge comparison.
+/// actually paint.
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn segments_to_footprint(segments: &[Segment]) -> PathFootprint {
     let mut footprint = PathFootprint::default();
@@ -972,7 +970,7 @@ mod segments_to_footprint_tests {
         assert_eq!(footprint.cells.get(&(14, 9)), Some(&CellRole::Corner));
     }
 
-    // ---- Plan 0153 Red canaries C1 and C3 (see Q7 §Canary List). ----
+    // ---- Render-time placement canaries C1 and C3. ----
 
     /// C1: forward vertical (TD) 2-segment L-path. The projected label center
     /// lands on the Corner cell where the vertical meets the horizontal; the
@@ -1035,9 +1033,8 @@ mod segments_to_footprint_tests {
 
     #[test]
     fn segments_to_footprint_matches_extend_grid_polyline_on_l_bend() {
-        // This test mirrors the spike harness at research-0067-footprint-helper
-        // b18d2466:src/internal_tests/routed_footprint_pass_diff.rs:
-        //   segments_footprint_matches_polyline_on_l_bend.
+        // This test mirrors the original footprint parity harness:
+        // segments_footprint_matches_polyline_on_l_bend.
         let segs = vec![
             Segment::Horizontal {
                 y: 0,

@@ -76,8 +76,7 @@ impl Direction {
 ///
 /// Orthogonal to [`LabelDummyRouting`]: placement decides WHICH rank in the
 /// chain hosts the dummy; routing decides HOW the edge path traverses that
-/// dummy's rectangle. Plan 0147 Task 2.3 split `LabelDummyStrategy` into
-/// these two enums.
+/// dummy's rectangle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelDummyPlacement {
     /// Place the label at the midpoint rank of the edge (dagre parity).
@@ -90,10 +89,9 @@ pub enum LabelDummyPlacement {
 
 /// Routing strategy for how an edge path traverses its label dummy's rect.
 ///
-/// Orthogonal to [`LabelDummyPlacement`]. Plan 0147 Task 2.3 split
-/// `LabelDummyStrategy` into placement and routing so profiles can choose
-/// placement (flux: `WidestLayer`, mermaid: `Midpoint`) independently of
-/// routing (flux Tier A: `Bend`, mermaid/dagre parity: `Center`).
+/// Orthogonal to [`LabelDummyPlacement`]. Profiles can choose placement
+/// (flux: `WidestLayer`, mermaid: `Midpoint`) independently of routing
+/// (flux: `Bend`, mermaid/dagre parity: `Center`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelDummyRouting {
     /// Emit a single waypoint at the dummy rect's center (dagre parity).
@@ -101,7 +99,7 @@ pub enum LabelDummyRouting {
     Center,
     /// Emit two waypoints on the dummy rect's perpendicular faces so the
     /// edge path bows around the label (ELK `LongEdgeJoiner.joinAt` with
-    /// `isPolyline=true`). Plan 0147 Task 2.4 lands the emission.
+    /// `isPolyline=true`).
     Bend,
 }
 
@@ -378,12 +376,11 @@ pub struct LayoutConfig {
     pub label_side_strategy: LabelSideStrategy,
 
     /// Placement strategy for label dummies within long edge chains.
-    /// Orthogonal to `label_dummy_routing` (plan 0147 Task 2.3).
+    /// Orthogonal to `label_dummy_routing`.
     pub label_dummy_placement: LabelDummyPlacement,
 
     /// Routing strategy for how an edge path traverses its label dummy's
-    /// rect. Orthogonal to `label_dummy_placement` (plan 0147 Task 2.3).
-    /// Two-waypoint emission under `Bend` lands in Task 2.4.
+    /// rect. Orthogonal to `label_dummy_placement`.
     pub label_dummy_routing: LabelDummyRouting,
 
     /// Gap between edge stroke and label text (in layout units).
@@ -393,7 +390,7 @@ pub struct LayoutConfig {
     pub backward_edge_side_grouping: bool,
 
     /// Maximum edge-label width in pixels before greedy wrap kicks in.
-    /// `None` disables wrap (dagre-parity fallback). Plan 0147 Task 1.7.
+    /// `None` disables wrap (dagre-parity fallback).
     pub edge_label_max_width: Option<f64>,
 }
 
@@ -565,8 +562,7 @@ mod tests {
         assert!(!config.per_edge_label_spacing);
     }
 
-    // Plan 0147 Task 2.3: placement + routing defaults, split enum replaces
-    // the old `LabelDummyStrategy`.
+    // Placement + routing defaults replace the old `LabelDummyStrategy`.
     #[test]
     fn label_dummy_placement_defaults_to_midpoint() {
         let config = LayoutConfig::default();

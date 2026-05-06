@@ -72,9 +72,9 @@ fn edge_label_dims_proportional_for_run(
 }
 
 fn grid_edge_label_layout_dimensions(edge: &Edge) -> Option<(f64, f64)> {
-    // Plan 0147 Task 1.6: honor the pre-engine wrap artifact when present
-    // so Grid-mode measurement reserves the same vertical space that SVG
-    // and routing assume.
+    // Honor the pre-engine wrap artifact when present so Grid-mode
+    // measurement reserves the same vertical space that SVG and routing
+    // assume.
     if let Some(lines) = edge.wrapped_label_lines.as_deref() {
         return Some(grid_edge_label_dimensions_wrapped(lines));
     }
@@ -149,10 +149,10 @@ pub fn run_layered_layout(
     let mut result = match mode {
         // Grid-mode label-dummy dims are padded in whole-cell increments
         // via `pad_edge_label_dims_grid` so the Text renderer honors
-        // `edge_label_spacing` (Plan 0148 / #238). Default spacing 2.0 +
-        // default thickness 1.0 round to 0 extra cells — existing Text
-        // snapshots are byte-identical; above-default spacings widen the
-        // gap between labeled ranks by `round((spacing + thickness - 3) /
+        // `edge_label_spacing`. Default spacing 2.0 + default thickness 1.0
+        // round to 0 extra cells — existing Text snapshots are
+        // byte-identical; above-default spacings widen the gap between
+        // labeled ranks by `round((spacing + thickness - 3) /
         // GRID_CELL_PX)` cells.
         MeasurementMode::Grid => build_layered_layout_with_config(
             diagram,

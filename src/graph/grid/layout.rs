@@ -166,9 +166,9 @@ pub struct GridLayout {
     /// Routed edges whose deliberate orthogonal corridor should be preserved.
     pub preserve_routed_path_topology: HashSet<usize>,
 
-    // Plan 0153 PR #B: `edge_label_positions` and `authoritative_label_positions`
-    // removed. The render-time placer in
-    // `src/render/graph/text/label_placement.rs` owns every body-label anchor.
+    // `edge_label_positions` and `authoritative_label_positions` removed.
+    // The render-time placer in `src/render/graph/text/label_placement.rs`
+    // owns every body-label anchor.
     /// Node shapes for intersection calculation.
     /// Maps node ID to its shape for computing dynamic attachment points.
     pub node_shapes: HashMap<String, Shape>,

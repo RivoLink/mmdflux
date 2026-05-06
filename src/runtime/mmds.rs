@@ -78,9 +78,9 @@ pub(crate) fn render_document(
 
     let mut diagram = from_document(payload).map_err(display_error)?;
 
-    // Plan 0147 Task 1.6 / 1.7: MMDS replay path runs the wrap pass so the
-    // hydrated graph's edge labels carry the same `wrapped_label_lines`
-    // artifact the original render would have. `wrapped_label_lines` is
+    // MMDS replay path runs the wrap pass so the hydrated graph's edge labels
+    // carry the same `wrapped_label_lines` artifact the original render would
+    // have. `wrapped_label_lines` is
     // `#[serde(skip)]` on the Edge, so round-tripping through MMDS drops
     // it; rehydrating it here keeps the SVG/text replay in lockstep with
     // the direct runtime render. Uses the default Proportional metrics

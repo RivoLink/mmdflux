@@ -131,7 +131,7 @@ pub struct LayoutEdge {
     /// pass and copied back onto `LayoutEdge` so `Visual` SVG solve paths
     /// still see authoritative label rectangles). `None` before routing.
     pub label_geometry: Option<EdgeLabelGeometry>,
-    /// Plan 0149 (#237): lane-aware re-wrap output, forwarded from
+    /// Lane-aware re-wrap output, forwarded from
     /// `RoutedEdgeGeometry::effective_wrapped_lines` through
     /// `geometry_for_routed_svg` so the SVG renderer (which consumes
     /// `LayoutEdge`, not `RoutedEdgeGeometry`) can emit text matching
@@ -174,7 +174,7 @@ pub enum EdgeLabelSide {
 /// `Visual` SVG solve path) and `RoutedEdgeGeometry` (for MMDS/SVG/bounds
 /// consumers after routing). Populated exactly once by the label-lane pass
 /// and read-only downstream — every consumer sees the same rectangle and
-/// center. See plan 0145 architecture design §3.1 for invariants.
+/// center.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EdgeLabelGeometry {
     /// Midpoint of `rect`. Consumers may use either; no drift.
@@ -274,9 +274,9 @@ pub struct RoutedGraphGeometry {
     /// label-clamp pass in `route_graph_geometry`. **Empty in all healthy
     /// layouts.**
     ///
-    /// Plan 0146 Task 2.1: this field is populated unconditionally in **all**
-    /// builds (no `cfg(test)`, no env-var gating). Consumers may inspect it
-    /// to surface a warning. Not serialized in MMDS layout output (it is a
+    /// Populated unconditionally in **all** builds (no `cfg(test)`, no
+    /// env-var gating). Consumers may inspect it to surface a warning.
+    /// Not serialized in MMDS layout output (it is a
     /// routing diagnostic, not part of the layout contract); MMDS can carry
     /// it under a separate optional `diagnostics` object.
     pub unfit_label_overlaps: Vec<UnfitOverlap>,
@@ -337,8 +337,8 @@ pub struct RoutedEdgeGeometry {
     /// Shared label-rectangle geometry populated by the routing label-lane
     /// pass. Read by SVG/MMDS/bounds consumers; one rectangle, no divergence.
     pub label_geometry: Option<EdgeLabelGeometry>,
-    /// Plan 0149 (#237): lane-aware re-wrap output. `Some(lines)` when the
-    /// post-lane `label_rewrap` pass decided to narrow this edge's label
+    /// Lane-aware re-wrap output. `Some(lines)` when the post-lane
+    /// `label_rewrap` pass decided to narrow this edge's label
     /// below the pre-engine wrap width so it fits the compartment's
     /// `label_step` budget. Renderers (SVG `labels.rs`, text `edge.rs`,
     /// MMDS replay) must prefer this over `diagram.edges[idx].

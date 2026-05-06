@@ -1,9 +1,6 @@
 //! Kernel-local rank-space reservation for multi-member edge-label
 //! compartments. Runs inside Phase 4 (position.rs) after Brandes-Köpf has
 //! produced cross-axis coordinates.
-//!
-//! Design record:
-//! `.gumbo/plans/0150-kernel-compartment-rank-spacing/architecture/design.md`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -213,8 +210,8 @@ mod tests {
 
     #[test]
     fn kernel_grouping_agrees_with_routing_grouping_on_synthetic_cases() {
-        // Plan 0150 canary (scope-reduced form of task 4.1): instead of
-        // running both kernel and routing end-to-end and comparing
+        // Canary: instead of running both kernel and routing end-to-end and
+        // comparing
         // compartment sets, this test exercises the shared algorithmic
         // invariant — bucket by scope, sort by cross_min, merge with
         // INTER_TRACK_GAP / LANE_GAP slack — on synthetic candidates and
@@ -280,8 +277,8 @@ mod tests {
 
     #[test]
     fn inter_track_gap_matches_routing_lane_gap() {
-        // Plan 0150: the kernel reservation pass intentionally duplicates
-        // routing's LANE_GAP as INTER_TRACK_GAP to avoid a kernel → routing
+        // The kernel reservation pass intentionally duplicates routing's
+        // LANE_GAP as INTER_TRACK_GAP to avoid a kernel → routing
         // dependency. This test is the drift-detection check required by
         // design.md §7.
         assert!(

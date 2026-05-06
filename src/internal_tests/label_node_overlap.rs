@@ -1,4 +1,4 @@
-//! Plan 0146: corpus-wide assertion that no edge label rect overlaps the
+//! Corpus-wide assertion that no edge label rect overlaps the
 //! source/target node rect or the source/target marker bounding box.
 //!
 //! Walks every `.mmd` flowchart fixture under `tests/fixtures/flowchart/`,

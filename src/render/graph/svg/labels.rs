@@ -155,8 +155,8 @@ pub(super) fn render_edge_labels(
         // Prefer label_geometry.center (populated by the routing label-lane pass)
         // over the precomputed label_position when available. Falls through to
         // fallback + revalidation when label_geometry is None.
-        // TODO(plan 0145 PR 3 / task 3.7): remove precomputed/revalidate fallback
-        // once label_lanes populates label_geometry for all edges.
+        // TODO: remove precomputed/revalidate fallback once label_lanes
+        // populates label_geometry for all edges.
         let layout_edge = geom.edges.iter().find(|e| e.index == edge_idx);
         let label_geom = layout_edge.and_then(|e| e.label_geometry.as_ref());
         // The lane-assignment pass writes `label_geometry` with either
@@ -198,10 +198,10 @@ pub(super) fn render_edge_labels(
         let Some(point) = position else {
             continue;
         };
-        // Plan 0149 (#237): prefer the post-lane re-wrap output when
-        // the routing pass decided to narrow this edge's label. Falling
-        // back to `edge.wrapped_label_lines` (pre-engine wrap) when no
-        // re-wrap happened keeps non-overflowing edges byte-stable.
+        // Prefer the post-lane re-wrap output when the routing pass decided
+        // to narrow this edge's label. Falling back to
+        // `edge.wrapped_label_lines` (pre-engine wrap) when no re-wrap
+        // happened keeps non-overflowing edges byte-stable.
         //
         // Why not mutate `edge.wrapped_label_lines` upstream? The kernel's
         // Grid-mode measurement reads that artifact during layout. By the
@@ -334,8 +334,8 @@ pub(super) fn precomputed_label_positions(geom: &GraphGeometry) -> HashMap<usize
 /// Resolve the label center for a given edge index, preferring
 /// `label_geometry.center` when present, falling back to `label_position`
 /// (precomputed by the layout engine), then to path-based midpoint fallbacks.
-// TODO(plan 0145 PR 3 / task 3.7): once label_lanes populates label_geometry
-// for all edges, the precomputed/fallback paths may be simplified.
+// TODO: once label_lanes populates label_geometry for all edges, the
+// precomputed/fallback paths may be simplified.
 #[cfg(test)]
 fn resolve_edge_label_center(
     geom: &GraphGeometry,

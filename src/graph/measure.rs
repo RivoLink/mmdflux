@@ -73,8 +73,7 @@ impl ProportionalTextMetrics {
     /// Width = max width across lines; height = `line_height * lines.len()`
     /// plus symmetric label padding on both axes. Mirrors
     /// [`Self::edge_label_dimensions`] so the wrapped path is a drop-in
-    /// replacement wherever `wrapped_label_lines` is populated. Plan 0147
-    /// Task 1.6 / design.md §6.3.
+    /// replacement wherever `wrapped_label_lines` is populated.
     pub fn edge_label_dimensions_wrapped(&self, lines: &[String]) -> (f64, f64) {
         let line_count = lines.len().max(1) as f64;
         let max_width = lines
@@ -215,7 +214,7 @@ pub fn grid_edge_label_dimensions(label: &str) -> (f64, f64) {
 /// Grid edge-label dimensions for a pre-wrapped label. Mirrors
 /// [`grid_edge_label_dimensions`] but consumes a persisted wrap artifact
 /// instead of `'\n'`-splitting raw text, so wrap decisions made in pixel
-/// units (plan 0147) are honored by the Grid measurement path too.
+/// units are honored by the Grid measurement path too.
 pub fn grid_edge_label_dimensions_wrapped(lines: &[String]) -> (f64, f64) {
     let width = lines
         .iter()
@@ -360,7 +359,7 @@ mod tests {
         assert_eq!((w, h), (9, 3));
     }
 
-    // -- Plan 0147, Task 1.6: wrapped-dims measurement primitive --
+    // -- wrapped-dims measurement primitive --
 
     #[test]
     fn edge_label_dimensions_wrapped_measures_multi_line_height() {
@@ -388,7 +387,7 @@ mod tests {
         assert!((h_single - h_wrap).abs() < 0.001);
     }
 
-    // -- Plan 0145, Task 1.7: Label padding contract --
+    // -- Label padding contract --
 
     #[test]
     fn proportional_text_metrics_default_label_padding_matches_svg_constants() {
@@ -399,7 +398,7 @@ mod tests {
         assert_eq!(DEFAULT_LABEL_PADDING_Y, 2.0);
     }
 
-    // -- Plan 0147, Task 1.1: wrap_lines greedy word-wrap (Red) --
+    // -- wrap_lines greedy word-wrap --
 
     #[test]
     fn wrap_lines_greedy_breaks_on_word_boundaries() {
@@ -440,7 +439,7 @@ mod tests {
         assert_eq!(lines, vec!["single".to_string()]);
     }
 
-    // -- Plan 0147, Task 1.3: <br>-derived '\n' acts as a hard segment break --
+    // -- <br>-derived '\n' acts as a hard segment break --
 
     #[test]
     fn wrap_lines_preserves_br_hard_breaks_as_segment_boundaries() {

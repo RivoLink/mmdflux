@@ -1,14 +1,10 @@
-//! Plan 0147 Task 2.1 Red: TD labeled edge emits two waypoints under
-//! `LabelDummyRouting::Bend`.
+//! TD labeled edge emits two waypoints under `LabelDummyRouting::Bend`.
 //!
 //! This file references `LabelDummyPlacement` / `LabelDummyRouting` which
-//! are introduced in Task 2.3. Until 2.3 ships the enum split, the whole
-//! crate test binary will not compile — this is the documented Red state
-//! per `plan-0147/tasks/2.1-red-two-waypoint-td.md`.
+//! must both exist before the test can compile.
 //!
-//! Once 2.3 adds the enums the test will compile and fail at runtime
-//! (path length 3, not 4). Task 2.4 emits the two waypoints and turns the
-//! test green.
+//! The runtime assertion expects Bend routing to emit two waypoints
+//! around the label dummy.
 
 use crate::diagrams::flowchart::compile_to_graph;
 use crate::engines::graph::algorithms::layered::{

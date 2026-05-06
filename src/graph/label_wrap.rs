@@ -5,13 +5,12 @@
 //! `max_width`. Every downstream wrap consumer (layered kernel sizing scan,
 //! `populate_label_geometry`, SVG text, routed SVG replay, MMDS routed
 //! replay) reads the same artifact instead of recomputing, which is the
-//! divergence bug plan 0145 task 1.7 and plan 0147 design.md §6.2 set out
-//! to eliminate.
+//! divergence class this pass is meant to eliminate.
 //!
-//! Module lives at the `graph` tier per plan 0147 design.md §4.5 and
-//! `boundaries.toml:17-30` (`graph` allowed deps are `errors` and `format`).
+//! Module lives at the `graph` tier per `boundaries.toml:17-30` (`graph`
+//! allowed deps are `errors` and `format`).
 //! The runtime call site is `runtime::graph_family::render_graph_family`
-//! per design.md §6.1.
+//! so wrapping happens before engine sizing.
 
 use crate::graph::Edge;
 use crate::graph::measure::{ProportionalTextMetrics, wrap_lines};

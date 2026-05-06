@@ -895,7 +895,7 @@ pub struct Edge {
     ///
     /// Appears at both `layout` and `routed` geometry levels when the engine
     /// has assigned a side. `None` means the engine made no assignment.
-    /// Plan 0145 populates this via `EdgeLabelGeometry` (Task 1.13).
+    /// Populated from `EdgeLabelGeometry` when label-side assignment runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub label_side: Option<String>,
@@ -903,8 +903,8 @@ pub struct Edge {
     ///
     /// Includes `label_padding_x` / `label_padding_y` padding on each side.
     /// Consumers that need the unpadded rectangle can subtract the padding
-    /// constants advertised in the profile. Plan 0145 populates this via
-    /// `EdgeLabelGeometry` (Task 1.13).
+    /// constants advertised in the profile. Populated from
+    /// `EdgeLabelGeometry` when routed label geometry is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub label_rect: Option<Rect>,

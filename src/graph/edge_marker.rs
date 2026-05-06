@@ -33,9 +33,8 @@
 
 use crate::graph::Arrow;
 
-// Consumers land in Task 1.1 (assertion test) and Task 2.1 (clamp pass) of
-// plan 0146. Until those land, the helpers are exercised only by the unit
-// tests in this module.
+// Consumers are the assertion test and the clamp pass. Until those land, the
+// helpers are exercised only by the unit tests in this module.
 
 /// Full envelope of an edge marker bounding box at the path endpoint.
 ///

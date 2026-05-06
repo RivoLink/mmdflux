@@ -53,9 +53,9 @@ type IndexedDrawPathPair = (usize, DrawPath, usize, DrawPath);
 
 const BACKWARD_ROUTE_GAP: usize = 2;
 
-// Plan 0153 PR #B: `label_geometry_to_grid_dims` and
-// `label_block_overlaps_nodes` deleted from derive/mod.rs — the derive-time
-// corridor-aware placer that used them has been removed. Equivalent logic
+// `label_geometry_to_grid_dims` and `label_block_overlaps_nodes` deleted from
+// derive/mod.rs — the derive-time corridor-aware placer that used them has
+// been removed. Equivalent logic
 // lives in `src/graph/grid/label_placement.rs` and
 // `src/render/graph/text/label_placement.rs`.
 
@@ -487,8 +487,8 @@ pub fn geometry_to_grid_layout_with_routed(
         &mut preserve_routed_path_topology,
     );
 
-    // Plan 0153 PR #B: derive-time `edge_label_positions` removed. The
-    // render-time placer projects `label_geometry.center` at render time via
+    // Derive-time `edge_label_positions` removed. The render-time placer
+    // projects `label_geometry.center` at render time via
     // `layout.project_layout_point`; no precomputed per-edge cache lives on
     // `GridLayout` anymore.
 
@@ -844,8 +844,8 @@ pub fn geometry_to_grid_layout_with_routed(
 
     let node_directions = geometry.node_directions.clone();
 
-    // Plan 0153 PR #B: derive-time corridor-aware placer removed. The
-    // render-time placer in `src/render/graph/text/label_placement.rs` now
+    // Derive-time corridor-aware placer removed. The render-time placer in
+    // `src/render/graph/text/label_placement.rs` now
     // owns every body-label anchor and reads its footprint from Pass-3
     // segments (not `routed_edge_paths`). `edge_label_positions` and
     // `authoritative_label_positions` are no longer populated here.

@@ -1,13 +1,13 @@
-//! Plan 0146 Task 2.1: edge-label boundary clamp.
+//! Edge-label boundary clamp.
 //!
 //! Walks every routed edge with `label_geometry`, computes the available
 //! gap between visual source/target node faces (plus marker avoidance)
 //! along the edge-parallel axis, and slides the label rect into that gap.
 //! When the label cannot fit (`span > gap`), records an `UnfitOverlap`
 //! entry on the routed geometry's public field so downstream consumers
-//! (MMDS diagnostics + CLI stderr per Task 2.3) can surface the
-//! diagnostic. The label rect is left at its pre-clamp position in
-//! that case so the visual fallback is the same as pre-fix.
+//! (MMDS diagnostics + CLI stderr) can surface the diagnostic. The label
+//! rect is left at its pre-clamp position in that case so the visual
+//! fallback is the same as pre-fix.
 
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ use crate::graph::{Direction, Graph};
 ///
 /// Records unfit cases (label too large for the gap) on the supplied
 /// `unfit_overlaps` vec — populated unconditionally in **all builds**
-/// per plan 0146 Rev 2 (no `cfg(test)`, no env-gating, no thread-local).
+/// with no `cfg(test)`, env-gating, or thread-local side channel.
 pub(crate) fn clamp_label_geometry_to_node_bounds(
     edges: &mut [RoutedEdgeGeometry],
     nodes: &HashMap<String, PositionedNode>,

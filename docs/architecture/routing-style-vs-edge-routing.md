@@ -100,5 +100,6 @@ Re-open consolidation only when one or more of these occur:
 
 ## References
 
-- `.gumbo/research/0039-architecture-extensibility-readiness/q4-routing-abstraction-boundary.md`
-- `.gumbo/research/0047-orthogonal-routing-unification/synthesis.md`
+This note summarizes the routing-boundary decision for the public repository.
+The private investigation artifacts that informed it are intentionally not
+linked here.

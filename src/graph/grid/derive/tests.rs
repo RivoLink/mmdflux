@@ -799,7 +799,7 @@ fn test_subgraph_bounds_maps_rects() {
 }
 
 // =========================================================================
-// to_grid_rect() Tests (Plan 0028, Task 1.1)
+// to_grid_rect() Tests
 // =========================================================================
 
 #[test]
@@ -910,7 +910,7 @@ fn direction_override_none_when_not_specified() {
     assert_eq!(diagram.subgraphs["sg1"].dir, None);
 }
 
-// Plan 0148 (#238): padding grid-mode label dummies widens rank gaps
+// Padding grid-mode label dummies widens rank gaps.
 // for labeled edges. `deconflict_backward_corridor_columns` (this
 // module, `MIN_CORRIDOR_GAP = 2`) runs post-projection on grid-space
 // paths, so same-column backward-edge corridors must still be spread

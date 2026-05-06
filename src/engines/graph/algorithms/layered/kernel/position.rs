@@ -509,7 +509,7 @@ mod tests {
         );
     }
 
-    // Plan 0150: compartment-pass integration tests.
+    // Compartment-pass integration tests.
     //
     // Fixture shape: two labeled edges A→C and B→C. Both edges get an
     // EdgeLabel dummy at rank 1; with per_edge_label_spacing the labeled
@@ -663,7 +663,7 @@ mod tests {
         );
     }
 
-    // Plan 0150: horizontal variant of the compartment-pass integration
+    // Horizontal variant of the compartment-pass integration
     // tests. Same topology, direction flipped. Width drives rank-axis
     // extent in LR/RL. RL mirrors LR after reverse_positions.
     fn build_two_label_layout_h(config: &LayoutConfig) -> LayoutGraph {

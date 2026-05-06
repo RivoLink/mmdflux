@@ -1,4 +1,4 @@
-//! Render-time corridor-aware label placer (Plan 0153).
+//! Render-time corridor-aware label placer.
 //!
 //! The wrapper lives on the render side so it can reach for render-owned
 //! helpers (`effective_edge_label`, `label_block`, `clamp_label_x`,
@@ -7,10 +7,8 @@
 //! operations (`segments_to_footprint`, `choose_corridor_aware_anchor`,
 //! seeding helpers, cell-claim) — see `src/graph/grid/label_placement.rs`.
 //!
-//! PR #A activates `RenderTimePlacementScope::AuthoritativeOnly` from the
-//! authoritative branch at `edge::render_all_edges_with_labels` (task 1.6);
-//! PR #B flips every body-label site to `AllBodyLabels` and collapses the
-//! multi-branch body.
+//! `RenderTimePlacementScope` lets tests stage ownership between coordinated
+//! labels and all body labels while preserving the same placement machinery.
 
 #![cfg_attr(not(test), allow(dead_code))]
 
@@ -33,12 +31,11 @@ const OFF_CORRIDOR_DRIFT_THRESHOLD: f64 = 3.0;
 /// Which edges the render-time placer is allowed to own.
 ///
 /// Used to stage the migration from the derive-time placer to the render-time
-/// placer. PR #A uses `AuthoritativeOnly`; PR #B flips to `AllBodyLabels`.
+/// placer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RenderTimePlacementScope {
     /// Only edges the label-lane pass coordinated (track != 0 or
-    /// compartment_size > 1). Matches Plan 0152 Phase 3's
-    /// `authoritative_label_positions` subset.
+    /// compartment_size > 1).
     AuthoritativeOnly,
     /// Every body-label edge. Phase 4 head/tail labels are still excluded.
     AllBodyLabels,
@@ -164,7 +161,7 @@ pub(crate) fn compute_label_placements(
         // remains visually attached to the leg instead of falling back to the
         // stale projected x-position. Prior label claims still keep projected
         // placement; dense reciprocal compartments need the existing sibling
-        // deconfliction behavior. See research 0068 Q3 and Plan 0154 finding 03.
+        // deconfliction behavior.
         let backward_midpoint = backward_midpoint_candidate(
             routed,
             midpoint,
@@ -183,8 +180,7 @@ pub(crate) fn compute_label_placements(
         // projected cell is materially off-corridor and the Pass-3 midpoint is
         // on-corridor. This keeps ordinary lane-coordinated labels stable while
         // covering the singleton F2 cases and observed two-label forward
-        // cases that share the same off-corridor projection shape. See
-        // research 0069 Q3 addendum + Q4 F2.
+        // cases that share the same off-corridor projection shape.
         let projected = if should_prefer_midpoint_for_forward_edge(
             routed,
             geometry,
@@ -340,9 +336,8 @@ fn edge_label_geometry<'rg>(
         .and_then(|e| e.label_geometry.as_ref())
 }
 
-/// Mirrors Plan 0152 Phase 3's authoritative gate: an edge is authoritative
-/// when the lane pass coordinated its label track or the compartment size is
-/// greater than 1.
+/// An edge is authoritative when the lane pass coordinated its label track or
+/// the compartment size is greater than 1.
 fn is_authoritative_geometry(geometry: &EdgeLabelGeometry) -> bool {
     geometry.track != 0 || geometry.compartment_size > 1
 }
@@ -368,9 +363,8 @@ fn should_prefer_midpoint_for_forward_edge(
     let (Some(projected), Some(midpoint)) = (projected, midpoint) else {
         return false;
     };
-    // Research 0069 Q2 used >3 cells as the bucket-(a) off-corridor
-    // boundary. Keeping that same boundary makes this a measured bad-
-    // projection repair, not a general rewrite of coordinated label policy.
+    // The >3-cell boundary keeps this a measured bad-projection repair, not
+    // a general rewrite of coordinated label policy.
     if distance_to_segments(projected, &routed.segments) <= OFF_CORRIDOR_DRIFT_THRESHOLD
         || distance_to_segments(midpoint, &routed.segments) > OFF_CORRIDOR_DRIFT_THRESHOLD
     {

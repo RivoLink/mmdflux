@@ -191,7 +191,7 @@ where
     debug_dump_pipeline(&lg, "after_normalize");
 
     // Phase 2.6: Optionally move label dummies to widest layer.
-    // Plan 0147 Task 2.3: placement is now orthogonal to routing.
+    // Placement is now orthogonal to routing.
     if config.label_dummy_placement != LabelDummyPlacement::Midpoint {
         switch_label_dummies(&mut lg, config.label_dummy_placement);
     }
@@ -243,7 +243,7 @@ where
     // Compute per-gap variable spacing overrides from edge density.
     // Dense gaps (3+ forward edges) get extra space proportional to edge count
     // above the threshold. Sparse gaps use base rank_sep (no override).
-    // Based on research 0056 Q5 (routing-driven spacing, option B2).
+    // Routing-driven spacing based on per-gap edge density.
     if config.variable_rank_spacing {
         config.rank_sep_overrides = compute_rank_sep_overrides(&lg, &config);
     }
@@ -284,9 +284,9 @@ where
     };
 
     // Extract waypoints from dummy positions.
-    // Plan 0147 Task 2.4: config drives label-dummy routing (Bend emits
-    // two waypoints on the dummy's perpendicular faces; Center keeps the
-    // single-center-waypoint dagre behavior).
+    // Config drives label-dummy routing: Bend emits two waypoints on the
+    // dummy's perpendicular faces; Center keeps the single-center-waypoint
+    // dagre behavior.
     let edge_waypoints = normalize::denormalize(&lg, &config);
 
     // Extract label positions and sides

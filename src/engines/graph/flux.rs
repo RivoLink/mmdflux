@@ -41,12 +41,11 @@ pub(crate) fn flux_layout_profile(
         per_edge_label_spacing: true,
         label_side_selection: true,
         label_side_strategy: LabelSideStrategy::DirectionDown,
-        // Plan 0147 Task 2.3 / 2.6: flux profile uses WidestLayer placement
-        // and the Bend routing that Task 2.4 ships.
+        // Flux profile uses WidestLayer placement and Bend routing.
         label_dummy_placement: LabelDummyPlacement::WidestLayer,
         label_dummy_routing: LabelDummyRouting::Bend,
         backward_edge_side_grouping: true,
-        // Plan 0147 Task 1.7: flux profile enables wrap at 200 px.
+        // Flux profile enables wrap at 200 px.
         edge_label_max_width: input_cfg.edge_label_max_width.or(Some(200.0)),
         ..input_cfg.clone()
     }

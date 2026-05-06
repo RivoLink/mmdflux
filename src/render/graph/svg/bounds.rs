@@ -128,8 +128,8 @@ pub(super) fn compute_svg_bounds(
         // Prefer label_geometry.rect when precomputed positions would be used.
         // label_geometry is the authoritative source populated by the routing
         // label-lane pass; it carries both center and padded rect.
-        // TODO(plan 0145 PR 3 / task 3.7): remove precomputed/revalidate fallback
-        // once label_lanes populates label_geometry for all edges.
+        // TODO: remove precomputed/revalidate fallback once label_lanes
+        // populates label_geometry for all edges.
         let layout_edge = geom.edges.iter().find(|e| e.index == edge_idx);
         if let Some(g) = layout_edge.and_then(|e| e.label_geometry.as_ref())
             && use_precomputed

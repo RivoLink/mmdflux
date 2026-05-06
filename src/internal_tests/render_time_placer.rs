@@ -322,8 +322,7 @@ fn assert_target_label_on_corridor(fixture_name: &str, from: &str, to: &str, lab
     );
 }
 
-/// P0.2 (Plan 0155): Inventory every labeled forward edge across the
-/// flowchart corpus. Grounds Phase 1/2 assertions.
+/// Inventory every labeled forward edge across the flowchart corpus.
 ///
 /// Run: `cargo nextest run -E 'test(p0_2_inventory_singleton_forward_labels)' --run-ignored all --no-capture`
 #[test]
@@ -402,7 +401,7 @@ fn p0_2_inventory_singleton_forward_labels() {
     panic!("p0_2 intentional failure to surface printout under --nocapture");
 }
 
-/// P0.2 (Plan 0154): Inventory every labeled backward edge.
+/// Inventory every labeled backward edge.
 ///
 /// Run: `cargo nextest run -E 'test(p0_2_inventory_backward_labels)' --run-ignored all --no-capture`
 #[test]
@@ -545,9 +544,9 @@ fn c2_backward_vertical_avoids_corners() {
 }
 
 /// C4: backward horizontal, forward + backward labels on parallel asymmetric
-/// markers. Confirms the placer closes the PR #252 regression class (Plan
-/// 0152 Phase 3's original trigger). Both labels must render and neither may
-/// land on a load-bearing `┌`/`└` corner glyph.
+/// markers. Confirms the placer closes the PR #252 regression class. Both
+/// labels must render and neither may land on a load-bearing `┌`/`└` corner
+/// glyph.
 #[test]
 fn c4_backward_horizontal_corner_avoidance() {
     let output = render_flowchart_fixture("backward_label_asymmetric_markers.mmd");
@@ -695,9 +694,9 @@ fn c8_self_edge_fallback_without_label_geometry() {
     );
 }
 
-/// Plan 0155 / research 0069 Q2 + Q3 addendum: singleton non-authoritative
-/// forward-edge labels must place within 3 cells of the Pass-3 segments rather
-/// than landing on the projected `EdgeLabelGeometry.center`.
+/// Singleton non-authoritative forward-edge labels must place within 3 cells
+/// of the Pass-3 segments rather than landing on the projected
+/// `EdgeLabelGeometry.center`.
 #[test]
 fn f2_no_complex_e_to_f_on_corridor() {
     assert_target_label_on_corridor("complex.mmd", "E", "F", "no");
@@ -727,7 +726,7 @@ fn f3_no_labeled_edges_config_error_on_corridor() {
     assert_target_label_on_corridor("labeled_edges.mmd", "Config", "Error", "no");
 }
 
-/// Corpus guard for Plan 0155's midpoint-owned forward labels: exact singleton
+/// Corpus guard for midpoint-owned forward labels: exact singleton
 /// non-authoritative edges, the drift-gated two-label coordinated shape
 /// observed for `miss` and `Yes`, and tiny safe labels in larger
 /// compartments. Every matched label must land within 3 cells of the Pass-3
@@ -835,8 +834,8 @@ fn f2_forward_midpoint_owned_labels_on_corridor() {
     );
 }
 
-/// Plan 0154 / research 0068 Q3: backward U-bracket labels must sit inline
-/// on the horizontal leg, not one row above it in the reserved gap.
+/// Backward U-bracket labels must sit inline on the horizontal leg, not one
+/// row above it in the reserved gap.
 #[test]
 fn q3_backward_u_bracket_fail_label_inline_on_horizontal_leg() {
     let pipeline = verified_flowchart_pipeline("backward_loop_lr.mmd");
@@ -866,14 +865,14 @@ fn q3_backward_u_bracket_fail_label_inline_on_horizontal_leg() {
     assert_eq!(
         placement.center.1, bracket_row,
         "'Fail' label expected on bracket row {bracket_row}, got row {} (delta = {delta}). \
-         This asserts the Plan 0153 PR #B regression is fixed; see research 0068 Q3.",
+         This asserts the backward U-bracket regression is fixed.",
         placement.center.1,
     );
 }
 
-/// Plan 0154 / research 0068 Q3: every labeled backward edge across flowchart
-/// fixtures must place its label either on a long horizontal leg of the routed
-/// path or on the Pass-3 midpoint row.
+/// Every labeled backward edge across flowchart fixtures must place its label
+/// either on a long horizontal leg of the routed path or on the Pass-3
+/// midpoint row.
 #[test]
 fn q3_backward_labels_inline_on_horizontal_leg_corpus() {
     let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))

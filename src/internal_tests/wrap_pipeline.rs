@@ -1,4 +1,4 @@
-//! Plan 0147 Task 1.4: sequencing test for `normalize_br_tags` → `wrap_lines`.
+//! Sequencing test for `normalize_br_tags` → `wrap_lines`.
 //!
 //! `internal_tests` is exempt from the semantic boundary graph (see
 //! `boundaries.toml:14`), so this module may freely import from both
@@ -53,7 +53,7 @@ fn wrap_lines_respects_br_normalized_input() {
 /// Phase 1.5b integration gate: runtime wrap pass populates
 /// `diagram::Edge.wrapped_label_lines` before the engine runs, so every
 /// downstream consumer sees the same wrap decision instead of
-/// recomputing. See plan 0147 design.md §6.1.
+/// recomputing.
 #[test]
 fn runtime_render_populates_wrapped_label_lines_for_long_label() {
     let input =

@@ -7272,7 +7272,7 @@ B o--o C
 <summary>Mermaid source</summary>
 
 ```
-%% User repro from research 0043: lollipop lines must not drop implicit classes.
+%% User repro: lollipop lines must not drop implicit classes.
 classDiagram
 class Class01 {
   int amount
@@ -9377,4 +9377,3 @@ stateDiagram-v2
 ```
 
 </details>
-

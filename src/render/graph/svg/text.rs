@@ -17,7 +17,7 @@ pub(super) struct BackgroundStyle<'a> {
     pub(super) extra_attrs: &'a str,
 }
 
-// Plan 0145 Task 1.7: label padding defaults now live in `graph::measure`
+// Label padding defaults live in `graph::measure`.
 // so layout dummy reservations and render backgrounds stay in lockstep.
 pub(super) const LABEL_BG_PAD_X: f64 = DEFAULT_LABEL_PADDING_X;
 pub(super) const LABEL_BG_PAD_Y: f64 = DEFAULT_LABEL_PADDING_Y;
@@ -36,7 +36,7 @@ pub(super) fn render_text_centered(
 /// Like [`render_text_centered`] but uses a pre-wrapped line vector when
 /// `wrapped_lines` is `Some`, so the background rect and text lines come
 /// from the same wrap decision the layout engine reserved space for.
-/// Plan 0147 Task 1.6.
+/// Honors pre-engine wrapped label lines when available.
 pub(super) fn render_text_centered_with_wrap(
     writer: &mut SvgWriter,
     center: FPoint,
