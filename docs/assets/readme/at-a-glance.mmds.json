@@ -2,7 +2,8 @@
   "version": 1,
   "profiles": [
     "mmds-core-v1",
-    "mmdflux-text-v1"
+    "mmdflux-text-v1",
+    "mmdflux-text-metrics-v1"
   ],
   "extensions": {
     "org.mmdflux.render.text.v1": {
@@ -11,14 +12,14 @@
           "2": [
             {
               "rank": 1,
-              "x": 97.4992,
+              "x": 96.12890625,
               "y": 137.0
             }
           ],
           "3": [
             {
               "rank": 3,
-              "x": 291.2472,
+              "x": 286.451171875,
               "y": 341.0
             }
           ]
@@ -54,6 +55,27 @@
           }
         }
       }
+    },
+    "org.mmdflux.text-metrics.v1": {
+      "defaultTextStyle": {
+        "font-family": "\"trebuchet ms\", verdana, arial, sans-serif",
+        "font-size": 16.0,
+        "font-style": "normal",
+        "font-weight": "400",
+        "line-height": 24.0
+      },
+      "layoutText": {
+        "edge-label-max-width": 200.0,
+        "label-padding-x": 4.0,
+        "label-padding-y": 2.0,
+        "node-padding-x": 15.0,
+        "node-padding-y": 15.0
+      },
+      "metricsProfile": {
+        "id": "mmdflux-sans-v1",
+        "source": "recorded",
+        "version": 1
+      }
     }
   },
   "defaults": {
@@ -72,7 +94,7 @@
     "diagram_type": "flowchart",
     "direction": "TD",
     "bounds": {
-      "width": 477.9952,
+      "width": 469.7734375,
       "height": 478.0
     },
     "engine": "flux-layered"
@@ -83,11 +105,11 @@
       "label": "Step 1",
       "parent": "sg1",
       "position": {
-        "x": 97.4992,
+        "x": 96.12890625,
         "y": 239.0
       },
       "size": {
-        "width": 108.9984,
+        "width": 106.2578125,
         "height": 54.0
       }
     },
@@ -96,11 +118,11 @@
       "label": "Step 2",
       "parent": "sg1",
       "position": {
-        "x": 256.49760000000003,
+        "x": 252.38671875,
         "y": 239.0
       },
       "size": {
-        "width": 108.9984,
+        "width": 106.2578125,
         "height": 54.0
       }
     },
@@ -109,11 +131,11 @@
       "label": "Step 3",
       "parent": "sg1",
       "position": {
-        "x": 415.496,
+        "x": 408.64453125,
         "y": 239.0
       },
       "size": {
-        "width": 108.9984,
+        "width": 106.2578125,
         "height": 54.0
       }
     },
@@ -121,11 +143,11 @@
       "id": "End",
       "label": "End",
       "position": {
-        "x": 176.99839999999998,
+        "x": 174.2578125,
         "y": 443.0
       },
       "size": {
-        "width": 85.984,
+        "width": 88.46875,
         "height": 54.0
       }
     },
@@ -133,11 +155,11 @@
       "id": "Start",
       "label": "Start",
       "position": {
-        "x": 176.9984,
+        "x": 174.2578125,
         "y": 35.0
       },
       "size": {
-        "width": 95.26400000000001,
+        "width": 93.7890625,
         "height": 54.0
       }
     }
@@ -149,16 +171,16 @@
       "target": "B",
       "path": [
         [
-          151.9984,
+          149.2578125,
           239.0
         ],
         [
-          201.9984,
+          199.2578125,
           239.0
         ]
       ],
       "label_position": {
-        "x": 176.9984,
+        "x": 174.2578125,
         "y": 239.0
       },
       "is_backward": false,
@@ -166,7 +188,7 @@
         "face": "right",
         "fraction": 0.5,
         "position": {
-          "x": 151.9984,
+          "x": 149.2578125,
           "y": 239.0
         },
         "group_size": 1
@@ -175,7 +197,7 @@
         "face": "left",
         "fraction": 0.5,
         "position": {
-          "x": 201.9984,
+          "x": 199.2578125,
           "y": 239.0
         },
         "group_size": 1
@@ -187,16 +209,16 @@
       "target": "C",
       "path": [
         [
-          310.9968,
+          305.515625,
           239.0
         ],
         [
-          360.9968,
+          355.515625,
           239.0
         ]
       ],
       "label_position": {
-        "x": 335.9968,
+        "x": 330.515625,
         "y": 239.0
       },
       "is_backward": false,
@@ -204,7 +226,7 @@
         "face": "right",
         "fraction": 0.5,
         "position": {
-          "x": 310.9968,
+          "x": 305.515625,
           "y": 239.0
         },
         "group_size": 1
@@ -213,7 +235,7 @@
         "face": "left",
         "fraction": 0.5,
         "position": {
-          "x": 360.9968,
+          "x": 355.515625,
           "y": 239.0
         },
         "group_size": 1
@@ -225,24 +247,24 @@
       "target": "A",
       "path": [
         [
-          176.9984,
+          174.2578125,
           62.0
         ],
         [
-          176.9984,
+          174.2578125,
           137.0
         ],
         [
-          97.4992,
+          96.12890625,
           137.0
         ],
         [
-          97.4992,
+          96.12890625,
           212.0
         ]
       ],
       "label_position": {
-        "x": 137.24880000000002,
+        "x": 135.193359375,
         "y": 137.0
       },
       "is_backward": false,
@@ -250,7 +272,7 @@
         "face": "bottom",
         "fraction": 0.5,
         "position": {
-          "x": 176.9984,
+          "x": 174.2578125,
           "y": 62.0
         },
         "group_size": 1
@@ -259,7 +281,7 @@
         "face": "top",
         "fraction": 0.5,
         "position": {
-          "x": 97.4992,
+          "x": 96.12890625,
           "y": 212.0
         },
         "group_size": 1
@@ -271,24 +293,24 @@
       "target": "End",
       "path": [
         [
-          382.60661176470586,
+          376.2992302389706,
           266.0
         ],
         [
-          382.60661176470586,
+          376.2992302389706,
           341.0
         ],
         [
-          176.9984,
+          174.2578125,
           341.0
         ],
         [
-          176.9984,
+          174.2578125,
           416.0
         ]
       ],
       "label_position": {
-        "x": 279.80250588235293,
+        "x": 275.2785213694853,
         "y": 341.0
       },
       "is_backward": false,
@@ -296,7 +318,7 @@
         "face": "bottom",
         "fraction": 0.5,
         "position": {
-          "x": 415.496,
+          "x": 408.64453125,
           "y": 266.0
         },
         "group_size": 1
@@ -305,7 +327,7 @@
         "face": "top",
         "fraction": 0.5,
         "position": {
-          "x": 176.99839999999998,
+          "x": 174.2578125,
           "y": 416.0
         },
         "group_size": 1
@@ -323,7 +345,7 @@
       ],
       "direction": "LR",
       "bounds": {
-        "width": 461.9952,
+        "width": 453.7734375,
         "height": 204.0
       }
     }

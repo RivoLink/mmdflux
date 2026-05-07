@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `de8587a9` — 171 fixtures_
+_Generated from commit `0095ab74` — 171 fixtures_
 
 - [Flowchart](#flowchart) (112)
 - [Class](#class) (17)
@@ -39,7 +39,6 @@ _Generated from commit `de8587a9` — 171 fixtures_
 ![ampersand svg](../tests/svg-snapshots/flowchart/ampersand.svg)
 
 </details>
-
 <details>
 <summary>Mermaid source</summary>
 
@@ -7272,7 +7271,7 @@ B o--o C
 <summary>Mermaid source</summary>
 
 ```
-%% User repro: lollipop lines must not drop implicit classes.
+%% User repro from research 0043: lollipop lines must not drop implicit classes.
 classDiagram
 class Class01 {
   int amount
