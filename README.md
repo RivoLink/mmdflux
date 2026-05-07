@@ -90,6 +90,10 @@ Specification) outputs positioned graph data — node coordinates, routed edge
 paths, subgraph bounds — so downstream tools can consume diagram geometry
 without parsing SVG or scraping pixels.
 
+**Typed diagram edits and events.** Rust adapters can materialize MMDS, apply
+`Command` values, inspect accepted `ModelEvent`s, and hand the edited document
+back to the renderer without a JSON round trip.
+
 **Materialized diagram views.** Rust adapters can filter canonical MMDS payloads
 into read-side views for focused rendering, traversal, or event correlation
 without inventing a separate graph query language.
@@ -274,6 +278,43 @@ let svg = render_diagram(
 
 SVG `<defs>` blocks are also pruned to the markers each diagram actually uses, so simple flowcharts and sequence diagrams no longer carry unused arrowhead definitions.
 
+## Adapter workflows
+
+mmdflux is not only a one-shot renderer. Advanced Rust integrations can treat
+MMDS as a live document model. Condensed from the full example, the flow is:
+
+```rust
+let source = r#"graph TD
+api[API] --> auth[Auth]
+api --> billing[Billing]
+auth --> users[(Users)]
+billing --> ledger[(Ledger)]
+"#;
+let mut document = materialize_diagram(source, &RenderConfig::default())?;
+
+let model_events = apply(
+    &Command::ChangeNodeLabel {
+        node: "billing".into(),
+        label: "Billing API".into(),
+    },
+    &mut document,
+)?;
+
+let spec = ViewSpec::new(vec![ViewStatement::Include(Selector::Traversal {
+    anchor: AnchorRef::Node("api".into()),
+    direction: TraversalDirection::Downstream,
+    hops: 1,
+})]);
+let (view, view_events) = project(&document, &spec)?;
+let text = render_document(&view, OutputFormat::Text, &RenderConfig::default())?;
+```
+
+See [`examples/commands_events_views.rs`](examples/commands_events_views.rs) for
+the full flow, or the rustdocs for
+[`commands`](https://docs.rs/mmdflux/latest/mmdflux/commands/),
+[`mmds::events`](https://docs.rs/mmdflux/latest/mmdflux/mmds/events/), and
+[`views`](https://docs.rs/mmdflux/latest/mmdflux/views/).
+
 ## Documentation
 
 - [Developer setup](docs/development/setup.md) — prerequisites and first-time setup
@@ -300,6 +341,8 @@ The low-level API is smaller and adapter-focused:
 - `registry` and `payload` for explicit detect/parse/payload flows
 - `graph` and `timeline` for family-specific IR inspection
 - `mmds` for MMDS `Document` parsing, replay, and Mermaid generation
+- `commands` and `mmds::events` for typed MMDS edits and accepted model
+  transition events
 - `views` for materializing filtered read-side MMDS payloads
 
 The rest of the crate tree (`diagrams`, `engines`, `render`, and `mermaid`)
