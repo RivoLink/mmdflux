@@ -16,8 +16,8 @@ use crate::graph::measure::{
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
 use crate::render::graph::{
-    SvgRenderOptions, render_svg_from_geometry_with_theme_and_routing,
-    render_svg_from_routed_geometry_with_theme, render_text_from_geometry,
+    SvgRenderOptions, render_svg_from_geometry_with_theme_routing_and_metrics,
+    render_svg_from_routed_geometry_with_theme_and_metrics, render_text_from_geometry,
 };
 use crate::runtime::config::RenderConfig;
 use crate::runtime::resolve_configured_svg_theme;
@@ -47,6 +47,7 @@ pub(crate) fn render_graph_family(
                 &render_result.solve,
                 &options,
                 config,
+                &render_result.text_metrics.metrics,
             )?)
         }
         OutputFormat::Text | OutputFormat::Ascii => {
@@ -210,19 +211,25 @@ fn render_svg_from_solve_result(
     result: &GraphSolveResult,
     options: &SvgRenderOptions,
     config: &RenderConfig,
+    text_metrics: &ProportionalTextMetrics,
 ) -> Result<String, RenderError> {
     let theme = resolve_configured_svg_theme(config)?;
 
     Ok(match result.routed.as_ref() {
-        Some(routed) => {
-            render_svg_from_routed_geometry_with_theme(diagram, routed, options, theme.as_ref())
-        }
-        None => render_svg_from_geometry_with_theme_and_routing(
+        Some(routed) => render_svg_from_routed_geometry_with_theme_and_metrics(
+            diagram,
+            routed,
+            options,
+            theme.as_ref(),
+            text_metrics,
+        ),
+        None => render_svg_from_geometry_with_theme_routing_and_metrics(
             diagram,
             &result.geometry,
             options,
             crate::render::graph::edge_routing_from_style(options.routing_style),
             theme.as_ref(),
+            text_metrics,
         ),
     })
 }
@@ -329,11 +336,14 @@ mod tests {
     #[test]
     fn svg_renderer_consumes_graph_solve_result() {
         let (diagram, result) = graph_solve_result_fixture();
+        let text_metrics = resolve_text_metrics_profile(TextMetricsProfileConfig::default())
+            .expect("default text metrics should resolve");
         let svg = render_svg_from_solve_result(
             &diagram,
             &result,
             &SvgRenderOptions::default(),
             &RenderConfig::default(),
+            &text_metrics.metrics,
         )
         .expect("SVG render should succeed");
         assert!(svg.starts_with("<svg"));
