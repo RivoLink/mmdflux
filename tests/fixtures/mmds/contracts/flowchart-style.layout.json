@@ -27,8 +27,8 @@
     },
     "org.mmdflux.text-metrics.v1": {
       "metricsProfile": {
-        "id": "mmdflux-heuristic-proportional-v1",
-        "source": "heuristic",
+        "id": "mmdflux-sans-v1",
+        "source": "recorded",
         "version": 1
       },
       "defaultTextStyle": {
@@ -63,7 +63,7 @@
     "diagram_type": "flowchart",
     "direction": "TD",
     "bounds": {
-      "width": 115.16159999999999,
+      "width": 116.921875,
       "height": 70.0
     },
     "engine": "flux-layered"
@@ -73,11 +73,11 @@
       "id": "A",
       "label": "Alpha",
       "position": {
-        "x": 57.580799999999996,
+        "x": 58.4609375,
         "y": 35.0
       },
       "size": {
-        "width": 99.16159999999999,
+        "width": 100.921875,
         "height": 54.0
       }
     }

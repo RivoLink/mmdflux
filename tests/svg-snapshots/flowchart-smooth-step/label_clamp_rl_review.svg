@@ -1,26 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 304.04 81.03" style="max-width: 304.04px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 307.37 81.52" style="max-width: 307.37px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(0.00,-17.76)">
+  <g transform="translate(0.00,-17.31)">
     <g class="edgePaths">
-      <path d="M210.05,35.50 L190.05,35.50 Q185.05,35.50 185.05,40.50 L185.05,49.50 Q185.05,54.50 180.05,54.50 L102.44,54.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M210.05,73.50 L185.05,73.50 L102.44,73.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M209.12,35.50 L189.12,35.50 Q184.12,35.50 184.12,40.50 L184.12,49.50 Q184.12,54.50 179.12,54.50 L102.23,54.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M209.12,73.50 L184.12,73.50 L102.23,73.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="210.05" y="27.50" width="85.98" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="253.04" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">One</text>
-      <rect x="8.00" y="27.50" width="90.44" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="53.22" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Two</text>
+      <rect x="209.12" y="27.50" width="90.24" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="254.25" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">One</text>
+      <rect x="8.00" y="27.50" width="90.23" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="53.11" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Two</text>
     </g>
     <g class="edgeLabels">
-      <rect x="169.53" y="40.50" width="16.54" height="28.00" fill="white" />
-      <text x="177.80" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">x</text>
-      <rect x="123.38" y="38.79" width="33.61" height="52.00" fill="white" />
-      <text x="140.19" y="52.79" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
-      <text x="140.19" y="76.79" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
+      <rect x="168.88" y="40.50" width="16.00" height="28.00" fill="white" />
+      <text x="176.88" y="54.50" text-anchor="middle" dominant-baseline="middle" fill="#333">x</text>
+      <rect x="123.53" y="38.83" width="32.90" height="52.00" fill="white" />
+      <text x="139.98" y="52.83" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
+      <text x="139.98" y="76.83" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
     </g>
   </g>
 </svg>

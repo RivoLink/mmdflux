@@ -16,6 +16,10 @@ use crate::graph::{Direction, Node, Shape};
 pub const COMPATIBILITY_TEXT_METRICS_PROFILE_ID: &str = "mmdflux-heuristic-proportional-v1";
 /// Recorded profile backed by static generated mmdflux sans metrics.
 pub const RECORDED_SANS_TEXT_METRICS_PROFILE_ID: &str = RECORDED_SANS_PROFILE_ID;
+/// Direct graph-family default text metrics profile.
+pub const DEFAULT_TEXT_METRICS_PROFILE_ID: &str = RECORDED_SANS_TEXT_METRICS_PROFILE_ID;
+/// Legacy fallback profile for MMDS documents that predate text-metrics metadata.
+pub const LEGACY_MMDS_TEXT_METRICS_PROFILE_ID: &str = COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
 /// Supported graph-family text metrics profile identifiers.
 pub const SUPPORTED_TEXT_METRICS_PROFILE_IDS: &[&str] = &[
     COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
@@ -290,9 +294,7 @@ pub fn supported_text_metrics_profile_ids() -> &'static str {
 pub fn resolve_text_metrics_profile(
     config: TextMetricsProfileConfig<'_>,
 ) -> Result<ResolvedTextMetrics, UnsupportedTextMetricsProfile> {
-    let profile_id = config
-        .profile_id
-        .unwrap_or(COMPATIBILITY_TEXT_METRICS_PROFILE_ID);
+    let profile_id = config.profile_id.unwrap_or(DEFAULT_TEXT_METRICS_PROFILE_ID);
     validate_text_metrics_profile_id(profile_id)?;
 
     let (metrics, source) = match profile_id {
@@ -408,7 +410,11 @@ pub fn wrap_lines(metrics: &ProportionalTextMetrics, text: &str, max_width: f64)
     out
 }
 
-/// Default proportional metrics used by engine-side float/MMDS layout flows.
+/// Compatibility proportional metrics used by legacy engine-side callers.
+///
+/// This intentionally stays pinned to the heuristic profile even though direct
+/// graph-family rendering now defaults to `mmdflux-sans-v1`; sequence and
+/// internal compatibility paths consume this function directly.
 pub fn default_proportional_text_metrics() -> ProportionalTextMetrics {
     ProportionalTextMetrics::new(
         DEFAULT_PROPORTIONAL_FONT_SIZE,
@@ -607,9 +613,9 @@ mod tests {
 
         assert_eq!(
             resolved.descriptor.profile_id,
-            COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+            RECORDED_SANS_TEXT_METRICS_PROFILE_ID
         );
-        assert_eq!(resolved.descriptor.source, "heuristic");
+        assert_eq!(resolved.descriptor.source, "recorded");
         assert_eq!(resolved.descriptor.version, 1);
         assert_eq!(
             resolved.descriptor.default_text_style.font_family,
@@ -698,8 +704,11 @@ mod tests {
 
     #[test]
     fn compatibility_profile_source_is_heuristic() {
-        let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig::default())
-            .expect("compatibility profile resolves");
+        let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig {
+            profile_id: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            ..TextMetricsProfileConfig::default()
+        })
+        .expect("compatibility profile resolves");
 
         assert_eq!(
             resolved.descriptor.profile_id,

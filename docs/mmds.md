@@ -370,8 +370,8 @@ layout and replay:
 
 - profile: `mmdflux-text-metrics-v1`
 - extension namespace: `org.mmdflux.text-metrics.v1`
-- default compatibility metrics profile: `mmdflux-heuristic-proportional-v1`
-- opt-in recorded metrics profile: `mmdflux-sans-v1`
+- direct default recorded metrics profile: `mmdflux-sans-v1`
+- compatibility metrics profile: `mmdflux-heuristic-proportional-v1`
 
 Payload shape:
 
@@ -381,8 +381,8 @@ Payload shape:
   "extensions": {
     "org.mmdflux.text-metrics.v1": {
       "metricsProfile": {
-        "id": "mmdflux-heuristic-proportional-v1",
-        "source": "heuristic",
+        "id": "mmdflux-sans-v1",
+        "source": "recorded",
         "version": 1
       },
       "defaultTextStyle": {
@@ -407,15 +407,21 @@ Payload shape:
 Rules:
 
 - New graph-family MMDS output emits this profile and extension.
-- `mmdflux-heuristic-proportional-v1` remains the default. `mmdflux-sans-v1`
-  is opt-in, graph-family-only, and backed by mmdflux-owned generated static
-  width tables.
+- `mmdflux-sans-v1` is the direct graph-family default and is backed by
+  mmdflux-owned generated static width tables.
+- `mmdflux-heuristic-proportional-v1` remains available as the
+  compatibility profile for callers that need the previous heuristic
+  geometry.
+- Text and ASCII output ignore `fontMetricsProfile` and remain pinned to
+  compatibility metrics for wrap preparation.
 - `metricsProfile.source` is a provenance category: `heuristic` for the
   compatibility estimates, `recorded` for generated static tables, and
   reserved `dynamic` for future live measurement backends.
 - The recorded profile source font is provenance, not an exact Mermaid or
-  browser font claim. Browser `measureText` remains out of scope for this
-  static profile.
+  browser font claim.
+- SVG font-family and metrics profile are intentionally decoupled for now: the default recorded profile uses Liberation Sans Regular advances, while emitted SVG continues to use the existing Mermaid-style font stack.
+- Exposing SVG `fontFamily` remains future work.
+- Dynamic/browser font measurement remains out of scope for this static profile.
 - Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
 - Replay is document-owned: a caller-supplied `fontMetricsProfile` must match the replay profile, and the replay profile plus persisted `layoutText` values override SVG font and node-padding config.
 - Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.

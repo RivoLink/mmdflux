@@ -9,6 +9,7 @@ annotate-snippets = "0.12.13"
 anyhow = "1"
 ctrlc = "3"
 hex = "0.4"
+mmdflux = { path = "..", default-features = false }
 notify = "8"
 ra_ap_cfg = "=0.0.328"
 ra_ap_hir = "=0.0.328"

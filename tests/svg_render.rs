@@ -67,10 +67,25 @@ fn render_svg(input: &str, config: &RenderConfig) -> String {
 }
 
 #[test]
-fn font_metrics_explicit_compatibility_profile_matches_default_svg() {
+fn font_metrics_explicit_recorded_profile_matches_default_svg() {
     let input = load_flowchart_fixture("labeled_edges.mmd");
     let default_svg = render_svg(&input, &RenderConfig::default());
     let explicit_svg = render_svg(
+        &input,
+        &RenderConfig {
+            font_metrics_profile: Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID.to_string()),
+            ..RenderConfig::default()
+        },
+    );
+
+    assert_eq!(explicit_svg, default_svg);
+}
+
+#[test]
+fn font_metrics_explicit_compatibility_profile_differs_from_default_svg() {
+    let input = load_flowchart_fixture("labeled_edges.mmd");
+    let default_svg = render_svg(&input, &RenderConfig::default());
+    let compatibility_svg = render_svg(
         &input,
         &RenderConfig {
             font_metrics_profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID.to_string()),
@@ -78,7 +93,7 @@ fn font_metrics_explicit_compatibility_profile_matches_default_svg() {
         },
     );
 
-    assert_eq!(explicit_svg, default_svg);
+    assert_ne!(compatibility_svg, default_svg);
 }
 
 #[test]
@@ -122,9 +137,18 @@ fn mmdflux_sans_svg_uses_recorded_profile_for_rendered_label_backgrounds() {
 }
 
 #[test]
-fn text_output_ignores_recorded_font_profile_for_now() {
-    let input = "graph TD\nA[mmmm] --> B[iiii]";
+fn text_output_forces_compatibility_profile_for_wrap_metrics() {
+    let input = include_str!("fixtures/flowchart/flowchart_code_flow.mmd");
     let default_text = render_diagram(input, OutputFormat::Text, &RenderConfig::default()).unwrap();
+    let compatibility_text = render_diagram(
+        input,
+        OutputFormat::Text,
+        &RenderConfig {
+            font_metrics_profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID.to_string()),
+            ..RenderConfig::default()
+        },
+    )
+    .unwrap();
     let recorded_text = render_diagram(
         input,
         OutputFormat::Text,
@@ -135,7 +159,8 @@ fn text_output_ignores_recorded_font_profile_for_now() {
     )
     .unwrap();
 
-    assert_eq!(recorded_text, default_text);
+    assert_eq!(default_text, compatibility_text);
+    assert_eq!(recorded_text, compatibility_text);
 }
 
 #[test]
@@ -217,9 +242,9 @@ fn graph_circle_marker_paths_stop_at_circle_border() {
     let input = load_class_fixture("lollipop_interfaces.mmd");
     let svg = render_svg(&input, &RenderConfig::default());
 
-    assert!(svg.contains("d=\"M64.82,166.00 L64.82,206.00\""), "{svg}");
-    assert!(svg.contains("d=\"M210.80,62.00 L210.80,102.00\""), "{svg}");
-    assert!(!svg.contains("d=\"M64.82,166.00 L64.82,216.00\""), "{svg}");
+    assert!(svg.contains("d=\"M64.68,166.00 L64.68,206.00\""), "{svg}");
+    assert!(svg.contains("d=\"M207.82,62.00 L207.82,102.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M64.68,166.00 L64.68,216.00\""), "{svg}");
 }
 
 #[test]
@@ -239,8 +264,8 @@ fn class_open_arrow_paths_stop_at_triangle_border() {
     let input = load_class_fixture("simple.mmd");
     let svg = render_svg(&input, &RenderConfig::default());
 
-    assert!(svg.contains("d=\"M62.13,67.00 L62.13,112.00\""), "{svg}");
-    assert!(!svg.contains("d=\"M62.13,66.00 L62.13,112.00\""), "{svg}");
+    assert!(svg.contains("d=\"M62.45,67.00 L62.45,112.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M62.45,66.00 L62.45,112.00\""), "{svg}");
 }
 
 #[test]
@@ -262,8 +287,8 @@ fn class_open_diamond_paths_stop_at_diamond_border() {
     let input = load_class_fixture("two_way_relations.mmd");
     let svg = render_svg(&input, &RenderConfig::default());
 
-    assert!(svg.contains("d=\"M42.45,172.00 L42.45,210.00\""), "{svg}");
-    assert!(!svg.contains("d=\"M42.45,166.00 L42.45,216.00\""), "{svg}");
+    assert!(svg.contains("d=\"M43.78,172.00 L43.78,210.00\""), "{svg}");
+    assert!(!svg.contains("d=\"M43.78,166.00 L43.78,216.00\""), "{svg}");
 }
 
 #[test]

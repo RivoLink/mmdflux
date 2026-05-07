@@ -1,28 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 137.40 334.00" style="max-width: 137.40px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 132.06 334.00" style="max-width: 132.06px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(28.31,0.00)">
+  <g transform="translate(26.24,0.00)">
     <g class="edgePaths">
-      <path d="M19.86,62.00 L19.86,100.00 L24.27,100.00 C28.68,100.00 37.50,100.00 41.90,103.00 C46.31,106.00 46.31,112.00 46.31,115.00 L46.31,118.00 L46.31,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M72.77,62.00 L72.77,71.33 C72.77,80.67 72.77,99.33 72.77,116.33 C72.77,133.33 72.77,148.67 72.77,156.33 L72.77,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M46.31,222.00 L46.31,224.78 C46.31,227.56 46.31,233.11 46.31,238.11 C46.31,243.11 46.31,247.56 46.31,252.44 C46.31,257.33 46.31,262.67 46.31,265.33 L46.31,268.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M16.91,62.00 L16.91,100.00 L21.46,100.00 C26.02,100.00 35.13,100.00 39.69,103.00 C44.24,106.00 44.24,112.00 44.24,115.00 L44.24,118.00 L44.24,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M71.58,62.00 L71.58,71.33 C71.58,80.67 71.58,99.33 71.58,116.33 C71.58,133.33 71.58,148.67 71.58,156.33 L71.58,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M44.24,222.00 L44.24,224.78 C44.24,227.56 44.24,233.11 44.24,238.11 C44.24,243.11 44.24,247.56 44.24,252.44 C44.24,257.33 44.24,262.67 44.24,265.33 L44.24,268.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="11.86" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="11.86" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="11.86" y="272.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="299.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="8.91" y="8.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.91" y="168.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="8.46" y="272.00" width="71.55" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="299.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
     </g>
     <g class="edgeLabels">
-      <rect x="-10.09" y="92.50" width="56.63" height="28.00" fill="white" />
-      <text x="18.23" y="106.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 1</text>
-      <rect x="44.45" y="124.50" width="56.63" height="28.00" fill="white" />
-      <text x="72.77" y="138.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 2</text>
+      <rect x="-7.57" y="92.50" width="52.48" height="28.00" fill="white" />
+      <text x="18.67" y="106.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 1</text>
+      <rect x="45.34" y="124.50" width="52.48" height="28.00" fill="white" />
+      <text x="71.58" y="138.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 2</text>
     </g>
   </g>
 </svg>

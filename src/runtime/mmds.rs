@@ -11,8 +11,8 @@ use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::GeometryLevel;
 use crate::graph::measure::{
-    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_EDGE_LABEL_MAX_WIDTH,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_X, DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ResolvedTextMetrics,
+    DEFAULT_EDGE_LABEL_MAX_WIDTH, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, LEGACY_MMDS_TEXT_METRICS_PROFILE_ID, ResolvedTextMetrics,
     TextMetricsProfileConfig, TextMetricsProfileDescriptor, resolve_text_metrics_profile,
 };
 use crate::mmds::{
@@ -168,14 +168,17 @@ fn resolve_text_metrics_for_replay(
     let Some(extension) = payload.extensions.get(TEXT_METRICS_EXTENSION_NAMESPACE) else {
         ensure_requested_profile_matches_replay(
             requested_text_metrics_profile,
-            COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            LEGACY_MMDS_TEXT_METRICS_PROFILE_ID,
         )?;
-        return resolve_text_metrics_profile(TextMetricsProfileConfig::default())
-            .map(|resolved| ReplayTextMetrics {
-                resolved,
-                from_extension: false,
-            })
-            .map_err(display_error);
+        return resolve_text_metrics_profile(TextMetricsProfileConfig {
+            profile_id: Some(LEGACY_MMDS_TEXT_METRICS_PROFILE_ID),
+            ..TextMetricsProfileConfig::default()
+        })
+        .map(|resolved| ReplayTextMetrics {
+            resolved,
+            from_extension: false,
+        })
+        .map_err(display_error);
     };
 
     let metrics_profile = required_object(extension, "metricsProfile")?;
@@ -392,4 +395,83 @@ fn strip_routed_fields(payload: &Document) -> Document {
         subgraph.bounds = None;
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::measure::{
+        COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+    };
+
+    const LEGACY_LAYOUT_MMDS: &str = r##"{
+      "version": 1,
+      "profiles": ["mmds-core-v1"],
+      "defaults": {
+        "node": { "shape": "rectangle" },
+        "edge": {
+          "stroke": "solid",
+          "arrow_start": "none",
+          "arrow_end": "normal",
+          "minlen": 1
+        }
+      },
+      "geometry_level": "layout",
+      "metadata": {
+        "diagram_type": "flowchart",
+        "direction": "TD",
+        "bounds": { "width": 120.0, "height": 200.0 }
+      },
+      "nodes": [
+        {
+          "id": "A",
+          "label": "Alpha",
+          "position": { "x": 60.0, "y": 35.0 },
+          "size": { "width": 99.16, "height": 54.0 }
+        },
+        {
+          "id": "B",
+          "label": "Beta",
+          "position": { "x": 60.0, "y": 139.0 },
+          "size": { "width": 88.0, "height": 54.0 }
+        }
+      ],
+      "edges": [
+        { "id": "e0", "source": "A", "target": "B", "label": "mmmm" }
+      ]
+    }"##;
+
+    #[test]
+    fn replay_without_text_metrics_extension_resolves_legacy_compatibility_profile() {
+        let document = parse_input(LEGACY_LAYOUT_MMDS).expect("legacy MMDS should parse");
+        let replay = resolve_text_metrics_for_replay(&document, None)
+            .expect("legacy replay metrics should resolve");
+
+        assert_eq!(
+            replay.resolved.descriptor.profile_id,
+            COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+        );
+        assert_eq!(replay.resolved.descriptor.source, "heuristic");
+        assert!(!replay.from_extension);
+    }
+
+    #[test]
+    fn replay_without_text_metrics_extension_rejects_recorded_request() {
+        let document = parse_input(LEGACY_LAYOUT_MMDS).expect("legacy MMDS should parse");
+        let err = match resolve_text_metrics_for_replay(
+            &document,
+            Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID),
+        ) {
+            Ok(_) => panic!("legacy replay should reject recorded profile request"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.message.contains(&format!(
+                "font metrics profile '{}' does not match MMDS replay profile '{}'",
+                RECORDED_SANS_TEXT_METRICS_PROFILE_ID, COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+            )),
+            "{err}"
+        );
+    }
 }

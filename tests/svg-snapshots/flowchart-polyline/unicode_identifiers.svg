@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 583.62 70.00" style="max-width: 583.62px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 592.80 70.00" style="max-width: 592.80px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,19 +6,19 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M119.60,35.00 L165.60,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M289.92,35.00 L335.92,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M434.07,35.00 L480.07,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M120.49,35.00 L166.49,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M291.87,35.00 L337.87,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M440.12,35.00 L486.12,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="8.00" y="8.00" width="111.60" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="63.80" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Lasaña</text>
-      <rect x="169.60" y="8.00" width="120.32" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="229.76" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Máquina</text>
-      <rect x="339.92" y="8.00" width="94.15" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="386.99" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Ñoño</text>
-      <rect x="484.07" y="8.00" width="91.55" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="529.84" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Über</text>
+      <rect x="8.00" y="8.00" width="112.49" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="64.25" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Lasaña</text>
+      <rect x="170.49" y="8.00" width="121.38" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="231.18" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Máquina</text>
+      <rect x="341.87" y="8.00" width="98.25" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="390.99" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Ñoño</text>
+      <rect x="490.12" y="8.00" width="94.68" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="537.46" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Über</text>
     </g>
     <g class="edgeLabels">
     </g>

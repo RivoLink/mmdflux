@@ -181,6 +181,12 @@ fn compatibility_text_metrics_extension() -> Value {
     })
 }
 
+fn styled_mmds_layout_with_label(label: &str) -> String {
+    let mut value: Value = serde_json::from_str(STYLED_MMDS_LAYOUT).unwrap();
+    value["edges"][0]["label"] = Value::String(label.to_string());
+    serde_json::to_string(&value).unwrap()
+}
+
 fn mmds_fixture(path: &str) -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -406,13 +412,13 @@ fn mmds_output_emits_grid_projection_extension_when_available() {
 }
 
 #[test]
-fn font_metrics_explicit_compatibility_profile_matches_default_mmds_geometry() {
+fn font_metrics_explicit_recorded_profile_matches_default_mmds_geometry() {
     let input = flowchart_fixture("labeled_edges.mmd");
     let default_mmds: Value = serde_json::from_str(&render_json(&input)).unwrap();
     let explicit_mmds: Value = serde_json::from_str(&render_json_with_config(
         &input,
         &RenderConfig {
-            font_metrics_profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID.to_string()),
+            font_metrics_profile: Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID.to_string()),
             ..RenderConfig::default()
         },
     ))
@@ -442,9 +448,9 @@ fn text_metrics_mmds_output_emits_profile_and_extension_contract() {
     let extension = &value["extensions"]["org.mmdflux.text-metrics.v1"];
     assert_eq!(
         extension["metricsProfile"]["id"],
-        "mmdflux-heuristic-proportional-v1"
+        RECORDED_SANS_TEXT_METRICS_PROFILE_ID
     );
-    assert_eq!(extension["metricsProfile"]["source"], "heuristic");
+    assert_eq!(extension["metricsProfile"]["source"], "recorded");
     assert_eq!(extension["metricsProfile"]["version"], 1);
     assert_eq!(
         extension["defaultTextStyle"]["font-family"],
@@ -475,13 +481,31 @@ fn text_metrics_old_mmds_without_extension_still_replays() {
 }
 
 #[test]
-fn text_metrics_old_mmds_replay_matches_same_document_with_extension() {
-    let legacy_svg = render_mmds_input(
+fn text_metrics_old_mmds_without_extension_rejects_recorded_caller_profile() {
+    let err = render_mmds_input_result(
         STYLED_MMDS_LAYOUT,
         OutputFormat::Svg,
-        RenderConfig::default(),
+        RenderConfig {
+            font_metrics_profile: Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID.to_string()),
+            ..RenderConfig::default()
+        },
+    )
+    .expect_err("legacy MMDS replay should reject recorded caller profile");
+
+    assert!(
+        err.message.contains(&format!(
+            "font metrics profile '{}' does not match MMDS replay profile '{}'",
+            RECORDED_SANS_TEXT_METRICS_PROFILE_ID, COMPATIBILITY_TEXT_METRICS_PROFILE_ID
+        )),
+        "{err}"
     );
-    let mut value: Value = serde_json::from_str(STYLED_MMDS_LAYOUT).unwrap();
+}
+
+#[test]
+fn text_metrics_old_mmds_replay_matches_same_document_with_extension() {
+    let legacy_input = styled_mmds_layout_with_label("mmmm");
+    let legacy_svg = render_mmds_input(&legacy_input, OutputFormat::Svg, RenderConfig::default());
+    let mut value: Value = serde_json::from_str(&legacy_input).unwrap();
     value["profiles"]
         .as_array_mut()
         .unwrap()
@@ -626,7 +650,7 @@ fn text_metrics_routed_to_layout_mmds_preserves_profile_and_extension() {
     );
     assert_eq!(
         value["extensions"]["org.mmdflux.text-metrics.v1"]["metricsProfile"]["id"],
-        "mmdflux-heuristic-proportional-v1"
+        RECORDED_SANS_TEXT_METRICS_PROFILE_ID
     );
     assert!(value["edges"].as_array().unwrap().iter().all(|edge| {
         edge.get("path").is_none()
@@ -1534,8 +1558,15 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(docs.contains("org.mmdflux.text-metrics.v1"));
     assert!(docs.contains("mmdflux-heuristic-proportional-v1"));
     assert!(docs.contains("mmdflux-sans-v1"));
+    assert!(docs.contains("direct default recorded metrics profile: `mmdflux-sans-v1`"));
+    assert!(docs.contains("compatibility metrics profile: `mmdflux-heuristic-proportional-v1`"));
+    assert!(docs.contains("Text and ASCII output ignore `fontMetricsProfile`"));
     assert!(docs.contains("source font is provenance"));
-    assert!(docs.contains("Browser `measureText` remains out of scope"));
+    assert!(docs.contains("SVG font-family and metrics profile are intentionally decoupled"));
+    assert!(docs.contains("Liberation Sans Regular advances"));
+    assert!(docs.contains("emitted SVG continues to use the existing Mermaid-style font stack"));
+    assert!(docs.contains("Exposing SVG `fontFamily` remains future work"));
+    assert!(docs.contains("Dynamic/browser font measurement remains out of scope"));
     assert!(docs.contains("Sequence-family full text-metrics parity remains deferred"));
     assert!(docs.contains("line-height"));
 
@@ -1543,6 +1574,8 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(schema.contains("org.mmdflux.text-metrics.v1"));
     assert!(schema.contains("metricsProfile"));
     assert!(schema.contains("mmdflux-sans-v1"));
+    assert!(schema.contains("direct default 'mmdflux-sans-v1'"));
+    assert!(schema.contains("compatibility 'mmdflux-heuristic-proportional-v1'"));
     assert!(schema.contains("heuristic"));
     assert!(schema.contains("recorded"));
     assert!(schema.contains("dynamic"));
@@ -1580,6 +1613,11 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
     assert!(wasm_docs.contains("fontMetricsProfile"));
     assert!(wasm_docs.contains("mmdflux-heuristic-proportional-v1"));
     assert!(wasm_docs.contains("mmdflux-sans-v1"));
+    assert!(wasm_docs.contains("`fontMetricsProfile` defaults to `mmdflux-sans-v1`"));
+    assert!(wasm_docs.contains("The compatibility profile `mmdflux-heuristic-proportional-v1`"));
+    assert!(wasm_docs.contains("Text and ASCII output ignore this setting"));
+    assert!(wasm_docs.contains("SVG font-family and metrics profile are intentionally decoupled"));
+    assert!(wasm_docs.contains("Dynamic/browser font measurement remains out of scope"));
     assert!(!wasm_docs.contains("currently accepts only"));
 
     let readme = std::fs::read_to_string("README.md").unwrap();

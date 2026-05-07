@@ -9,9 +9,9 @@ use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::label_wrap::prepare_wrapped_labels;
 use crate::graph::measure::{
-    DEFAULT_PROPORTIONAL_NODE_PADDING_X, DEFAULT_PROPORTIONAL_NODE_PADDING_Y,
-    ProportionalTextMetrics, ResolvedTextMetrics, TextMetricsProfileConfig,
-    TextMetricsProfileDescriptor, resolve_text_metrics_profile,
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ProportionalTextMetrics, ResolvedTextMetrics,
+    TextMetricsProfileConfig, TextMetricsProfileDescriptor, resolve_text_metrics_profile,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -111,7 +111,7 @@ fn solve_graph_family_for_render(
     // Threshold comes from `RenderConfig.layout.edge_label_max_width`; the
     // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
     // default. Explicit `None` disables wrap (dagre-parity fallback).
-    let text_metrics = resolve_text_metrics_for_config(config)?;
+    let text_metrics = resolve_text_metrics_for_config(format, config)?;
     prepare_wrapped_labels(
         &mut diagram.edges,
         &text_metrics.metrics,
@@ -174,6 +174,7 @@ fn geometry_contract_for_format(format: OutputFormat) -> GraphGeometryContract {
 }
 
 fn resolve_text_metrics_for_config(
+    format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<ResolvedTextMetrics, RenderError> {
     let node_padding_x = config
@@ -183,7 +184,7 @@ fn resolve_text_metrics_for_config(
         .svg_node_padding_y
         .unwrap_or(DEFAULT_PROPORTIONAL_NODE_PADDING_Y);
     resolve_text_metrics_profile(TextMetricsProfileConfig {
-        profile_id: config.font_metrics_profile.as_deref(),
+        profile_id: text_metrics_profile_id_for_format(format, config),
         node_padding_x,
         node_padding_y,
         edge_label_max_width: config.layout.edge_label_max_width,
@@ -191,6 +192,15 @@ fn resolve_text_metrics_for_config(
     .map_err(|error| RenderError {
         message: error.to_string(),
     })
+}
+
+fn text_metrics_profile_id_for_format(format: OutputFormat, config: &RenderConfig) -> Option<&str> {
+    match format {
+        // Text/ASCII rendering remains grid-based and compatibility-stable, so
+        // caller-supplied proportional profile IDs are ignored for wrap prep.
+        OutputFormat::Text | OutputFormat::Ascii => Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+        _ => config.font_metrics_profile.as_deref(),
+    }
 }
 
 fn resolve_graph_engine_for_request(

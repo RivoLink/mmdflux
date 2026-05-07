@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 408.29 234.88" style="max-width: 408.29px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 408.06 235.36" style="max-width: 408.06px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,19 +6,19 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M167.26,89.61 L55.90,170.53" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M200.52,122.88 L200.52,168.88" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M234.13,89.27 L348.74,170.56" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M165.37,90.03 L54.57,171.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M198.70,123.36 L198.70,169.36" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M232.52,89.53 L348.12,171.05" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <polygon points="200.52,8.00 257.96,65.44 200.52,122.88 143.09,65.44" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="200.52" y="65.44" text-anchor="middle" dominant-baseline="middle" fill="#333">Decision</text>
-      <rect x="8.00" y="172.88" width="89.32" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="52.66" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Left</text>
-      <rect x="147.32" y="172.88" width="106.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="200.52" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Center</text>
-      <rect x="303.72" y="172.88" width="96.56" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="352.01" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Right</text>
+      <polygon points="198.70,8.00 256.38,65.68 198.70,123.36 141.02,65.68" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="198.70" y="65.68" text-anchor="middle" dominant-baseline="middle" fill="#333">Decision</text>
+      <rect x="8.00" y="173.36" width="86.69" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="51.34" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Left</text>
+      <rect x="144.69" y="173.36" width="108.02" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="198.70" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Center</text>
+      <rect x="302.71" y="173.36" width="97.35" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="351.39" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Right</text>
     </g>
     <g class="edgeLabels">
     </g>

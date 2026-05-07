@@ -1,28 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 149.25 334.00" style="max-width: 149.25px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 140.97 334.00" style="max-width: 140.97px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(28.31,0.00)">
+  <g transform="translate(26.24,0.00)">
     <g class="edgePaths">
-      <path d="M26.42,62.00 L8.00,87.00 L8.00,118.00 L31.10,164.42" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M66.21,62.00 L84.63,87.00 L84.63,118.00 L61.53,164.42" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M46.31,222.00 L46.31,268.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M25.42,62.00 L8.00,87.00 L8.00,118.00 L29.83,164.38" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M63.06,62.00 L80.48,87.00 L80.48,118.00 L58.65,164.38" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M44.24,222.00 L44.24,268.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="11.86" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="11.86" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="11.86" y="272.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="46.31" y="299.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="8.91" y="8.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.91" y="168.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="8.46" y="272.00" width="71.55" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="44.24" y="299.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
     </g>
     <g class="edgeLabels">
-      <rect x="-20.31" y="70.50" width="56.63" height="28.00" fill="white" />
+      <rect x="-18.24" y="70.50" width="52.48" height="28.00" fill="white" />
       <text x="8.00" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 1</text>
-      <rect x="56.31" y="70.50" width="56.63" height="28.00" fill="white" />
-      <text x="84.63" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 2</text>
+      <rect x="54.24" y="70.50" width="52.48" height="28.00" fill="white" />
+      <text x="80.48" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">path 2</text>
     </g>
   </g>
 </svg>

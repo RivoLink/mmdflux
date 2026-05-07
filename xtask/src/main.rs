@@ -2,6 +2,7 @@ mod architecture;
 mod font_metrics;
 mod lint;
 mod readme_assets;
+mod text_metrics_churn;
 
 use std::fs;
 use std::io::{self, Write};
@@ -36,6 +37,7 @@ fn try_main() -> Result<()> {
         "font-metrics" => run_font_metrics_command(&parsed.command_args),
         "lint" => run_lint_command(&parsed.command_args),
         "readme-assets" => run_readme_assets_command(&parsed.command_args),
+        "text-metrics-churn" => run_text_metrics_churn_command(&parsed.command_args),
         "help" | "--help" | "-h" => {
             print_help();
             Ok(())
@@ -279,6 +281,17 @@ fn run_readme_assets_command(args: &[String]) -> Result<()> {
     readme_assets::run(options)
 }
 
+fn run_text_metrics_churn_command(args: &[String]) -> Result<()> {
+    if args.iter().skip(1).any(|arg| is_help_arg(arg)) {
+        eprintln!("{}", text_metrics_churn::help_text());
+        return Ok(());
+    }
+
+    let options =
+        text_metrics_churn::parse_text_metrics_churn_args(args.iter().map(String::as_str))?;
+    text_metrics_churn::run(options)
+}
+
 fn print_help() {
     eprintln!(
         "\
@@ -289,6 +302,8 @@ Commands:
     font-metrics    Generate recorded font metrics tables
     lint            Run clippy and architecture boundary checks
     readme-assets   Refresh README showcase assets
+    text-metrics-churn
+                    Compare compatibility vs recorded text metrics output
 
 Run `cargo xtask <command> --help` for details."
     );

@@ -4153,6 +4153,7 @@ dependencies = [
  "anyhow",
  "ctrlc",
  "hex",
+ "mmdflux",
  "notify",
  "ra_ap_cfg",
  "ra_ap_hir",

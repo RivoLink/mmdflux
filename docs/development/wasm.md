@@ -59,7 +59,8 @@ Supported top-level keys:
 - `svgDiagramPadding`
 - `svgNodePaddingX`
 - `svgNodePaddingY`
-- `fontMetricsProfile` (`mmdflux-heuristic-proportional-v1`, `mmdflux-sans-v1`)
+- `fontMetricsProfile` (default: `mmdflux-sans-v1`; compatibility:
+  `mmdflux-heuristic-proportional-v1`)
 - `showIds`
 - `color` (`off`, `auto`, `always`)
 - `geometryLevel` (`layout`, `routed`)
@@ -74,11 +75,19 @@ Notes:
   WASM defaults to the `smooth-step` preset.
 - `color` only affects text/ascii output. `always` forces ANSI escapes, while `auto`
   resolves to plain text in WASM because there is no terminal-capability probe.
-- `fontMetricsProfile` defaults to `mmdflux-heuristic-proportional-v1` and
-  also accepts the opt-in graph-family `mmdflux-sans-v1` recorded static
-  profile. Unsupported profile IDs are rejected.
+- `fontMetricsProfile` defaults to `mmdflux-sans-v1` for direct graph-family
+  rendering. The compatibility profile `mmdflux-heuristic-proportional-v1`
+  remains available for callers that need the previous heuristic geometry.
+  Text and ASCII output ignore this setting and remain pinned to
+  compatibility metrics for wrap preparation. Unsupported profile IDs are
+  rejected.
 - WASM uses the same static profile tables as native rendering; browser
   `measureText` is not used by these profiles.
+- SVG font-family and metrics profile are intentionally decoupled for now: the
+  default recorded profile uses Liberation Sans Regular advances, while emitted
+  SVG continues to use the existing Mermaid-style font stack. Exposing SVG
+  `fontFamily` remains future work.
+- Dynamic/browser font measurement remains out of scope.
 - Release wasm artifacts use a size-optimized Cargo profile:
   `opt-level=z`, `codegen-units=1`, `lto=fat`, `panic=abort`.
 - Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
@@ -103,7 +112,7 @@ Example:
 {
   "layoutEngine": "flux-layered",
   "edgePreset": "smooth-step",
-  "fontMetricsProfile": "mmdflux-heuristic-proportional-v1",
+  "fontMetricsProfile": "mmdflux-sans-v1",
   "edgeRadius": 6,
   "geometryLevel": "routed",
   "pathSimplification": "lossless",

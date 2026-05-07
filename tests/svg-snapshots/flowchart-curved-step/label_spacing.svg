@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 203.82 230.00" style="max-width: 203.82px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 208.23 230.00" style="max-width: 208.23px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,22 +6,22 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M75.45,62.00 L75.45,80.00 L75.45,91.00 C75.45,102.00 75.45,124.00 69.95,135.00 C64.45,146.00 53.45,146.00 47.95,146.00 L42.45,146.00 L42.45,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M128.36,62.00 L128.36,80.00 L128.36,91.00 C128.36,102.00 128.36,124.00 133.86,135.00 C139.36,146.00 150.36,146.00 155.86,146.00 L161.36,146.00 L161.36,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M76.56,62.00 L76.56,80.00 L76.56,91.00 C76.56,102.00 76.56,124.00 71.02,135.00 C65.48,146.00 54.41,146.00 48.87,146.00 L43.34,146.00 L43.34,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M131.23,62.00 L131.23,80.00 L131.23,91.00 C131.23,102.00 131.23,124.00 136.77,135.00 C142.30,146.00 153.38,146.00 158.91,146.00 L164.45,146.00 L164.45,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="67.45" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="101.91" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="8.00" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="42.45" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="126.91" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="161.36" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="68.56" y="8.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="103.89" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.00" y="168.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="43.34" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="128.67" y="168.00" width="71.55" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="164.45" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
     </g>
     <g class="edgeLabels">
-      <rect x="37.51" y="99.00" width="42.89" height="28.00" fill="white" />
-      <text x="58.95" y="113.00" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
-      <rect x="116.83" y="99.00" width="56.07" height="28.00" fill="white" />
-      <text x="144.86" y="113.00" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
+      <rect x="39.49" y="99.00" width="40.91" height="28.00" fill="white" />
+      <text x="59.95" y="113.00" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
+      <rect x="121.16" y="99.00" width="53.36" height="28.00" fill="white" />
+      <text x="147.84" y="113.00" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
     </g>
   </g>
 </svg>

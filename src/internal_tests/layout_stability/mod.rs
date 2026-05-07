@@ -462,7 +462,7 @@ fn plan_0166_guardrails_preserve_prior_calibration_outputs() {
         m14.classification,
         Some(proportionality::ProportionalityClass::Disproportionate)
     );
-    assert!((m14.aggregate_ratio.expect("M14 aggregate ratio") - 5.4764).abs() < 0.25);
+    assert!((m14.aggregate_ratio.expect("M14 aggregate ratio") - 4.5881).abs() < 0.25);
     assert_eq!(m14.additive_path_shape_count, Some(15));
     assert_eq!(m14.label_geometry_overlap_count, Some(6));
 

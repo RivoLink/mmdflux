@@ -434,7 +434,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Text metrics profile identifier, e.g. 'mmdflux-heuristic-proportional-v1' or opt-in 'mmdflux-sans-v1'."
+          "description": "Text metrics profile identifier, e.g. direct default 'mmdflux-sans-v1' or compatibility 'mmdflux-heuristic-proportional-v1'."
         },
         "source": {
           "type": "string",

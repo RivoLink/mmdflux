@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 408.29 234.88" style="max-width: 408.29px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 408.06 235.36" style="max-width: 408.06px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,19 +6,19 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M170.44,92.79 L170.44,97.24 C170.44,101.69 170.44,110.59 155.76,119.49 C141.08,128.39 111.72,137.28 97.04,145.52 C82.36,153.75 82.36,161.31 82.36,165.09 L82.36,168.88" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M200.52,122.88 L200.52,125.65 C200.52,128.43 200.52,133.99 200.52,139.54 C200.52,145.10 200.52,150.65 200.52,155.54 C200.52,160.43 200.52,164.65 200.52,166.77 L200.52,168.88" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M230.96,92.45 L230.96,96.91 C230.96,101.38 230.96,110.32 246.06,119.26 C261.17,128.19 291.37,137.13 306.48,145.40 C321.58,153.67 321.58,161.27 321.58,165.08 L321.58,168.88" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M168.56,93.22 L168.56,97.68 C168.56,102.13 168.56,111.03 153.95,119.94 C139.34,128.84 110.11,137.74 95.50,145.98 C80.88,154.22 80.88,161.79 80.88,165.57 L80.88,169.36" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M198.70,123.36 L198.70,126.14 C198.70,128.91 198.70,134.47 198.70,140.03 C198.70,145.58 198.70,151.14 198.70,156.03 C198.70,160.91 198.70,165.14 198.70,167.25 L198.70,169.36" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M229.35,92.71 L229.35,97.19 C229.35,101.67 229.35,110.63 244.58,119.59 C259.82,128.56 290.30,137.52 305.54,145.81 C320.78,154.10 320.78,161.73 320.78,165.55 L320.78,169.36" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <polygon points="200.52,8.00 257.96,65.44 200.52,122.88 143.09,65.44" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="200.52" y="65.44" text-anchor="middle" dominant-baseline="middle" fill="#333">Decision</text>
-      <rect x="8.00" y="172.88" width="89.32" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="52.66" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Left</text>
-      <rect x="147.32" y="172.88" width="106.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="200.52" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Center</text>
-      <rect x="303.72" y="172.88" width="96.56" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="352.01" y="199.88" text-anchor="middle" dominant-baseline="middle" fill="#333">Right</text>
+      <polygon points="198.70,8.00 256.38,65.68 198.70,123.36 141.02,65.68" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="198.70" y="65.68" text-anchor="middle" dominant-baseline="middle" fill="#333">Decision</text>
+      <rect x="8.00" y="173.36" width="86.69" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="51.34" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Left</text>
+      <rect x="144.69" y="173.36" width="108.02" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="198.70" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Center</text>
+      <rect x="302.71" y="173.36" width="97.35" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="351.39" y="200.36" text-anchor="middle" dominant-baseline="middle" fill="#333">Right</text>
     </g>
     <g class="edgeLabels">
     </g>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 203.82 230.00" style="max-width: 203.82px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 208.23 230.00" style="max-width: 208.23px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,22 +6,22 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M71.04,62.00 L65.02,67.27 L61.26,70.56 C57.50,73.84 49.98,80.42 46.21,88.88 C42.45,97.33 42.45,107.67 42.45,119.17 C42.45,130.67 42.45,143.33 42.45,149.67 L42.45,156.00 L42.45,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M132.78,62.00 L138.80,67.27 L142.56,70.56 C146.32,73.84 153.84,80.42 157.60,88.88 C161.36,97.33 161.36,107.67 161.36,119.17 C161.36,130.67 161.36,143.33 161.36,149.67 L161.36,156.00 L161.36,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M72.45,62.00 L66.38,67.21 L62.54,70.51 C58.70,73.81 51.02,80.40 47.18,88.87 C43.34,97.33 43.34,107.67 43.34,119.17 C43.34,130.67 43.34,143.33 43.34,149.67 L43.34,156.00 L43.34,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M135.34,62.00 L141.40,67.21 L145.25,70.51 C149.09,73.81 156.77,80.40 160.61,88.87 C164.45,97.33 164.45,107.67 164.45,119.17 C164.45,130.67 164.45,143.33 164.45,149.67 L164.45,156.00 L164.45,164.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
-      <rect x="67.45" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="101.91" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="8.00" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="42.45" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="126.91" y="168.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="161.36" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="68.56" y="8.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="103.89" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.00" y="168.00" width="70.67" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="43.34" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="128.67" y="168.00" width="71.55" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="164.45" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
     </g>
     <g class="edgeLabels">
-      <rect x="21.01" y="70.50" width="42.89" height="28.00" fill="white" />
-      <text x="42.45" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
-      <rect x="133.33" y="70.50" width="56.07" height="28.00" fill="white" />
-      <text x="161.36" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
+      <rect x="22.88" y="70.50" width="40.91" height="28.00" fill="white" />
+      <text x="43.34" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
+      <rect x="137.77" y="70.50" width="53.36" height="28.00" fill="white" />
+      <text x="164.45" y="84.50" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
     </g>
   </g>
 </svg>

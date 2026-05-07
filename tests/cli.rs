@@ -152,6 +152,9 @@ fn cli_help_mentions_font_metrics_profile_flag() {
         .assert()
         .success()
         .stdout(predicate::str::contains("--font-metrics-profile"))
+        .stdout(predicate::str::contains(format!(
+            "default: {RECORDED_SANS_TEXT_METRICS_PROFILE_ID}"
+        )))
         .stdout(predicate::str::contains(
             COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
         ))
