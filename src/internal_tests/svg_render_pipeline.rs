@@ -6173,6 +6173,180 @@ mod plan_0145_q9_red {
     }
 }
 
+mod sibling_subgraph_label_placement {
+    use std::collections::HashMap;
+
+    use super::{
+        extract_edge_label_positions, parse_attr_f64, parse_flowchart_diagram_for_test,
+        parse_svg_text_position_and_value,
+    };
+    use crate::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
+    use crate::{OutputFormat, RenderConfig};
+
+    #[derive(Clone, Copy)]
+    struct SvgRect {
+        y: f64,
+        height: f64,
+    }
+
+    impl SvgRect {
+        fn bottom(self) -> f64 {
+            self.y + self.height
+        }
+    }
+
+    #[test]
+    fn nested_subgraph_parallel_labels_keep_cross_labels_centered_in_inter_region_gap() {
+        struct Case<'a> {
+            label: &'a str,
+            input: &'a str,
+            profile: Option<&'a str>,
+        }
+
+        let cases = [
+            Case {
+                label: "recorded default",
+                input: include_str!(
+                    "../../tests/fixtures/flowchart/nested_subgraph_parallel_labels.mmd"
+                ),
+                profile: None,
+            },
+            Case {
+                label: "compatibility with widened A1",
+                input: r#"graph TD
+    subgraph outer [Outer region]
+        subgraph inner_a [A region]
+            A1[Alpha One Wide] --> A2
+        end
+        subgraph inner_b [B region]
+            B1 --> B2
+        end
+    end
+    A1 -->|cross edge one| B1
+    A2 -->|cross edge two| B2
+"#,
+                profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            },
+            Case {
+                label: "compatibility with widened A2",
+                input: r#"graph TD
+    subgraph outer [Outer region]
+        subgraph inner_a [A region]
+            A1 --> A2[Alpha Two Wide]
+        end
+        subgraph inner_b [B region]
+            B1 --> B2
+        end
+    end
+    A1 -->|cross edge one| B1
+    A2 -->|cross edge two| B2
+"#,
+                profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            },
+            Case {
+                label: "compatibility with widened B1",
+                input: r#"graph TD
+    subgraph outer [Outer region]
+        subgraph inner_a [A region]
+            A1 --> A2
+        end
+        subgraph inner_b [B region]
+            B1[Beta One Wide] --> B2
+        end
+    end
+    A1 -->|cross edge one| B1
+    A2 -->|cross edge two| B2
+"#,
+                profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            },
+            Case {
+                label: "compatibility with widened B2",
+                input: r#"graph TD
+    subgraph outer [Outer region]
+        subgraph inner_a [A region]
+            A1 --> A2
+        end
+        subgraph inner_b [B region]
+            B1 --> B2[Beta Two Wide]
+        end
+    end
+    A1 -->|cross edge one| B1
+    A2 -->|cross edge two| B2
+"#,
+                profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            },
+        ];
+
+        for case in cases {
+            let diagram = parse_flowchart_diagram_for_test(case.input);
+            let svg = crate::render_diagram(
+                case.input,
+                OutputFormat::Svg,
+                &RenderConfig {
+                    font_metrics_profile: case.profile.map(str::to_string),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap_or_else(|err| panic!("{} should render: {err}", case.label));
+            let positions: HashMap<_, _> = extract_edge_label_positions(&svg, &diagram)
+                .into_iter()
+                .collect();
+            let one_y = positions
+                .get("cross edge one")
+                .unwrap_or_else(|| panic!("{} should render cross edge one", case.label))
+                .1;
+            let two_y = positions
+                .get("cross edge two")
+                .unwrap_or_else(|| panic!("{} should render cross edge two", case.label))
+                .1;
+            let a_region = named_subgraph_rect(&svg, "A region")
+                .unwrap_or_else(|| panic!("{} should render A region rect", case.label));
+            let b_region = named_subgraph_rect(&svg, "B region")
+                .unwrap_or_else(|| panic!("{} should render B region rect", case.label));
+            let gap_top = a_region.bottom();
+            let gap_bottom = b_region.y;
+            let gap_mid = (gap_top + gap_bottom) / 2.0;
+            let mid_tolerance = ((gap_bottom - gap_top) * 0.2).max(8.0);
+
+            assert!(
+                (one_y - two_y).abs() <= 1.0,
+                "{} should keep both cross labels in the same inter-region band; \
+                 got cross edge one y={one_y}, cross edge two y={two_y}\nSVG:\n{svg}",
+                case.label
+            );
+            for (label, y) in [("cross edge one", one_y), ("cross edge two", two_y)] {
+                assert!(
+                    gap_top < y && y < gap_bottom && (y - gap_mid).abs() <= mid_tolerance,
+                    "{} should center {label} in the inter-region gap; \
+                     got y={y}, gap=({gap_top}, {gap_bottom}), midpoint={gap_mid}, \
+                     tolerance={mid_tolerance}\nSVG:\n{svg}",
+                    case.label
+                );
+            }
+        }
+    }
+
+    fn named_subgraph_rect(svg: &str, label: &str) -> Option<SvgRect> {
+        let mut pending_rect = None;
+        for line in svg.lines().map(str::trim) {
+            if line.starts_with("<rect class=\"subgraph\"") {
+                pending_rect = Some(SvgRect {
+                    y: parse_attr_f64(line, "y")?,
+                    height: parse_attr_f64(line, "height")?,
+                });
+                continue;
+            }
+            let Some((_, _, value)) = parse_svg_text_position_and_value(line) else {
+                continue;
+            };
+            if value == label {
+                return pending_rect;
+            }
+        }
+        None
+    }
+}
+
 // -- Plan 0147 Task 4.1: user RL repro edges bow around peer label rects --
 
 // -- Plan 0147 Task 4.2: long_reciprocal_labels wraps + bends --

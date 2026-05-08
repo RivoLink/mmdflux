@@ -50,30 +50,19 @@ pub(crate) fn switch_label_dummies(lg: &mut LayoutGraph, placement: LabelDummyPl
         *rank_widths.entry(rank).or_default() += lg.dimensions[idx].0;
     }
 
-    for chain in &mut lg.dummy_chains {
-        let Some(label_idx) = chain.label_dummy_index else {
+    for chain_idx in 0..lg.dummy_chains.len() {
+        let Some(label_idx) = lg.dummy_chains[chain_idx].label_dummy_index else {
             continue;
         };
 
-        // Find the widest layer among all dummies in this chain
-        let best_idx = chain
-            .dummy_ids
-            .iter()
-            .enumerate()
-            .max_by(|(_, a_id), (_, b_id)| {
-                let a_rank = lg.node_index.get(a_id).map(|&i| lg.ranks[i]).unwrap_or(0);
-                let b_rank = lg.node_index.get(b_id).map(|&i| lg.ranks[i]).unwrap_or(0);
-                let a_w = rank_widths.get(&a_rank).copied().unwrap_or(0.0);
-                let b_w = rank_widths.get(&b_rank).copied().unwrap_or(0.0);
-                a_w.partial_cmp(&b_w).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(i, _)| i)
+        let best_idx = preferred_sibling_compound_boundary_label_index(lg, chain_idx)
+            .or_else(|| widest_label_index(lg, chain_idx, &rank_widths))
             .unwrap_or(label_idx);
 
         if best_idx != label_idx {
             // Swap: label dummy becomes Edge dummy, target becomes EdgeLabel dummy
-            let label_id = chain.dummy_ids[label_idx].clone();
-            let target_id = chain.dummy_ids[best_idx].clone();
+            let label_id = lg.dummy_chains[chain_idx].dummy_ids[label_idx].clone();
+            let target_id = lg.dummy_chains[chain_idx].dummy_ids[best_idx].clone();
 
             if let (Some(label_dummy), Some(_target_dummy)) = (
                 lg.dummy_nodes.get(&label_id).cloned(),
@@ -102,10 +91,84 @@ pub(crate) fn switch_label_dummies(lg: &mut LayoutGraph, placement: LabelDummyPl
                 lg.dimensions[label_graph_idx] = (0.0, 0.0);
                 lg.dimensions[target_graph_idx] = (label_w, label_h);
 
-                chain.label_dummy_index = Some(best_idx);
+                lg.dummy_chains[chain_idx].label_dummy_index = Some(best_idx);
             }
         }
     }
+}
+
+fn widest_label_index(
+    lg: &LayoutGraph,
+    chain_idx: usize,
+    rank_widths: &HashMap<i32, f64>,
+) -> Option<usize> {
+    lg.dummy_chains[chain_idx]
+        .dummy_ids
+        .iter()
+        .enumerate()
+        .max_by(|(_, a_id), (_, b_id)| {
+            let a_rank = lg.node_index.get(a_id).map(|&i| lg.ranks[i]).unwrap_or(0);
+            let b_rank = lg.node_index.get(b_id).map(|&i| lg.ranks[i]).unwrap_or(0);
+            let a_w = rank_widths.get(&a_rank).copied().unwrap_or(0.0);
+            let b_w = rank_widths.get(&b_rank).copied().unwrap_or(0.0);
+            a_w.partial_cmp(&b_w).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(i, _)| i)
+}
+
+fn preferred_sibling_compound_boundary_label_index(
+    lg: &LayoutGraph,
+    chain_idx: usize,
+) -> Option<usize> {
+    let chain = &lg.dummy_chains[chain_idx];
+    let &(source_idx, target_idx) = lg.original_edge_endpoints.get(chain.edge_index)?;
+    let source_parent = lg.parents[source_idx]?;
+    let target_parent = lg.parents[target_idx]?;
+
+    let shared_parent = lg.parents[source_parent]?;
+    if source_parent == target_parent || lg.parents[target_parent] != Some(shared_parent) {
+        return None;
+    }
+
+    let source_rank = lg.ranks[source_idx];
+    let target_rank = lg.ranks[target_idx];
+    let source_min = node_min_rank(lg, source_parent);
+    let source_max = node_max_rank(lg, source_parent);
+    let target_min = node_min_rank(lg, target_parent);
+    let target_max = node_max_rank(lg, target_parent);
+
+    // For direct sibling-compound crossings, the visually stable slot is the
+    // first dummy rank on the target side of the source compound. Downstream
+    // side selection and SVG rendering then use that dummy geometry, keeping
+    // labels in the inter-sibling gap instead of on the source boundary.
+    chain.dummy_ids.iter().enumerate().find_map(|(idx, id)| {
+        let dummy_idx = *lg.node_index.get(id)?;
+        let rank = lg.ranks[dummy_idx];
+        let inside_target = target_min <= rank && rank <= target_max;
+        let crossed_from_source = if source_rank < target_rank {
+            rank > source_max
+        } else if source_rank > target_rank {
+            rank < source_min
+        } else {
+            false
+        };
+
+        (inside_target && crossed_from_source).then_some(idx)
+    })
+}
+
+fn node_min_rank(lg: &LayoutGraph, node_idx: usize) -> i32 {
+    lg.min_rank
+        .get(&node_idx)
+        .copied()
+        .unwrap_or(lg.ranks[node_idx])
+}
+
+fn node_max_rank(lg: &LayoutGraph, node_idx: usize) -> i32 {
+    lg.max_rank
+        .get(&node_idx)
+        .copied()
+        .unwrap_or(lg.ranks[node_idx])
 }
 
 /// Assign Above/Below sides to label dummies using positional strategy.

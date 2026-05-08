@@ -16,8 +16,8 @@
     <g class="edgePaths">
       <path d="M212.68,162.00 L243.30,208.66" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M144.42,476.00 L175.04,522.66" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M171.02,162.00 L126.70,212.00 L126.70,291.00 L126.70,322.00 L126.70,372.00 L126.70,418.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M263.21,266.00 L263.21,291.00 L263.21,322.00 L263.21,372.00 L263.21,422.00 L210.87,522.45" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M171.02,162.00 L126.70,212.00 L126.70,316.00 L126.70,341.00 L126.70,372.00 L126.70,418.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M263.21,266.00 L263.21,316.00 L263.21,341.00 L263.21,372.00 L263.21,422.00 L210.87,522.45" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="nodes">
       <rect x="155.17" y="108.00" width="79.57" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
@@ -30,10 +30,10 @@
       <text x="194.96" y="553.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B2</text>
     </g>
     <g class="edgeLabels">
-      <rect x="68.00" y="274.50" width="117.41" height="28.00" fill="white" />
-      <text x="126.70" y="288.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge one</text>
-      <rect x="205.41" y="274.50" width="115.61" height="28.00" fill="white" />
-      <text x="263.21" y="288.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge two</text>
+      <rect x="68.00" y="324.50" width="117.41" height="28.00" fill="white" />
+      <text x="126.70" y="338.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge one</text>
+      <rect x="205.41" y="324.50" width="115.61" height="28.00" fill="white" />
+      <text x="263.21" y="338.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge two</text>
     </g>
   </g>
 </svg>

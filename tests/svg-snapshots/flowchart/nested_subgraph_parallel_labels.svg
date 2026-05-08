@@ -30,10 +30,10 @@
       <text x="194.96" y="553.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B2</text>
     </g>
     <g class="edgeLabels">
-      <rect x="68.00" y="274.50" width="117.41" height="28.00" fill="white" />
-      <text x="126.70" y="288.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge one</text>
-      <rect x="205.41" y="274.50" width="115.61" height="28.00" fill="white" />
-      <text x="263.21" y="288.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge two</text>
+      <rect x="68.00" y="324.50" width="117.41" height="28.00" fill="white" />
+      <text x="126.70" y="338.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge one</text>
+      <rect x="205.41" y="324.50" width="115.61" height="28.00" fill="white" />
+      <text x="263.21" y="338.50" text-anchor="middle" dominant-baseline="middle" fill="#333">cross edge two</text>
     </g>
   </g>
 </svg>

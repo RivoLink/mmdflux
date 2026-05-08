@@ -170,10 +170,18 @@ pub(super) fn render_edge_labels(
         // engine-supplied label_position, which can be off-path due to
         // upstream side-adjustment passes; keep the revalidation fallback
         // so those labels render attached to their edge.
+        //
+        // Exception: labels crossing between sibling subgraphs intentionally
+        // use the compound label-dummy slot, even when they are not lane-
+        // shifted. Re-validating those against a rendered direct path can snap
+        // them from the inter-sibling gap back to a child boundary.
+        let sibling_compound_center = label_geom
+            .filter(|_| edge_crosses_sibling_subgraphs(diagram, geom, edge))
+            .map(|g| g.center);
         let lane_shifted_center = label_geom
             .filter(|g| (g.track != 0 || g.compartment_size > 1) && use_precomputed)
             .map(|g| g.center);
-        let position = if let Some(center) = lane_shifted_center {
+        let position = if let Some(center) = sibling_compound_center.or(lane_shifted_center) {
             Some(center)
         } else {
             let candidate = if use_precomputed {
@@ -293,6 +301,47 @@ pub(super) fn render_edge_labels(
     }
 
     writer.end_group();
+}
+
+fn edge_crosses_sibling_subgraphs(
+    diagram: &Graph,
+    geom: &GraphGeometry,
+    edge: &crate::graph::Edge,
+) -> bool {
+    let Some(from_parent) = node_parent_id(diagram, geom, &edge.from) else {
+        return false;
+    };
+    let Some(to_parent) = node_parent_id(diagram, geom, &edge.to) else {
+        return false;
+    };
+    if from_parent == to_parent {
+        return false;
+    }
+
+    let from_grandparent = diagram
+        .subgraphs
+        .get(&from_parent)
+        .and_then(|sg| sg.parent.as_deref());
+    let to_grandparent = diagram
+        .subgraphs
+        .get(&to_parent)
+        .and_then(|sg| sg.parent.as_deref());
+    from_grandparent.is_some() && from_grandparent == to_grandparent
+}
+
+fn node_parent_id(diagram: &Graph, geom: &GraphGeometry, node_id: &str) -> Option<String> {
+    if let Some(parent) = geom
+        .nodes
+        .get(node_id)
+        .and_then(|node| node.parent.as_deref())
+    {
+        return Some(parent.to_string());
+    }
+    diagram
+        .subgraphs
+        .values()
+        .find(|subgraph| subgraph.nodes.iter().any(|member| member == node_id))
+        .map(|subgraph| subgraph.id.clone())
 }
 
 pub(super) fn fallback_label_position(
