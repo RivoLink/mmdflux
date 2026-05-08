@@ -12,7 +12,7 @@ use crate::engines::graph::flux::FluxLayeredEngine;
 use crate::format::{CornerStyle, Curve, RoutingStyle};
 use crate::graph::Stroke;
 use crate::graph::measure::{
-    TextMetricsProvider, default_proportional_text_metrics,
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, TextMetricsProvider, default_proportional_text_metrics,
     default_proportional_text_metrics_provider,
 };
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
@@ -1551,6 +1551,11 @@ fn load_flowchart_fixture_diagram(name: &str) -> crate::graph::Graph {
         .join(name);
     let input = fs::read_to_string(fixture).expect("fixture should load");
     let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    compile_to_graph(&flowchart)
+}
+
+fn parse_flowchart_diagram_for_test(input: &str) -> crate::graph::Graph {
+    let flowchart = parse_flowchart(input).expect("input should parse");
     compile_to_graph(&flowchart)
 }
 
@@ -4017,6 +4022,73 @@ fn svg_curved_orthogonal_route_five_fan_in_keeps_mirrored_pairs_visually_symmetr
         (a_prev.1 - e_prev.1).abs() <= 1.0,
         "curved A->Target and E->Target should have mirrored terminal approach depth after fan-in channel collapse: A_prev={a_prev:?}, E_prev={e_prev:?}, A={a_points:?}, E={e_points:?}"
     );
+}
+
+#[test]
+fn svg_five_fan_in_lr_bottom_overflow_avoids_peer_approach_crossing() {
+    struct FanInCase<'a> {
+        label: &'a str,
+        input: &'a str,
+        profile: Option<&'a str>,
+        e_from: &'a str,
+        peer_froms: &'a [&'a str],
+    }
+
+    let cases = [
+        FanInCase {
+            label: "recorded default fixture",
+            input: include_str!("../../tests/fixtures/flowchart/five_fan_in_lr.mmd"),
+            profile: None,
+            e_from: "E",
+            peer_froms: &["A", "B", "C", "D"],
+        },
+        FanInCase {
+            label: "compatibility bare labels",
+            input: include_str!("../../tests/fixtures/flowchart/five_fan_in_lr.mmd"),
+            profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            e_from: "E",
+            peer_froms: &["A", "B", "C", "D"],
+        },
+        FanInCase {
+            label: "compatibility widened labels",
+            input: r#"graph LR
+    A1[Alpha] --> F[Target]
+    B1[Bravo] --> F
+    C1[Char] --> F
+    D1[Delta] --> F
+    E1[Echo] --> F
+"#,
+            profile: Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+            e_from: "E1",
+            peer_froms: &["A1", "B1", "C1", "D1"],
+        },
+    ];
+
+    for case in cases {
+        let diagram = parse_flowchart_diagram_for_test(case.input);
+        let svg = crate::render_diagram(
+            case.input,
+            OutputFormat::Svg,
+            &RenderConfig {
+                font_metrics_profile: case.profile.map(str::to_string),
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap_or_else(|err| panic!("{}: SVG render should succeed: {err}", case.label));
+
+        let e_path =
+            edge_path_for_svg_order(&diagram, &svg, edge_index(&diagram, case.e_from, "F"));
+        for peer_from in case.peer_froms {
+            let peer_path =
+                edge_path_for_svg_order(&diagram, &svg, edge_index(&diagram, peer_from, "F"));
+            assert!(
+                !paths_have_strict_interior_crossing(&peer_path, &e_path),
+                "{}: lower fan-in overflow edge should use the clean perimeter route instead of crossing a peer approach; {peer_from}->F={peer_path:?}, {}->F={e_path:?}",
+                case.label,
+                case.e_from,
+            );
+        }
+    }
 }
 
 #[test]

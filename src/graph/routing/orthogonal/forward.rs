@@ -119,6 +119,7 @@ pub(super) fn avoid_forward_node_intrusions(
     path: &mut Vec<FPoint>,
     edge: &LayoutEdge,
     geometry: &GraphGeometry,
+    direction: Direction,
 ) {
     // Margin 0.0 means only segments strictly inside the node rect interior
     // trigger avoidance.  -0.5 was too aggressive and caught boundary-touching
@@ -233,38 +234,58 @@ pub(super) fn avoid_forward_node_intrusions(
             // Vertical segment at x = a.x crosses blockers.
             let left_x = env_min_x - NODE_CLEARANCE;
             let right_x = env_max_x + NODE_CLEARANCE;
-            let safe_x = if (a.x - left_x).abs() <= (a.x - right_x).abs() {
-                left_x
+            let preferred_safe_x = preferred_lr_source_perimeter_x(
+                path,
+                seg_idx,
+                edge,
+                geometry,
+                direction,
+                INTRUSION_MARGIN,
+                EPS,
+            );
+            let (safe_x, safe_x_validated_clear) = if let Some(preferred_safe_x) = preferred_safe_x
+            {
+                (preferred_safe_x, true)
+            } else if (a.x - left_x).abs() <= (a.x - right_x).abs() {
+                (left_x, false)
             } else {
-                right_x
+                (right_x, false)
             };
 
             let ja = FPoint::new(safe_x, a.y);
             let jb = FPoint::new(safe_x, b.y);
-            let detour_clear = !geometry.nodes.iter().any(|(nid, node)| {
-                nid != &edge.from
-                    && nid != &edge.to
-                    && super::collision::axis_aligned_segment_crosses_rect_interior(
+            let detour_clear = if safe_x_validated_clear {
+                debug_assert!(
+                    !super::collision::segment_crosses_any_other_node_interior(
+                        edge,
+                        geometry,
                         ja,
                         jb,
-                        node.rect,
                         INTRUSION_MARGIN,
-                    )
-            });
+                    ),
+                    "preferred LR perimeter detour must be node-clear"
+                );
+                true
+            } else {
+                !super::collision::segment_crosses_any_other_node_interior(
+                    edge,
+                    geometry,
+                    ja,
+                    jb,
+                    INTRUSION_MARGIN,
+                )
+            };
             if !detour_clear {
                 let alt_x = if safe_x == left_x { right_x } else { left_x };
                 let ja2 = FPoint::new(alt_x, a.y);
                 let jb2 = FPoint::new(alt_x, b.y);
-                let alt_clear = !geometry.nodes.iter().any(|(nid, node)| {
-                    nid != &edge.from
-                        && nid != &edge.to
-                        && super::collision::axis_aligned_segment_crosses_rect_interior(
-                            ja2,
-                            jb2,
-                            node.rect,
-                            INTRUSION_MARGIN,
-                        )
-                });
+                let alt_clear = !super::collision::segment_crosses_any_other_node_interior(
+                    edge,
+                    geometry,
+                    ja2,
+                    jb2,
+                    INTRUSION_MARGIN,
+                );
                 if !alt_clear {
                     continue;
                 }
@@ -277,6 +298,65 @@ pub(super) fn avoid_forward_node_intrusions(
         // scanning from the top.
         collapse_collinear_interior_points(path);
     }
+}
+
+fn preferred_lr_source_perimeter_x(
+    path: &[FPoint],
+    seg_idx: usize,
+    edge: &LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    intrusion_margin: f64,
+    eps: f64,
+) -> Option<f64> {
+    if !matches!(direction, Direction::LeftRight | Direction::RightLeft) || seg_idx != 0 {
+        return None;
+    }
+
+    let a = path[seg_idx];
+    let b = path[seg_idx + 1];
+    if (a.x - b.x).abs() > eps {
+        return None;
+    }
+
+    let next = *path.get(seg_idx + 2)?;
+    if (b.y - next.y).abs() > eps {
+        return None;
+    }
+
+    let candidate_x = next.x;
+    let advances_with_flow = match direction {
+        Direction::LeftRight => candidate_x > a.x + eps,
+        Direction::RightLeft => candidate_x < a.x - eps,
+        _ => false,
+    };
+    if !advances_with_flow {
+        return None;
+    }
+
+    // When a source-side vertical fan-in leg crosses a peer source node, the
+    // local nearest-clear detour can thread through peer approach lanes. If the
+    // route already has a downstream perimeter column and the two replacement
+    // segments are node-clear, use that column instead.
+    let jog_start = FPoint::new(candidate_x, a.y);
+    let jog_end = FPoint::new(candidate_x, b.y);
+    if super::collision::segment_crosses_any_other_node_interior(
+        edge,
+        geometry,
+        a,
+        jog_start,
+        intrusion_margin,
+    ) || super::collision::segment_crosses_any_other_node_interior(
+        edge,
+        geometry,
+        jog_start,
+        jog_end,
+        intrusion_margin,
+    ) {
+        return None;
+    }
+
+    Some(candidate_x)
 }
 
 /// Prevent forward edges from transiting through their own target node
