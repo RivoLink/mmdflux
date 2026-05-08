@@ -6456,7 +6456,194 @@ mod issue_301_backward_route_stability {
     }
 
     fn starts_with_rightward_outer_channel(points: &[(f64, f64)]) -> bool {
-        let Some([start, support, rest @ ..]) = points.get(0..) else {
+        let [start, support, rest @ ..] = points else {
+            return false;
+        };
+        let first_segment_is_rightward =
+            (support.1 - start.1).abs() <= 1.0 && support.0 > start.0 + 8.0;
+        let vertical_channel_span = rest
+            .windows(2)
+            .filter(|segment| (segment[0].0 - segment[1].0).abs() <= 1.0)
+            .map(|segment| (segment[0].1 - segment[1].1).abs())
+            .fold(0.0, f64::max);
+
+        first_segment_is_rightward && vertical_channel_span > 250.0
+    }
+}
+
+#[cfg(feature = "unstable-text-metrics-provider")]
+mod dynamic_text_metrics_topology_smoke_tests {
+    use std::collections::HashMap;
+
+    use super::{
+        edge_index, edge_path_for_svg_order, extract_edge_label_positions, parse_attr_f64,
+        parse_flowchart_diagram_for_test, parse_svg_text_position_and_value,
+        paths_have_strict_interior_crossing,
+    };
+    use crate::graph::measure::{
+        DEFAULT_GRAPH_FONT_FAMILY, TextMetricsProfileConfig, TextMetricsProvider,
+        resolve_text_metrics_profile,
+    };
+    use crate::runtime::config::RenderConfig;
+    use crate::runtime::dynamic_text_metrics::{
+        DynamicMetricsInput, render_graph_family_svg_with_dynamic_text_metrics,
+    };
+
+    #[derive(Clone, Copy)]
+    struct SvgRect {
+        y: f64,
+        height: f64,
+    }
+
+    impl SvgRect {
+        fn bottom(self) -> f64 {
+            self.y + self.height
+        }
+    }
+
+    #[test]
+    fn dynamic_backward_port_spread_keeps_same_source_fanout_outer_channel() {
+        let input = include_str!("../../tests/fixtures/flowchart/backward_port_spread.mmd");
+        let diagram = parse_flowchart_diagram_for_test(input);
+        let svg = dynamic_svg_with_width_scales(
+            input,
+            &[("A", 1.2), ("B", 1.2), ("C", 1.2), ("D", 1.2), ("E", 1.2)],
+        );
+        let path = edge_path_for_svg_order(&diagram, &svg, edge_index(&diagram, "E", "A"));
+
+        assert!(
+            starts_with_rightward_outer_channel(&path),
+            "dynamic #301 smoke should preserve the outer-channel E -> A topology; \
+             points={path:?}\nSVG:\n{svg}"
+        );
+    }
+
+    #[test]
+    fn dynamic_nested_subgraph_parallel_labels_stay_in_inter_region_gap() {
+        let input =
+            include_str!("../../tests/fixtures/flowchart/nested_subgraph_parallel_labels.mmd");
+        let diagram = parse_flowchart_diagram_for_test(input);
+        let svg = dynamic_svg_with_width_scales(
+            input,
+            &[
+                ("cross edge one", 1.2),
+                ("cross edge two", 1.2),
+                ("A1", 0.8),
+                ("B2", 1.2),
+            ],
+        );
+        let positions: HashMap<_, _> = extract_edge_label_positions(&svg, &diagram)
+            .into_iter()
+            .collect();
+        let one_y = positions
+            .get("cross edge one")
+            .expect("dynamic #302 smoke should render cross edge one")
+            .1;
+        let two_y = positions
+            .get("cross edge two")
+            .expect("dynamic #302 smoke should render cross edge two")
+            .1;
+        let a_region = named_subgraph_rect(&svg, "A region")
+            .expect("dynamic #302 smoke should render A region");
+        let b_region = named_subgraph_rect(&svg, "B region")
+            .expect("dynamic #302 smoke should render B region");
+        let gap_top = a_region.bottom();
+        let gap_bottom = b_region.y;
+        let gap_mid = (gap_top + gap_bottom) / 2.0;
+        let mid_tolerance = ((gap_bottom - gap_top) * 0.2).max(8.0);
+
+        assert!(
+            (one_y - two_y).abs() <= 1.0,
+            "dynamic #302 smoke should keep sibling cross labels in one band; \
+             cross edge one y={one_y}, cross edge two y={two_y}\nSVG:\n{svg}"
+        );
+        for (label, y) in [("cross edge one", one_y), ("cross edge two", two_y)] {
+            assert!(
+                gap_top < y && y < gap_bottom && (y - gap_mid).abs() <= mid_tolerance,
+                "dynamic #302 smoke should center {label} in the inter-region gap; \
+                 got y={y}, gap=({gap_top}, {gap_bottom}), midpoint={gap_mid}, \
+                 tolerance={mid_tolerance}\nSVG:\n{svg}"
+            );
+        }
+    }
+
+    #[test]
+    fn dynamic_five_fan_in_lr_bottom_overflow_avoids_peer_approach_crossings() {
+        let input = include_str!("../../tests/fixtures/flowchart/five_fan_in_lr.mmd");
+        let diagram = parse_flowchart_diagram_for_test(input);
+        let svg = dynamic_svg_with_width_scales(
+            input,
+            &[
+                ("A", 1.2),
+                ("B", 0.8),
+                ("C", 1.2),
+                ("D", 0.8),
+                ("E", 1.2),
+                ("Target", 1.2),
+            ],
+        );
+        let e_path = edge_path_for_svg_order(&diagram, &svg, edge_index(&diagram, "E", "F"));
+
+        for peer_from in ["A", "B", "C", "D"] {
+            let peer_path =
+                edge_path_for_svg_order(&diagram, &svg, edge_index(&diagram, peer_from, "F"));
+            assert!(
+                !paths_have_strict_interior_crossing(&peer_path, &e_path),
+                "dynamic #303 smoke should keep lower fan-in overflow edge from crossing \
+                 {peer_from}->F peer approach; {peer_from}->F={peer_path:?}, E->F={e_path:?}\nSVG:\n{svg}"
+            );
+        }
+    }
+
+    fn dynamic_svg_with_width_scales(input: &str, text_scales: &[(&str, f64)]) -> String {
+        let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig::default())
+            .expect("default recorded text metrics should resolve");
+        let metrics = resolved.metrics;
+        let dynamic_input = DynamicMetricsInput {
+            css_font: format!("{}px {}", metrics.font_size(), DEFAULT_GRAPH_FONT_FAMILY),
+            font_family: DEFAULT_GRAPH_FONT_FAMILY.to_string(),
+            font_size_px: metrics.font_size(),
+            line_height_px: metrics.line_height(),
+        };
+        let text_scales = text_scales
+            .iter()
+            .map(|(text, scale)| ((*text).to_string(), *scale))
+            .collect::<HashMap<_, _>>();
+
+        render_graph_family_svg_with_dynamic_text_metrics(
+            input,
+            &RenderConfig::default(),
+            dynamic_input,
+            move |text, _css_font| {
+                let scale = text_scales.get(text).copied().unwrap_or(1.0);
+                Ok(metrics.measure_line_width(text) * scale)
+            },
+        )
+        .unwrap_or_else(|err| panic!("dynamic SVG render should succeed: {err}"))
+    }
+
+    fn named_subgraph_rect(svg: &str, label: &str) -> Option<SvgRect> {
+        let mut pending_rect = None;
+        for line in svg.lines().map(str::trim) {
+            if line.starts_with("<rect class=\"subgraph\"") {
+                pending_rect = Some(SvgRect {
+                    y: parse_attr_f64(line, "y")?,
+                    height: parse_attr_f64(line, "height")?,
+                });
+                continue;
+            }
+            let Some((_, _, value)) = parse_svg_text_position_and_value(line) else {
+                continue;
+            };
+            if value == label {
+                return pending_rect;
+            }
+        }
+        None
+    }
+
+    fn starts_with_rightward_outer_channel(points: &[(f64, f64)]) -> bool {
+        let [start, support, rest @ ..] = points else {
             return false;
         };
         let first_segment_is_rightward =

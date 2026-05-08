@@ -8,6 +8,13 @@ import type {
 interface MockWasmModule {
   default: () => Promise<void>;
   render: (input: string, format: string, configJson: string) => string;
+  renderWithBrowserTextMetrics: (
+    input: string,
+    format: string,
+    configJson: string,
+    metricsJson: string,
+    measureText: (text: string, cssFont: string) => number,
+  ) => string;
   validate: (input: string) => string;
 }
 
@@ -19,11 +26,14 @@ describe("createWorkerRequestHandler", () => {
         return `${format}:${input}:${configJson}`;
       },
     );
-    const validate = vi.fn((input: string) => `{"valid":true,"input":"${input}"}`);
+    const validate = vi.fn(
+      (input: string) => `{"valid":true,"input":"${input}"}`,
+    );
     const loadWasmModule = vi.fn(
       async (): Promise<MockWasmModule> => ({
         default: initialize,
         render,
+        renderWithBrowserTextMetrics: () => "unused",
         validate,
       }),
     );
@@ -79,6 +89,7 @@ describe("createWorkerRequestHandler", () => {
         render: () => {
           throw new Error("unknown output format: bad");
         },
+        renderWithBrowserTextMetrics: () => "unused",
         validate: () => '{"valid":true}',
       }),
     );
@@ -113,6 +124,7 @@ describe("createWorkerRequestHandler", () => {
       async (): Promise<MockWasmModule> => ({
         default: initialize,
         render: () => "unused",
+        renderWithBrowserTextMetrics: () => "unused",
         validate: (input) =>
           JSON.stringify({
             valid: input.includes("A-->B"),
@@ -144,6 +156,113 @@ describe("createWorkerRequestHandler", () => {
         type: "validation",
         seq: -1,
         resultJson: '{"valid":true,"diagnostics":[]}',
+      },
+    ]);
+  });
+
+  it("prepares browser metrics and invokes the dynamic wasm export", async () => {
+    const measureText = vi.fn(() => 42);
+    const prepareBrowserTextMetrics = vi.fn(async () => ({
+      metricsJson: '{"cssFont":"16px Inter"}',
+      measureText,
+    }));
+    const renderWithBrowserTextMetrics = vi.fn(
+      (
+        input: string,
+        format: string,
+        configJson: string,
+        metricsJson: string,
+        callback: (text: string, cssFont: string) => number,
+      ) =>
+        `${format}:${input}:${configJson}:${metricsJson}:${callback("A", "font")}`,
+    );
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: async () => {},
+        render: () => "static unused",
+        renderWithBrowserTextMetrics,
+        validate: () => '{"valid":true}',
+      }),
+    );
+
+    const responses: WorkerResponseMessage[] = [];
+    const handler = createWorkerRequestHandler({
+      loadWasmModule,
+      prepareBrowserTextMetrics,
+      postMessage: (message) => responses.push(message),
+    });
+
+    await handler({
+      type: "renderWithBrowserTextMetrics",
+      seq: 9,
+      input: "graph TD\nA-->B",
+      format: "svg",
+      configJson: "{}",
+      browserTextMetrics: {
+        fontFamily: "Inter",
+        fontSizePx: 16,
+        lineHeightPx: 24,
+      },
+    });
+
+    expect(prepareBrowserTextMetrics).toHaveBeenCalledWith({
+      fontFamily: "Inter",
+      fontSizePx: 16,
+      lineHeightPx: 24,
+    });
+    expect(renderWithBrowserTextMetrics).toHaveBeenCalledWith(
+      "graph TD\nA-->B",
+      "svg",
+      "{}",
+      '{"cssFont":"16px Inter"}',
+      measureText,
+    );
+    expect(responses).toEqual([
+      {
+        type: "result",
+        seq: 9,
+        format: "svg",
+        output: 'svg:graph TD\nA-->B:{}:{"cssFont":"16px Inter"}:42',
+      },
+    ]);
+  });
+
+  it("returns structured errors for dynamic metric preparation failures", async () => {
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: async () => {},
+        render: () => "static unused",
+        renderWithBrowserTextMetrics: () => "dynamic unused",
+        validate: () => '{"valid":true}',
+      }),
+    );
+    const responses: WorkerResponseMessage[] = [];
+    const handler = createWorkerRequestHandler({
+      loadWasmModule,
+      prepareBrowserTextMetrics: vi.fn(async () => {
+        throw new Error("Dynamic text metrics require OffscreenCanvas");
+      }),
+      postMessage: (message) => responses.push(message),
+    });
+
+    await handler({
+      type: "renderWithBrowserTextMetrics",
+      seq: 10,
+      input: "graph TD\nA-->B",
+      format: "svg",
+      configJson: "{}",
+      browserTextMetrics: {
+        fontFamily: "Inter",
+        fontSizePx: 16,
+        lineHeightPx: 24,
+      },
+    });
+
+    expect(responses).toEqual([
+      {
+        type: "error",
+        seq: 10,
+        error: "Dynamic text metrics require OffscreenCanvas",
       },
     ]);
   });

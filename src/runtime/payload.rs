@@ -81,7 +81,10 @@ pub(in crate::runtime) fn materialize_payload(
     }
 }
 
-fn prepare_payload_for_render(payload: Diagram, config: &RenderConfig) -> Diagram {
+pub(in crate::runtime) fn prepare_payload_for_render(
+    payload: Diagram,
+    config: &RenderConfig,
+) -> Diagram {
     if config.show_ids {
         annotate_graph_payload_ids(payload)
     } else {

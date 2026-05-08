@@ -1478,6 +1478,7 @@ dependencies = [
 name = "mmdflux-wasm"
 version = "2.4.2"
 dependencies = [
+ "js-sys",
  "mmdflux",
  "serde",
  "serde_json",

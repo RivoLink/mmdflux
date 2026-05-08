@@ -1,4 +1,5 @@
-use mmdflux_wasm::{detect, render, version};
+use mmdflux_wasm::{detect, render, render_with_browser_text_metrics, validate, version};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -26,6 +27,14 @@ fn strip_ansi(input: &str) -> String {
     }
 
     stripped
+}
+
+fn dynamic_metrics_json_fixture() -> &'static str {
+    r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24}"#
+}
+
+fn callback(body: &str) -> js_sys::Function {
+    js_sys::Function::new_with_args("text, cssFont", body)
 }
 
 #[wasm_bindgen_test]
@@ -57,6 +66,187 @@ fn renders_flowchart_text_with_color_policy_config() {
 fn renders_flowchart_svg() {
     let output = render("graph TD\nA-->B", "svg", "{}").expect("svg render should succeed");
     assert!(output.contains("<svg"));
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_changes_svg_geometry() {
+    let input = "graph TD\nA -->|mmmm| B";
+    let static_output = render(input, "svg", "{}").expect("static svg should render");
+    let measure = callback("return text.includes('m') ? 100 : 8;");
+    let dynamic_output = render_with_browser_text_metrics(
+        input,
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        &measure,
+    )
+    .expect("dynamic svg should render");
+
+    assert_ne!(dynamic_output, static_output);
+    assert!(dynamic_output.contains("<svg"));
+    assert!(dynamic_output.contains("width=\"108.00\""));
+}
+
+#[wasm_bindgen_test]
+fn static_render_export_stays_byte_stable_after_dynamic_render() {
+    let input = include_str!("../../../tests/fixtures/flowchart/labeled_edges.mmd");
+    let before = render(input, "svg", "{}").expect("static svg should render before dynamic");
+    let measure = callback("return text.length * 9;");
+    let dynamic = render_with_browser_text_metrics(
+        "graph TD\nA -->|mmmm| B",
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        &measure,
+    )
+    .expect("dynamic svg should render");
+    assert!(dynamic.contains("<svg"));
+    let after = render(input, "svg", "{}").expect("static svg should render after dynamic");
+
+    assert_eq!(after, before);
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_throw_errors() {
+    let measure = callback("throw new Error('canvas failed');");
+    let err = render_with_browser_text_metrics(
+        "graph TD\nA-->B",
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        &measure,
+    )
+    .expect_err("callback throw should fail");
+
+    assert!(error_debug(err).contains("canvas failed"));
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_rejects_non_number_returns() {
+    for (body, expected) in [
+        ("return Promise.resolve(12);", "synchronous"),
+        ("return { width: 12 };", "return a number"),
+        ("return '12';", "return a number"),
+        ("return null;", "return a number"),
+        ("return undefined;", "return a number"),
+    ] {
+        let measure = callback(body);
+        let err = render_with_browser_text_metrics(
+            "graph TD\nA-->B",
+            "svg",
+            "{}",
+            dynamic_metrics_json_fixture(),
+            &measure,
+        )
+        .expect_err("non-number callback return should fail");
+
+        let message = error_debug(err);
+        assert!(message.contains(expected), "{message}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_rejects_invalid_widths() {
+    for body in ["return Number.NaN;", "return Infinity;", "return -1;"] {
+        let measure = callback(body);
+        let err = render_with_browser_text_metrics(
+            "graph TD\nA-->B",
+            "svg",
+            "{}",
+            dynamic_metrics_json_fixture(),
+            &measure,
+        )
+        .expect_err("invalid width should fail");
+
+        let message = error_debug(err);
+        assert!(message.contains("finite non-negative"), "{message}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_failure_does_not_fallback_to_static_metrics() {
+    let measure = callback(
+        "if (text === 'mmmm') { throw new Error('missing glyph mmmm'); } return text.length * 8;",
+    );
+    let err = render_with_browser_text_metrics(
+        "graph TD\nA -->|mmmm| B",
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        &measure,
+    )
+    .expect_err("callback failure should fail the dynamic render");
+
+    let message = error_debug(err);
+    assert!(message.contains("missing glyph mmmm"), "{message}");
+    assert!(message.contains("mmmm"), "{message}");
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_reentry_errors_cleanly() {
+    let inner = callback("return 8;");
+    let closure = wasm_bindgen::closure::Closure::<dyn FnMut(String, String) -> f64>::new(
+        move |_text, _css_font| {
+            let _ = render_with_browser_text_metrics(
+                "graph TD\nA-->B",
+                "svg",
+                "{}",
+                dynamic_metrics_json_fixture(),
+                &inner,
+            );
+            8.0
+        },
+    );
+    let measure = closure.as_ref().unchecked_ref::<js_sys::Function>();
+    let err = render_with_browser_text_metrics(
+        "graph TD\nA-->B",
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        measure,
+    )
+    .expect_err("dynamic render re-entry should fail");
+
+    let message = error_debug(err);
+    assert!(message.contains("re-entered"), "{message}");
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_callback_can_call_validate_without_corruption() {
+    let closure = wasm_bindgen::closure::Closure::<dyn FnMut(String, String) -> f64>::new(
+        move |_text, _css_font| {
+            let result = validate("graph TD\nA-->B");
+            assert!(result.contains("\"valid\":true"));
+            8.0
+        },
+    );
+    let measure = closure.as_ref().unchecked_ref::<js_sys::Function>();
+    let output = render_with_browser_text_metrics(
+        "graph TD\nA-->B",
+        "svg",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        measure,
+    )
+    .expect("validate re-entry should not corrupt dynamic render");
+
+    assert!(output.contains("<svg"));
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_rejects_mmds_output() {
+    let measure = callback("return text.length * 8;");
+    let err = render_with_browser_text_metrics(
+        "graph TD\nA-->B",
+        "mmds",
+        "{}",
+        dynamic_metrics_json_fixture(),
+        &measure,
+    )
+    .expect_err("dynamic browser metrics should remain SVG-only");
+
+    let message = error_debug(err);
+    assert!(message.contains("only supports SVG output"), "{message}");
 }
 
 #[wasm_bindgen_test]

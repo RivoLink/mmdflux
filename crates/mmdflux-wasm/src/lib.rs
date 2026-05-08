@@ -1,10 +1,21 @@
+use std::cell::Cell;
+
+use mmdflux::dynamic_text_metrics::{
+    DynamicMetricsInput, DynamicTextMetricsError, render_graph_family_with_dynamic_text_metrics,
+};
 use mmdflux::errors::RenderError;
 use mmdflux::format::OutputFormat;
 use mmdflux::{
     RenderConfig, RuntimeConfigInput, apply_svg_surface_defaults, detect_diagram, render_diagram,
     validate_diagram,
 };
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+
+thread_local! {
+    static DYNAMIC_RENDER_DEPTH: Cell<u32> = const { Cell::new(0) };
+    static DYNAMIC_RENDER_REENTERED: Cell<bool> = const { Cell::new(false) };
+}
 
 #[wasm_bindgen]
 pub fn render(input: &str, format: &str, config_json: &str) -> Result<String, JsError> {
@@ -12,6 +23,35 @@ pub fn render(input: &str, format: &str, config_json: &str) -> Result<String, Js
     let config = parse_render_config(format, config_json)?;
 
     render_diagram(input, format, &config).map_err(|err| js_error(err.message))
+}
+
+#[wasm_bindgen(js_name = renderWithBrowserTextMetrics)]
+pub fn render_with_browser_text_metrics(
+    input: &str,
+    format: &str,
+    config_json: &str,
+    metrics_json: &str,
+    measure_text: &js_sys::Function,
+) -> Result<String, JsError> {
+    let reentry_guard = DynamicRenderGuard::enter()?;
+    let format = parse_output_format(format)?;
+    let config = parse_dynamic_render_config(config_json)?;
+    let metrics = parse_dynamic_metrics_input(metrics_json).map_err(|err| js_error(err.message))?;
+
+    let rendered = render_graph_family_with_dynamic_text_metrics(
+        input,
+        format,
+        &config,
+        metrics,
+        |text, css_font| measure_text_width(measure_text, text, css_font),
+    )
+    .map_err(|err| js_error(err.message));
+
+    if reentry_guard.reentered() {
+        return Err(js_error("renderWithBrowserTextMetrics re-entered"));
+    }
+
+    rendered
 }
 
 #[wasm_bindgen]
@@ -52,6 +92,64 @@ fn parse_render_config(format: OutputFormat, config_json: &str) -> Result<Render
     Ok(config)
 }
 
+fn parse_dynamic_render_config(config_json: &str) -> Result<RenderConfig, JsError> {
+    if config_json.trim().is_empty() {
+        return Ok(RenderConfig::default());
+    }
+
+    let input: RuntimeConfigInput = serde_json::from_str(config_json)
+        .map_err(|error| js_error(format!("invalid config_json: {error}")))?;
+    input
+        .into_render_config()
+        .map_err(|err| js_error(err.message))
+}
+
+fn parse_dynamic_metrics_input(metrics_json: &str) -> Result<DynamicMetricsInput, RenderError> {
+    let input: DynamicMetricsInput =
+        serde_json::from_str(metrics_json).map_err(|error| RenderError {
+            message: format!("invalid metrics_json: {error}"),
+        })?;
+    input.validate()?;
+    Ok(input)
+}
+
+fn measure_text_width(
+    measure_text: &js_sys::Function,
+    text: &str,
+    css_font: &str,
+) -> Result<f64, DynamicTextMetricsError> {
+    let value = measure_text
+        .call2(
+            &JsValue::UNDEFINED,
+            &JsValue::from_str(text),
+            &JsValue::from_str(css_font),
+        )
+        .map_err(|error| {
+            DynamicTextMetricsError::new(format!(
+                "measureText callback threw: {}",
+                js_value_message(&error)
+            ))
+        })?;
+
+    if value.is_instance_of::<js_sys::Promise>() {
+        return Err(DynamicTextMetricsError::new(
+            "measureText callback must be synchronous",
+        ));
+    }
+
+    let Some(width) = value.as_f64() else {
+        return Err(DynamicTextMetricsError::new(
+            "measureText callback must return a number",
+        ));
+    };
+    if !width.is_finite() || width < 0.0 {
+        return Err(DynamicTextMetricsError::new(
+            "measureText callback must return a finite non-negative number",
+        ));
+    }
+    Ok(width)
+}
+
 fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     value
         .parse::<OutputFormat>()
@@ -60,6 +158,52 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
 
 fn js_error(message: impl Into<String>) -> JsError {
     JsError::new(&message.into())
+}
+
+fn js_value_message(value: &JsValue) -> String {
+    if let Some(message) = value.as_string() {
+        return message;
+    }
+
+    js_sys::Reflect::get(value, &JsValue::from_str("message"))
+        .ok()
+        .and_then(|message| message.as_string())
+        .unwrap_or_else(|| format!("{value:?}"))
+}
+
+struct DynamicRenderGuard;
+
+impl DynamicRenderGuard {
+    fn enter() -> Result<Self, JsError> {
+        let already_rendering = DYNAMIC_RENDER_DEPTH.with(|depth| {
+            let current = depth.get();
+            if current > 0 {
+                true
+            } else {
+                depth.set(1);
+                false
+            }
+        });
+
+        if already_rendering {
+            DYNAMIC_RENDER_REENTERED.with(|reentered| reentered.set(true));
+            return Err(js_error("renderWithBrowserTextMetrics re-entered"));
+        }
+
+        DYNAMIC_RENDER_REENTERED.with(|reentered| reentered.set(false));
+        Ok(Self)
+    }
+
+    fn reentered(&self) -> bool {
+        DYNAMIC_RENDER_REENTERED.with(Cell::get)
+    }
+}
+
+impl Drop for DynamicRenderGuard {
+    fn drop(&mut self) {
+        DYNAMIC_RENDER_DEPTH.with(|depth| depth.set(0));
+        DYNAMIC_RENDER_REENTERED.with(|reentered| reentered.set(false));
+    }
 }
 
 #[cfg(test)]
@@ -74,8 +218,69 @@ mod tests {
     #[test]
     fn wasm_export_signatures_are_stable() {
         let _render: fn(&str, &str, &str) -> Result<String, JsError> = render;
+        let _render_dynamic: fn(
+            &str,
+            &str,
+            &str,
+            &str,
+            &js_sys::Function,
+        ) -> Result<String, JsError> = render_with_browser_text_metrics;
         let _detect: fn(&str) -> Option<String> = detect;
         let _version: fn() -> String = version;
+    }
+
+    #[test]
+    fn parse_dynamic_metrics_input_accepts_strict_contract() {
+        let input = parse_dynamic_metrics_input(
+            r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24}"#,
+        )
+        .expect("dynamic metrics input should parse");
+
+        assert_eq!(input.css_font, "16px Inter");
+        assert_eq!(input.font_family, "Inter");
+        assert_eq!(input.font_size_px, 16.0);
+        assert_eq!(input.line_height_px, 24.0);
+    }
+
+    #[test]
+    fn parse_dynamic_metrics_input_rejects_invalid_json() {
+        let err = parse_dynamic_metrics_input("{").expect_err("invalid metrics JSON should fail");
+        assert!(err.message.contains("invalid metrics_json"), "{err}");
+    }
+
+    #[test]
+    fn parse_dynamic_metrics_input_rejects_unknown_fields() {
+        let err = parse_dynamic_metrics_input(
+            r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24,"extra":true}"#,
+        )
+        .expect_err("unknown field should fail");
+        assert!(err.message.contains("unknown field"), "{err}");
+        assert!(err.message.contains("extra"), "{err}");
+    }
+
+    #[test]
+    fn parse_dynamic_metrics_input_validates_required_fields() {
+        for (field, json) in [
+            (
+                "cssFont",
+                r#"{"cssFont":"","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24}"#,
+            ),
+            (
+                "fontFamily",
+                r#"{"cssFont":"16px Inter","fontFamily":"","fontSizePx":16,"lineHeightPx":24}"#,
+            ),
+            (
+                "fontSizePx",
+                r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":0,"lineHeightPx":24}"#,
+            ),
+            (
+                "lineHeightPx",
+                r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":-1}"#,
+            ),
+        ] {
+            let err = parse_dynamic_metrics_input(json).expect_err("invalid field should fail");
+            assert!(err.message.contains(field), "{err}");
+        }
     }
 
     #[test]

@@ -1566,7 +1566,9 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(docs.contains("Liberation Sans Regular advances"));
     assert!(docs.contains("emitted SVG continues to use the existing Mermaid-style font stack"));
     assert!(docs.contains("Exposing SVG `fontFamily` remains future work"));
-    assert!(docs.contains("Dynamic/browser font measurement remains out of scope"));
+    assert!(docs.contains("experimental browser dynamic metrics export is SVG-only"));
+    assert!(docs.contains("does not emit"));
+    assert!(docs.contains("replay MMDS"));
     assert!(docs.contains("Sequence-family full text-metrics parity remains deferred"));
     assert!(docs.contains("line-height"));
 
@@ -1617,7 +1619,14 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
     assert!(wasm_docs.contains("The compatibility profile `mmdflux-heuristic-proportional-v1`"));
     assert!(wasm_docs.contains("Text and ASCII output ignore this setting"));
     assert!(wasm_docs.contains("SVG font-family and metrics profile are intentionally decoupled"));
-    assert!(wasm_docs.contains("Dynamic/browser font measurement remains out of scope"));
+    assert!(wasm_docs.contains("renderWithBrowserTextMetrics"));
+    assert!(wasm_docs.contains("existing `render` export remains static and deterministic"));
+    assert!(wasm_docs.contains("OffscreenCanvas"));
+    assert!(wasm_docs.contains("FontFaceSet"));
+    assert!(wasm_docs.contains("does not fall back"));
+    assert!(wasm_docs.contains("supports SVG graph-family Mermaid input"));
+    assert!(wasm_docs.contains("not emit"));
+    assert!(wasm_docs.contains("replay MMDS"));
     assert!(!wasm_docs.contains("currently accepts only"));
 
     let readme = std::fs::read_to_string("README.md").unwrap();

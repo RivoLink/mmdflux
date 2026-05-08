@@ -27,6 +27,11 @@ function createFakeRenderClient() {
       format: request.format,
       output: `${request.format}:${request.input}`,
     })),
+    renderWithBrowserTextMetrics: vi.fn(async (request) => ({
+      seq: request.seq,
+      format: "svg",
+      output: `svg:${request.input}`,
+    })),
     validate: vi.fn(async () => '{"valid":true}'),
     terminate: vi.fn(),
   } satisfies RenderWorkerClient;
@@ -245,6 +250,11 @@ describe("playground state persistence", () => {
           request.format === "text"
             ? "\u001b[38;2;255;0;0mAlpha\u001b[0m"
             : `${request.format}:${request.input}`,
+      })),
+      renderWithBrowserTextMetrics: vi.fn(async (request) => ({
+        seq: request.seq,
+        format: "svg",
+        output: `svg:${request.input}`,
       })),
       validate: vi.fn(async () => '{"valid":true}'),
       terminate: vi.fn(),

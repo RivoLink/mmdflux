@@ -1,3 +1,5 @@
+import type { BrowserTextMetricsRequest } from "./browser-text-metrics";
+
 export type WorkerOutputFormat = "text" | "ascii" | "svg" | "mmds" | "mermaid";
 
 export interface WorkerRenderRequestMessage {
@@ -14,8 +16,18 @@ export interface WorkerValidateRequestMessage {
   input: string;
 }
 
+export interface WorkerDynamicTextMetricsRenderRequestMessage {
+  type: "renderWithBrowserTextMetrics";
+  seq: number;
+  input: string;
+  format: "svg";
+  configJson: string;
+  browserTextMetrics: BrowserTextMetricsRequest;
+}
+
 export type WorkerRequestMessage =
   | WorkerRenderRequestMessage
+  | WorkerDynamicTextMetricsRenderRequestMessage
   | WorkerValidateRequestMessage;
 
 export interface WorkerResultMessage {

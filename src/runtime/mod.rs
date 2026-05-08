@@ -5,6 +5,11 @@
 
 pub mod config;
 pub mod config_input;
+// Keep this gate in lockstep with the crate-root re-export so the experimental
+// dynamic metrics bridge stays opt-in and doc-hidden as a single surface.
+#[cfg(feature = "unstable-text-metrics-provider")]
+#[doc(hidden)]
+pub mod dynamic_text_metrics;
 
 pub(crate) mod graph_family;
 pub(crate) mod mmds;

@@ -358,6 +358,11 @@ pub use runtime::config_input::RuntimeConfigInput;
 pub use runtime::config_input::apply_svg_surface_defaults;
 /// Detect the diagram type from input text.
 pub use runtime::detect_diagram;
+// Keep this re-export gate in lockstep with the runtime module gate so the
+// experimental dynamic metrics bridge stays opt-in and doc-hidden.
+#[cfg(feature = "unstable-text-metrics-provider")]
+#[doc(hidden)]
+pub use runtime::dynamic_text_metrics;
 /// Detect, parse, solve, and materialize Mermaid source or MMDS JSON as MMDS.
 pub use runtime::materialize_diagram;
 /// Detect, parse, and render Mermaid source or MMDS JSON in one call.

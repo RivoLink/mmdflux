@@ -40,6 +40,7 @@ just wasm-size
 `mmdflux-wasm` exports:
 
 - `render(input, format, configJson)`
+- `renderWithBrowserTextMetrics(input, format, configJson, metricsJson, measureText)`
 - `detect(input)`
 - `version()`
 
@@ -87,11 +88,47 @@ Notes:
   default recorded profile uses Liberation Sans Regular advances, while emitted
   SVG continues to use the existing Mermaid-style font stack. Exposing SVG
   `fontFamily` remains future work.
-- Dynamic/browser font measurement remains out of scope.
 - Release wasm artifacts use a size-optimized Cargo profile:
   `opt-level=z`, `codegen-units=1`, `lto=fat`, `panic=abort`.
 - Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
   `svgEdgeCurveRadius` are rejected.
+
+## Experimental Browser Text Metrics
+
+The existing `render` export remains static and deterministic. It never calls
+browser measurement APIs, and importing the browser metrics export does not
+change `render` output.
+
+`renderWithBrowserTextMetrics(input, format, configJson, metricsJson, measureText)`
+is a separate experimental export for browser-owned font measurement. It only
+supports SVG graph-family Mermaid input. Text, ASCII, MMDS output, MMDS input,
+and sequence-family diagrams are rejected instead of silently falling back to a
+static profile.
+
+`metricsJson` is intentionally separate from `configJson`:
+
+```json
+{
+  "cssFont": "normal 400 16px \"Inter\"",
+  "fontFamily": "Inter",
+  "fontSizePx": 16,
+  "lineHeightPx": 24
+}
+```
+
+The JavaScript adapter must complete async font preflight before Rust layout
+starts. The v1 worker path requires `OffscreenCanvas` and a worker
+`FontFaceSet`: call `fonts.load(cssFont)`, await `fonts.ready`, and then use a
+post-load `fonts.check(cssFont)` validity gate before invoking Rust. The
+`measureText` callback itself is synchronous from Rust's perspective and must
+return a finite non-negative width number for each `(text, cssFont)` request.
+Promises, objects, `NaN`, `Infinity`, negative values, and thrown errors fail
+the render.
+
+The dynamic path does not fall back to `mmdflux-sans-v1` or
+`mmdflux-heuristic-proportional-v1` after a measurement failure. It also does
+not emit or replay MMDS and does not use `metricsProfile.source = "dynamic"` in
+this slice; provider-bound dynamic MMDS replay remains future work.
 
 ## Tracing and Diagnostics
 

@@ -10,6 +10,11 @@ function createFakeRenderClient() {
   }));
   return {
     render,
+    renderWithBrowserTextMetrics: vi.fn(async (request) => ({
+      seq: request.seq,
+      format: "svg",
+      output: `svg:${request.input}`,
+    })),
     validate: vi.fn(async () => '{"valid":true}'),
     terminate: vi.fn(),
   } satisfies RenderWorkerClient;

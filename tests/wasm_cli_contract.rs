@@ -96,6 +96,30 @@ fn cli_feature_enables_clap_dependency() {
 }
 
 #[test]
+fn unstable_text_metrics_provider_feature_is_non_default() {
+    let package = mmdflux_metadata();
+    let feature = package
+        .features
+        .get("unstable-text-metrics-provider")
+        .expect("unstable text metrics provider feature must be declared");
+    let default_features = package
+        .features
+        .get("default")
+        .expect("`default` feature set must be declared");
+
+    assert!(
+        feature.is_empty(),
+        "unstable text metrics provider feature should not enable dependencies yet"
+    );
+    assert!(
+        !default_features
+            .iter()
+            .any(|feature| feature == "unstable-text-metrics-provider"),
+        "`default` must not enable the unstable text metrics provider bridge"
+    );
+}
+
+#[test]
 fn mmdflux_binary_requires_cli_feature() {
     let package = mmdflux_metadata();
     let mmdflux_bin = package
@@ -242,6 +266,7 @@ fn runtime_config_input_rejects_dynamic_font_config_fields() {
             r#"{"fontFamily":"Inter","fontMetricsProfile":"browser-dynamic-v1"}"#,
             "fontFamily",
         ),
+        (r#"{"fontSize":16}"#, "fontSize"),
         (
             r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"18px"}}"#,
             "themeVariables",
@@ -254,6 +279,54 @@ fn runtime_config_input_rejects_dynamic_font_config_fields() {
             "{err}"
         );
     }
+}
+
+#[cfg(feature = "unstable-text-metrics-provider")]
+#[test]
+fn dynamic_metrics_input_rejects_unknown_fields() {
+    use mmdflux::dynamic_text_metrics::DynamicMetricsInput;
+
+    let err = serde_json::from_str::<DynamicMetricsInput>(
+        r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24,"extra":true}"#,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(err.contains("unknown field"), "{err}");
+    assert!(err.contains("extra"), "{err}");
+}
+
+#[test]
+fn dynamic_text_metrics_bridge_is_feature_gated_and_doc_hidden() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let cargo_toml = std::fs::read_to_string(format!("{manifest_dir}/Cargo.toml")).unwrap();
+    let lib_source = std::fs::read_to_string(format!("{manifest_dir}/src/lib.rs")).unwrap();
+    let runtime_source =
+        std::fs::read_to_string(format!("{manifest_dir}/src/runtime/mod.rs")).unwrap_or_default();
+    let measure_source =
+        std::fs::read_to_string(format!("{manifest_dir}/src/graph/measure.rs")).unwrap();
+
+    assert!(
+        cargo_toml.contains("unstable-text-metrics-provider"),
+        "root Cargo.toml should declare the non-default unstable bridge feature"
+    );
+    assert!(
+        lib_source.contains("unstable-text-metrics-provider")
+            || runtime_source.contains("unstable-text-metrics-provider"),
+        "dynamic text metrics bridge should be gated by the unstable feature"
+    );
+    assert!(
+        lib_source.contains("#[doc(hidden)]") || runtime_source.contains("#[doc(hidden)]"),
+        "dynamic text metrics bridge should stay doc-hidden"
+    );
+    assert!(
+        measure_source.contains("pub(crate) trait TextMetricsProvider"),
+        "TextMetricsProvider must stay crate-private"
+    );
+    assert!(
+        !measure_source.contains("pub trait TextMetricsProvider"),
+        "TextMetricsProvider must not become normal public API"
+    );
 }
 
 #[test]

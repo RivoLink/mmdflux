@@ -421,7 +421,8 @@ Rules:
   browser font claim.
 - SVG font-family and metrics profile are intentionally decoupled for now: the default recorded profile uses Liberation Sans Regular advances, while emitted SVG continues to use the existing Mermaid-style font stack.
 - Exposing SVG `fontFamily` remains future work.
-- Dynamic/browser font measurement remains out of scope for this static profile.
+- The experimental browser dynamic metrics export is SVG-only and does not emit
+  or replay MMDS; provider-bound dynamic MMDS replay remains future work.
 - Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
 - Replay is document-owned: a caller-supplied `fontMetricsProfile` must match the replay profile, and the replay profile plus persisted `layoutText` values override SVG font and node-padding config.
 - Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.

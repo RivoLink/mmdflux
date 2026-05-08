@@ -27,6 +27,11 @@ describe("renderApp", () => {
             format: request.format,
             output: `${request.format}:${request.input}`,
           }),
+          renderWithBrowserTextMetrics: async (request) => ({
+            seq: request.seq,
+            format: "svg",
+            output: `svg:${request.input}`,
+          }),
           validate: async () => '{"valid":true}',
           terminate: () => {},
         }),

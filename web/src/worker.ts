@@ -1,3 +1,4 @@
+import { prepareBrowserTextMetrics } from "./browser-text-metrics";
 import type {
   WorkerRequestMessage,
   WorkerResponseMessage,
@@ -11,11 +12,19 @@ export type {
 interface WasmModule {
   default: () => Promise<void>;
   render: (input: string, format: string, configJson: string) => string;
+  renderWithBrowserTextMetrics: (
+    input: string,
+    format: string,
+    configJson: string,
+    metricsJson: string,
+    measureText: (text: string, cssFont: string) => number,
+  ) => string;
   validate: (input: string) => string;
 }
 
 interface RenderRequestHandlerOptions {
   loadWasmModule?: () => Promise<WasmModule>;
+  prepareBrowserTextMetrics?: typeof prepareBrowserTextMetrics;
   postMessage: (message: WorkerResponseMessage) => void;
 }
 
@@ -27,6 +36,8 @@ export function createWorkerRequestHandler(
   options: RenderRequestHandlerOptions,
 ): (message: WorkerRequestMessage) => Promise<void> {
   const loadModule = options.loadWasmModule ?? loadWasmModule;
+  const prepareMetrics =
+    options.prepareBrowserTextMetrics ?? prepareBrowserTextMetrics;
   const postMessage = options.postMessage;
   let modulePromise: Promise<WasmModule> | null = null;
 
@@ -49,6 +60,25 @@ export function createWorkerRequestHandler(
           message.input,
           message.format,
           message.configJson,
+        );
+
+        postMessage({
+          type: "result",
+          seq: message.seq,
+          format: message.format,
+          output,
+        });
+        return;
+      }
+
+      if (message.type === "renderWithBrowserTextMetrics") {
+        const prepared = await prepareMetrics(message.browserTextMetrics);
+        const output = wasmModule.renderWithBrowserTextMetrics(
+          message.input,
+          message.format,
+          message.configJson,
+          prepared.metricsJson,
+          prepared.measureText,
         );
 
         postMessage({

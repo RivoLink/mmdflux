@@ -1,3 +1,4 @@
+import type { BrowserTextMetricsRequest } from "../browser-text-metrics";
 import type {
   WorkerOutputFormat,
   WorkerRequestMessage,
@@ -17,6 +18,13 @@ export interface RenderResponse {
   output: string;
 }
 
+export interface BrowserTextMetricsRenderRequest {
+  seq: number;
+  input: string;
+  configJson?: string;
+  browserTextMetrics: BrowserTextMetricsRequest;
+}
+
 interface PendingRenderRequest {
   kind: "render";
   resolve: (response: RenderResponse) => void;
@@ -33,6 +41,9 @@ type PendingRequest = PendingRenderRequest | PendingValidateRequest;
 
 export interface RenderWorkerClient {
   render: (request: RenderRequest) => Promise<RenderResponse>;
+  renderWithBrowserTextMetrics: (
+    request: BrowserTextMetricsRenderRequest,
+  ) => Promise<RenderResponse>;
   validate: (input: string) => Promise<string>;
   terminate: () => void;
 }
@@ -114,6 +125,33 @@ export function createRenderWorkerClient(
           pending.delete(currentSeq);
           reject(
             new Error(`failed to post render request: ${toMessage(error)}`),
+          );
+        }
+      });
+    },
+    renderWithBrowserTextMetrics: (request) => {
+      const currentSeq = request.seq;
+
+      return new Promise<RenderResponse>((resolve, reject) => {
+        const message: WorkerRequestMessage = {
+          type: "renderWithBrowserTextMetrics",
+          seq: currentSeq,
+          input: request.input,
+          format: "svg",
+          configJson: request.configJson ?? "{}",
+          browserTextMetrics: request.browserTextMetrics,
+        };
+
+        pending.set(currentSeq, { kind: "render", resolve, reject });
+
+        try {
+          worker.postMessage(message);
+        } catch (error) {
+          pending.delete(currentSeq);
+          reject(
+            new Error(
+              `failed to post dynamic render request: ${toMessage(error)}`,
+            ),
           );
         }
       });

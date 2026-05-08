@@ -42,6 +42,9 @@ default = ["cli"]
 # CLI-only dependency surface.
 cli = ["dep:clap", "dep:libc", "dep:tracing-subscriber", "dep:windows-sys"]
 engine-elk = []
+# Experimental bridge for callback-backed browser text measurement. This is
+# intentionally disabled by default and only consumed by mmdflux-wasm.
+unstable-text-metrics-provider = []
 
 [[bin]]
 name = "mmdflux"

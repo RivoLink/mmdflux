@@ -10,9 +10,8 @@ use crate::format::OutputFormat;
 use crate::graph::label_wrap::prepare_wrapped_labels_with_provider;
 use crate::graph::measure::{
     COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ProportionalTextMetrics, ResolvedTextMetrics,
-    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsProvider,
-    resolve_text_metrics_profile,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ResolvedTextMetrics, TextMetricsProfileConfig,
+    TextMetricsProfileDescriptor, TextMetricsProvider, resolve_text_metrics_profile,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -85,6 +84,24 @@ pub(crate) fn materialize_graph_family(
     )
 }
 
+#[cfg(feature = "unstable-text-metrics-provider")]
+pub(in crate::runtime) fn render_graph_family_svg_with_provider(
+    diagram_id: &str,
+    diagram: &mut Graph,
+    config: &RenderConfig,
+    options: &SvgRenderOptions,
+    text_metrics: &dyn TextMetricsProvider,
+) -> Result<String, RenderError> {
+    let solve = solve_graph_family_with_provider(
+        diagram_id,
+        diagram,
+        OutputFormat::Svg,
+        config,
+        text_metrics,
+    )?;
+    render_svg_from_solve_result(diagram, &solve, options, config, text_metrics)
+}
+
 struct GraphFamilyRenderResult {
     solve: GraphSolveResult,
     text_metrics: ResolvedTextMetrics,
@@ -96,6 +113,28 @@ fn solve_graph_family_for_render(
     format: OutputFormat,
     config: &RenderConfig,
 ) -> Result<GraphFamilyRenderResult, RenderError> {
+    let text_metrics = resolve_text_metrics_for_config(format, config)?;
+    let solve = solve_graph_family_with_provider(
+        diagram_id,
+        diagram,
+        format,
+        config,
+        &text_metrics.metrics,
+    )?;
+
+    Ok(GraphFamilyRenderResult {
+        solve,
+        text_metrics,
+    })
+}
+
+fn solve_graph_family_with_provider(
+    diagram_id: &str,
+    diagram: &mut Graph,
+    format: OutputFormat,
+    config: &RenderConfig,
+    text_metrics: &dyn TextMetricsProvider,
+) -> Result<GraphSolveResult, RenderError> {
     let engine_id = config
         .layout_engine
         .unwrap_or(EngineAlgorithmId::FLUX_LAYERED);
@@ -114,22 +153,16 @@ fn solve_graph_family_for_render(
     // Threshold comes from `RenderConfig.layout.edge_label_max_width`; the
     // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
     // default. Explicit `None` disables wrap (dagre-parity fallback).
-    let text_metrics = resolve_text_metrics_for_config(format, config)?;
     prepare_wrapped_labels_with_provider(
         &mut diagram.edges,
-        &text_metrics.metrics,
+        text_metrics,
         config.layout.edge_label_max_width,
     );
 
-    let request = graph_solve_request_for(format, config, diagram_id, &text_metrics.metrics);
+    let request = graph_solve_request_for(format, config, diagram_id, text_metrics);
     let engine_config = EngineConfig::Layered(config.layout.clone().into());
     let engine_id = resolve_graph_engine_for_request(engine_id, &request);
-    let solve = solve_graph_family(diagram, engine_id, &engine_config, &request)?;
-
-    Ok(GraphFamilyRenderResult {
-        solve,
-        text_metrics,
-    })
+    solve_graph_family(diagram, engine_id, &engine_config, &request)
 }
 
 fn subgraph_direction_policy_for(diagram_id: &str) -> SubgraphDirectionPolicy {
@@ -143,7 +176,7 @@ fn graph_solve_request_for<'a>(
     format: OutputFormat,
     config: &RenderConfig,
     diagram_id: &str,
-    text_metrics: &'a ProportionalTextMetrics,
+    text_metrics: &'a dyn TextMetricsProvider,
 ) -> GraphSolveRequest<'a> {
     let routing_style = config
         .routing_style
@@ -159,7 +192,7 @@ fn graph_solve_request_for<'a>(
 
 fn measurement_mode_for_format(
     format: OutputFormat,
-    text_metrics: &ProportionalTextMetrics,
+    text_metrics: &dyn TextMetricsProvider,
 ) -> MeasurementMode<'_> {
     match format {
         OutputFormat::Svg | OutputFormat::Mmds => MeasurementMode::Proportional(text_metrics),
@@ -222,7 +255,7 @@ fn render_svg_from_solve_result(
     result: &GraphSolveResult,
     options: &SvgRenderOptions,
     config: &RenderConfig,
-    text_metrics: &ProportionalTextMetrics,
+    text_metrics: &dyn TextMetricsProvider,
 ) -> Result<String, RenderError> {
     let theme = resolve_configured_svg_theme(config)?;
 
