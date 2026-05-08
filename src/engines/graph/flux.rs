@@ -15,8 +15,10 @@ use crate::engines::graph::{
 };
 use crate::errors::RenderError;
 use crate::graph::geometry::{GraphGeometry, RoutedGraphGeometry};
-use crate::graph::measure::default_proportional_text_metrics;
-use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::graph::measure::{TextMetricsProvider, default_proportional_text_metrics};
+use crate::graph::routing::{
+    EdgeRouting, route_graph_geometry, route_graph_geometry_with_provider,
+};
 use crate::graph::{GeometryLevel, Graph};
 
 /// Flux-layered engine: native graph-family layout plus native routing.
@@ -192,7 +194,7 @@ fn edge_crowding_score(
 }
 
 pub(crate) fn adapt_flux_profile_for_reversed_chain_crowding(
-    mode: &MeasurementMode,
+    mode: &MeasurementMode<'_>,
     diagram: &Graph,
     edge_routing: EdgeRouting,
     profile: &LayoutConfig,
@@ -249,7 +251,7 @@ impl GraphEngine for FluxLayeredEngine {
         config: &EngineConfig,
         request: &GraphSolveRequest,
     ) -> Result<GraphSolveResult, RenderError> {
-        let mode = request.measurement_mode.clone();
+        let mode = request.measurement_mode;
 
         let EngineConfig::Layered(ref input_cfg) = *config;
         let edge_routing = self.id().edge_routing_for_style(request.routing_style);
@@ -270,7 +272,7 @@ impl GraphEngine for FluxLayeredEngine {
         let config = &enhanced_config;
 
         if matches!(request.geometry_contract, GraphGeometryContract::Visual) {
-            let MeasurementMode::Proportional(ref metrics) = mode else {
+            let MeasurementMode::Proportional(metrics) = mode else {
                 return Err(RenderError {
                     message: "internal: visual geometry requires proportional measurement mode"
                         .to_string(),
@@ -297,15 +299,19 @@ impl GraphEngine for FluxLayeredEngine {
         let geometry = run_layered_layout(&mode, diagram, config)?;
         let routed: Option<RoutedGraphGeometry> =
             if matches!(request.geometry_level, GeometryLevel::Routed) {
-                let solve_metrics = match &mode {
-                    MeasurementMode::Proportional(m) => m.clone(),
-                    MeasurementMode::Grid => default_proportional_text_metrics(),
+                let fallback_metrics;
+                let solve_metrics: &dyn TextMetricsProvider = match mode {
+                    MeasurementMode::Proportional(m) => m,
+                    MeasurementMode::Grid => {
+                        fallback_metrics = default_proportional_text_metrics();
+                        &fallback_metrics
+                    }
                 };
-                Some(route_graph_geometry(
+                Some(route_graph_geometry_with_provider(
                     diagram,
                     &geometry,
                     edge_routing,
-                    &solve_metrics,
+                    solve_metrics,
                 ))
             } else {
                 None

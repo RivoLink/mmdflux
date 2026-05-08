@@ -6,7 +6,10 @@ use crate::graph::attachment::EdgePort;
 use crate::graph::geometry::{
     EdgeLabelSide, GraphGeometry, RoutedEdgeGeometry, RoutedGraphGeometry,
 };
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::{
+    TextMetricsProvider, edge_label_dimensions_for_provider,
+    edge_label_dimensions_wrapped_for_provider,
+};
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::{Direction, Graph, Shape};
 
@@ -230,7 +233,7 @@ pub(crate) fn capture_route_input(
     geometry: &GraphGeometry,
     edge_routing: EdgeRouting,
     port_attachments: &HashMap<usize, (Option<EdgePort>, Option<EdgePort>)>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) {
     ACTIVE_TRACE.with(|trace| {
         let mut trace = trace.borrow_mut();
@@ -283,7 +286,7 @@ impl RouteInputSnapshot {
         geometry: &GraphGeometry,
         edge_routing: EdgeRouting,
         port_attachments: &HashMap<usize, (Option<EdgePort>, Option<EdgePort>)>,
-        metrics: &ProportionalTextMetrics,
+        metrics: &dyn TextMetricsProvider,
     ) -> Self {
         let mut nodes = geometry
             .nodes
@@ -338,8 +341,8 @@ impl RouteInputSnapshot {
                 }
                 let midpoint = edge.label_position?;
                 let (width, height) = match diagram_edge.wrapped_label_lines.as_deref() {
-                    Some(lines) => metrics.edge_label_dimensions_wrapped(lines),
-                    None => metrics.edge_label_dimensions(label),
+                    Some(lines) => edge_label_dimensions_wrapped_for_provider(metrics, lines),
+                    None => edge_label_dimensions_for_provider(metrics, label),
                 };
                 let (axis_dim, cross_dim, axis_center, cross_center) = match geometry.direction {
                     Direction::TopDown | Direction::BottomTop => {

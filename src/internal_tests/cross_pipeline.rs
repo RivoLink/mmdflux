@@ -20,7 +20,9 @@ use crate::graph::geometry::{FPoint, RoutedGraphGeometry};
 use crate::graph::grid::{
     GridLayout, GridLayoutConfig, GridRanker, NodeBounds, geometry_to_grid_layout_with_routed,
 };
-use crate::graph::measure::default_proportional_text_metrics;
+use crate::graph::measure::{
+    default_proportional_text_metrics, default_proportional_text_metrics_provider,
+};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::graph::{Direction, GeometryLevel, Graph, Shape};
 use crate::mmds::from_str;
@@ -53,7 +55,7 @@ fn load_mmds_fixture(name: &str) -> String {
 fn default_grid_request(
     level: GeometryLevel,
     routing_style: Option<RoutingStyle>,
-) -> GraphSolveRequest {
+) -> GraphSolveRequest<'static> {
     GraphSolveRequest::new(
         MeasurementMode::Grid,
         GraphGeometryContract::Canonical,
@@ -63,15 +65,15 @@ fn default_grid_request(
     )
 }
 
-fn default_proportional_mode() -> MeasurementMode {
-    MeasurementMode::Proportional(default_proportional_text_metrics())
+fn default_proportional_mode() -> MeasurementMode<'static> {
+    MeasurementMode::Proportional(default_proportional_text_metrics_provider())
 }
 
 fn default_proportional_request(
     geometry_contract: GraphGeometryContract,
     level: GeometryLevel,
     routing_style: Option<RoutingStyle>,
-) -> GraphSolveRequest {
+) -> GraphSolveRequest<'static> {
     GraphSolveRequest::new(
         default_proportional_mode(),
         geometry_contract,

@@ -61,6 +61,25 @@ pub struct ProportionalTextMetrics {
     width_model: ProportionalWidthModel,
 }
 
+/// Internal graph-family text measurement seam.
+///
+/// This is intentionally crate-local until browser/provider-backed measurement
+/// has a public API contract.
+pub(crate) trait TextMetricsProvider {
+    fn measure_line_width(&self, text: &str) -> f64;
+    fn measure_scalar_width(&self, ch: char) -> f64;
+    fn font_size(&self) -> f64;
+    fn line_height(&self) -> f64;
+    fn node_padding_x(&self) -> f64;
+    fn node_padding_y(&self) -> f64;
+    fn label_padding_x(&self) -> f64;
+    fn label_padding_y(&self) -> f64;
+
+    fn measure_space_width(&self) -> f64 {
+        self.measure_scalar_width(' ')
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum ProportionalWidthModel {
     CompatibilityHeuristic { scale: f64 },
@@ -130,19 +149,11 @@ impl ProportionalTextMetrics {
         padding_x: f64,
         padding_y: f64,
     ) -> (f64, f64) {
-        let lines: Vec<&str> = text.split('\n').collect();
-        let line_count = lines.len().max(1) as f64;
-        let max_width = lines
-            .iter()
-            .map(|line| self.measure_line_width(line))
-            .fold(0.0, f64::max);
-        let width = max_width + padding_x * 2.0;
-        let height = self.line_height * line_count + padding_y * 2.0;
-        (width, height)
+        measure_text_with_padding_for_provider(self, text, padding_x, padding_y)
     }
 
     pub fn edge_label_dimensions(&self, label: &str) -> (f64, f64) {
-        self.measure_text_with_padding(label, self.label_padding_x, self.label_padding_y)
+        edge_label_dimensions_for_provider(self, label)
     }
 
     /// Dimensions of an edge label that has already been wrapped into `lines`.
@@ -152,14 +163,7 @@ impl ProportionalTextMetrics {
     /// [`Self::edge_label_dimensions`] so the wrapped path is a drop-in
     /// replacement wherever `wrapped_label_lines` is populated.
     pub fn edge_label_dimensions_wrapped(&self, lines: &[String]) -> (f64, f64) {
-        let line_count = lines.len().max(1) as f64;
-        let max_width = lines
-            .iter()
-            .map(|line| self.measure_line_width(line))
-            .fold(0.0, f64::max);
-        let width = max_width + self.label_padding_x * 2.0;
-        let height = self.line_height * line_count + self.label_padding_y * 2.0;
-        (width, height)
+        edge_label_dimensions_wrapped_for_provider(self, lines)
     }
 
     pub(crate) fn measure_line_width(&self, text: &str) -> f64 {
@@ -176,6 +180,44 @@ impl ProportionalTextMetrics {
 
     pub(crate) fn char_width_ratio(&self, c: char) -> f64 {
         compatibility_char_width_ratio(c)
+    }
+}
+
+impl TextMetricsProvider for ProportionalTextMetrics {
+    fn measure_line_width(&self, text: &str) -> f64 {
+        // Use the inherent method explicitly; `self.measure_line_width(...)`
+        // would recurse into this trait method.
+        ProportionalTextMetrics::measure_line_width(self, text)
+    }
+
+    fn measure_scalar_width(&self, ch: char) -> f64 {
+        // Use the inherent method explicitly; `self.measure_scalar_width(...)`
+        // would recurse into this trait method.
+        ProportionalTextMetrics::measure_scalar_width(self, ch)
+    }
+
+    fn font_size(&self) -> f64 {
+        self.font_size
+    }
+
+    fn line_height(&self) -> f64 {
+        self.line_height
+    }
+
+    fn node_padding_x(&self) -> f64 {
+        self.node_padding_x
+    }
+
+    fn node_padding_y(&self) -> f64 {
+        self.node_padding_y
+    }
+
+    fn label_padding_x(&self) -> f64 {
+        self.label_padding_x
+    }
+
+    fn label_padding_y(&self) -> f64 {
+        self.label_padding_y
     }
 }
 
@@ -361,13 +403,64 @@ fn text_metrics_descriptor(
 /// variants to `'\n'` before calling this function. `wrap_lines` does not
 /// inspect the raw Mermaid source.
 pub fn wrap_lines(metrics: &ProportionalTextMetrics, text: &str, max_width: f64) -> Vec<String> {
-    let space_w = metrics.measure_space_width();
+    wrap_lines_with_provider(metrics, text, max_width)
+}
+
+pub(crate) fn measure_text_with_padding_for_provider(
+    provider: &dyn TextMetricsProvider,
+    text: &str,
+    padding_x: f64,
+    padding_y: f64,
+) -> (f64, f64) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let line_count = lines.len().max(1) as f64;
+    let max_width = lines
+        .iter()
+        .map(|line| provider.measure_line_width(line))
+        .fold(0.0, f64::max);
+    let width = max_width + padding_x * 2.0;
+    let height = provider.line_height() * line_count + padding_y * 2.0;
+    (width, height)
+}
+
+pub(crate) fn edge_label_dimensions_for_provider(
+    provider: &dyn TextMetricsProvider,
+    label: &str,
+) -> (f64, f64) {
+    measure_text_with_padding_for_provider(
+        provider,
+        label,
+        provider.label_padding_x(),
+        provider.label_padding_y(),
+    )
+}
+
+pub(crate) fn edge_label_dimensions_wrapped_for_provider(
+    provider: &dyn TextMetricsProvider,
+    lines: &[String],
+) -> (f64, f64) {
+    let line_count = lines.len().max(1) as f64;
+    let max_width = lines
+        .iter()
+        .map(|line| provider.measure_line_width(line))
+        .fold(0.0, f64::max);
+    let width = max_width + provider.label_padding_x() * 2.0;
+    let height = provider.line_height() * line_count + provider.label_padding_y() * 2.0;
+    (width, height)
+}
+
+pub(crate) fn wrap_lines_with_provider(
+    provider: &dyn TextMetricsProvider,
+    text: &str,
+    max_width: f64,
+) -> Vec<String> {
+    let space_w = provider.measure_space_width();
     let mut out = Vec::new();
     for segment in text.split('\n') {
         let mut current = String::new();
         let mut current_w = 0.0_f64;
         for word in segment.split_whitespace() {
-            let ww = metrics.measure_line_width(word);
+            let ww = provider.measure_line_width(word);
             if ww > max_width {
                 // Oversized word: fall back to per-character splits regardless
                 // of whether the word is first on the line. GPT-5.4 review of
@@ -379,7 +472,7 @@ pub fn wrap_lines(metrics: &ProportionalTextMetrics, text: &str, max_width: f64)
                     current_w = 0.0;
                 }
                 for ch in word.chars() {
-                    let cw = metrics.measure_scalar_width(ch);
+                    let cw = provider.measure_scalar_width(ch);
                     if current_w + cw > max_width && !current.is_empty() {
                         out.push(std::mem::take(&mut current));
                         current_w = 0.0;
@@ -421,6 +514,12 @@ pub fn default_proportional_text_metrics() -> ProportionalTextMetrics {
         DEFAULT_PROPORTIONAL_NODE_PADDING_X,
         DEFAULT_PROPORTIONAL_NODE_PADDING_Y,
     )
+}
+
+#[cfg(test)]
+pub(crate) fn default_proportional_text_metrics_provider() -> &'static ProportionalTextMetrics {
+    static METRICS: std::sync::OnceLock<ProportionalTextMetrics> = std::sync::OnceLock::new();
+    METRICS.get_or_init(default_proportional_text_metrics)
 }
 
 /// Calculate the grid dimensions needed to replay a node in the grid surface.
@@ -485,74 +584,83 @@ pub fn proportional_node_dimensions(
     node: &Node,
     direction: Direction,
 ) -> (f64, f64) {
-    let (label_w, label_h) = metrics.measure_text_with_padding(&node.label, 0.0, 0.0);
+    proportional_node_dimensions_with_provider(metrics, node, direction)
+}
+
+pub(crate) fn proportional_node_dimensions_with_provider(
+    provider: &dyn TextMetricsProvider,
+    node: &Node,
+    direction: Direction,
+) -> (f64, f64) {
+    let (label_w, label_h) =
+        measure_text_with_padding_for_provider(provider, &node.label, 0.0, 0.0);
 
     let (mut width, mut height) = match node.shape {
         Shape::Rectangle => (
-            label_w + metrics.node_padding_x * 4.0,
-            label_h + metrics.node_padding_y * 2.0,
+            label_w + provider.node_padding_x() * 4.0,
+            label_h + provider.node_padding_y() * 2.0,
         ),
         Shape::Diamond => {
-            let w = label_w + metrics.node_padding_x;
-            let h = label_h + metrics.node_padding_y;
+            let w = label_w + provider.node_padding_x();
+            let h = label_h + provider.node_padding_y();
             let size = w + h;
             (size, size)
         }
         Shape::Stadium => {
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             let radius = h / 2.0;
-            (label_w + metrics.node_padding_x * 2.0 + radius, h)
+            (label_w + provider.node_padding_x() * 2.0 + radius, h)
         }
         Shape::Cylinder => {
-            let w = label_w + metrics.node_padding_x * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
             let rx = w / 2.0;
             let ry = rx / (2.5 + w / 50.0);
-            (w, label_h + metrics.node_padding_y * 2.0 + ry)
+            (w, label_h + provider.node_padding_y() * 2.0 + ry)
         }
         Shape::Document => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w, h + h / 8.0)
         }
         Shape::Documents => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             let offset = 5.0;
             (w + 2.0 * offset, h + h / 4.0 + 2.0 * offset)
         }
         Shape::TaggedDocument => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 3.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 3.0;
             (w * 1.1, h + h / 4.0)
         }
         Shape::Card => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + 12.0, h)
         }
         Shape::TaggedRect => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + 0.2 * h, h)
         }
         Shape::Subroutine => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + 20.0, h)
         }
         Shape::Hexagon => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + h / 2.0, h)
         }
         Shape::Parallelogram | Shape::InvParallelogram | Shape::Trapezoid | Shape::InvTrapezoid => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + h / 3.0, h)
         }
         Shape::Asymmetric => {
-            let w = label_w + metrics.node_padding_x * 2.0;
-            let h = label_h + metrics.node_padding_y * 2.0;
+            let w = label_w + provider.node_padding_x() * 2.0;
+            let h = label_h + provider.node_padding_y() * 2.0;
             (w + h / 3.0, h)
         }
         Shape::SmallCircle => (14.0, 14.0),
@@ -561,8 +669,8 @@ pub fn proportional_node_dimensions(
         Shape::ForkJoin if node.label.trim().is_empty() => (70.0, 7.0),
         Shape::TextBlock => (label_w, label_h),
         _ => (
-            label_w + metrics.node_padding_x * 2.0,
-            label_h + metrics.node_padding_y * 2.0,
+            label_w + provider.node_padding_x() * 2.0,
+            label_h + provider.node_padding_y() * 2.0,
         ),
     };
 
@@ -596,6 +704,7 @@ pub fn proportional_node_dimensions(
 mod tests {
     use super::*;
     use crate::graph::Node;
+    use crate::internal_tests::stub_metrics::FixedWidthProvider;
 
     #[test]
     fn measure_text_uses_proportional_heuristic() {
@@ -632,6 +741,59 @@ mod tests {
         assert_eq!(
             resolved.descriptor.layout_text.edge_label_max_width,
             Some(200.0)
+        );
+    }
+
+    #[test]
+    fn proportional_text_metrics_implements_provider_contract() {
+        let metrics = resolve_text_metrics_profile(TextMetricsProfileConfig {
+            profile_id: Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID),
+            node_padding_x: 11.0,
+            node_padding_y: 7.0,
+            edge_label_max_width: Some(123.0),
+        })
+        .unwrap()
+        .metrics;
+
+        let provider: &dyn TextMetricsProvider = &metrics;
+
+        assert_eq!(provider.font_size(), metrics.font_size);
+        assert_eq!(provider.line_height(), metrics.line_height);
+        assert_eq!(provider.node_padding_x(), metrics.node_padding_x);
+        assert_eq!(provider.node_padding_y(), metrics.node_padding_y);
+        assert_eq!(provider.label_padding_x(), metrics.label_padding_x);
+        assert_eq!(provider.label_padding_y(), metrics.label_padding_y);
+        assert_eq!(
+            provider.measure_line_width("Abc"),
+            metrics.measure_line_width("Abc")
+        );
+        assert_eq!(
+            provider.measure_space_width(),
+            metrics.measure_space_width()
+        );
+    }
+
+    #[test]
+    fn wrap_lines_can_use_stub_provider_widths() {
+        let provider = FixedWidthProvider;
+
+        let lines = wrap_lines_with_provider(&provider, "mmmm iiii", 130.0);
+
+        assert_eq!(lines, vec!["mmmm", "iiii"]);
+    }
+
+    #[test]
+    fn proportional_node_dimensions_can_use_provider_padding_and_widths() {
+        let provider = FixedWidthProvider;
+        let node = Node::new("A").with_label("mmmm");
+
+        let (width, height) =
+            proportional_node_dimensions_with_provider(&provider, &node, Direction::TopDown);
+
+        assert_eq!(width, 30.0 * 4.0 + provider.node_padding_x() * 4.0);
+        assert_eq!(
+            height,
+            provider.line_height() + provider.node_padding_y() * 2.0
         );
     }
 

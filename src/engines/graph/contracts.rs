@@ -9,15 +9,27 @@ use super::{EngineAlgorithmCapabilities, EngineAlgorithmId, LayoutConfig};
 use crate::errors::RenderError;
 use crate::format::RoutingStyle;
 use crate::graph::GeometryLevel;
+use crate::graph::measure::TextMetricsProvider;
 
 /// Measurement mode controls whether layout uses grid-cell dimensions or
 /// proportional float-space dimensions for node sizing.
-#[derive(Debug, Clone)]
-pub enum MeasurementMode {
+#[derive(Clone, Copy)]
+pub enum MeasurementMode<'a> {
     /// Grid-cell dimensions for discrete grid replay.
     Grid,
     /// Proportional dimensions for unitless float-space geometry.
-    Proportional(crate::graph::measure::ProportionalTextMetrics),
+    Proportional(&'a dyn TextMetricsProvider),
+}
+
+impl std::fmt::Debug for MeasurementMode<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Grid => f.write_str("Grid"),
+            // Keep provider details opaque so `TextMetricsProvider` does not
+            // need a `Debug` super-trait or extra object-safety constraints.
+            Self::Proportional(_) => f.write_str("Proportional(..)"),
+        }
+    }
 }
 
 /// Engine-specific configuration envelope.
@@ -46,9 +58,9 @@ pub enum SubgraphDirectionPolicy {
 
 /// Request parameters for a `GraphEngine::solve()` call.
 #[derive(Debug, Clone)]
-pub struct GraphSolveRequest {
+pub struct GraphSolveRequest<'a> {
     /// Measurement model used for node and edge label sizing.
-    pub measurement_mode: MeasurementMode,
+    pub measurement_mode: MeasurementMode<'a>,
     /// Float-geometry contract requested by the caller.
     pub geometry_contract: GraphGeometryContract,
     /// Geometry detail level requested by the caller.
@@ -68,10 +80,10 @@ pub enum GraphGeometryContract {
     Visual,
 }
 
-impl GraphSolveRequest {
+impl<'a> GraphSolveRequest<'a> {
     /// Build a solve request from explicit engine-owned solve instructions.
     pub fn new(
-        measurement_mode: MeasurementMode,
+        measurement_mode: MeasurementMode<'a>,
         geometry_contract: GraphGeometryContract,
         geometry_level: GeometryLevel,
         routing_style: Option<RoutingStyle>,
@@ -113,6 +125,6 @@ pub trait GraphEngine: Send + Sync {
         &self,
         diagram: &crate::graph::Graph,
         config: &EngineConfig,
-        request: &GraphSolveRequest,
+        request: &GraphSolveRequest<'_>,
     ) -> Result<GraphSolveResult, RenderError>;
 }

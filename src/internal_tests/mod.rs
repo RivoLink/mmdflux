@@ -14,6 +14,7 @@ mod mmds_document_serialization;
 mod mmds_roundtrip;
 mod port_attachment_observation;
 mod singleton_centering_observation;
+pub(crate) mod stub_metrics;
 mod svg_render_pipeline;
 mod text_render_pipeline;
 

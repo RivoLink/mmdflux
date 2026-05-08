@@ -7,7 +7,7 @@ use super::edges::{document_svg_path, polygon_points};
 use super::text::{TextRenderStyle, render_text_centered};
 use super::{GraphSvgPalette, Point, Rect, dynamic_css_attrs};
 use crate::graph::geometry::{FRect, GraphGeometry};
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::routing::hexagon_vertices;
 use crate::graph::{Direction, Graph, Node, Shape};
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
@@ -67,7 +67,7 @@ impl<'a> ResolvedSvgNodeStyle<'a> {
 struct NodeLabelRenderContext<'a> {
     rect: &'a Rect,
     style: ResolvedSvgNodeStyle<'a>,
-    metrics: &'a ProportionalTextMetrics,
+    metrics: &'a dyn TextMetricsProvider,
     scale: f64,
     palette: &'a GraphSvgPalette,
 }
@@ -76,7 +76,7 @@ pub(super) fn render_subgraphs(
     writer: &mut SvgWriter,
     diagram: &Graph,
     geom: &GraphGeometry,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     scale: f64,
     palette: &GraphSvgPalette,
 ) {
@@ -121,7 +121,7 @@ pub(super) fn render_subgraphs(
 
         if !sg_geom.title.trim().is_empty() {
             let title_x = rect.x + rect.width / 2.0;
-            let title_y = rect.y + metrics.font_size * 0.25;
+            let title_y = rect.y + metrics.font_size() * 0.25;
             let dynamic_attrs = dynamic_css_attrs(
                 palette.dynamic_css,
                 "graph-subgraph-text",
@@ -199,7 +199,7 @@ pub(super) fn render_nodes(
     writer: &mut SvgWriter,
     diagram: &Graph,
     geom: &GraphGeometry,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     scale: f64,
     palette: &GraphSvgPalette,
 ) {
@@ -314,13 +314,13 @@ fn render_node_label(
         return;
     }
 
-    let line_height = context.metrics.line_height * context.scale;
+    let line_height = context.metrics.line_height() * context.scale;
     let total_height = line_height * (lines.len().saturating_sub(1) as f64);
     let start_y = center.y - total_height / 2.0;
     let x1 = context.rect.x * context.scale;
     let x2 = (context.rect.x + context.rect.width) * context.scale;
     // Left-align x: node left edge + padding (matches text renderer's x+2 convention)
-    let left_x = x1 + context.metrics.node_padding_x * context.scale;
+    let left_x = x1 + context.metrics.node_padding_x() * context.scale;
     let mut past_separator = false;
 
     for (idx, line_text) in lines.iter().enumerate() {

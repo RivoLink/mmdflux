@@ -13,8 +13,10 @@ use crate::errors::RenderError;
 use crate::graph::geometry::GraphGeometry;
 use crate::graph::grid::{GridLayoutConfig, GridRanker};
 use crate::graph::measure::{
-    grid_edge_label_dimensions, grid_edge_label_dimensions_wrapped, grid_node_dimensions,
-    proportional_node_dimensions,
+    TextMetricsProvider, edge_label_dimensions_for_provider,
+    edge_label_dimensions_wrapped_for_provider, grid_edge_label_dimensions,
+    grid_edge_label_dimensions_wrapped, grid_node_dimensions,
+    proportional_node_dimensions_with_provider,
 };
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::{Direction, Edge, Graph, Node};
@@ -60,15 +62,15 @@ fn grid_node_layout_dimensions(node: &Node, direction: Direction) -> (f64, f64) 
 }
 
 fn edge_label_dims_proportional_for_run(
-    metrics: &crate::graph::measure::ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     edge: &Edge,
 ) -> Option<(f64, f64)> {
     if let Some(lines) = edge.wrapped_label_lines.as_deref() {
-        return Some(metrics.edge_label_dimensions_wrapped(lines));
+        return Some(edge_label_dimensions_wrapped_for_provider(metrics, lines));
     }
     edge.label
         .as_deref()
-        .map(|label| metrics.edge_label_dimensions(label))
+        .map(|label| edge_label_dimensions_for_provider(metrics, label))
 }
 
 fn grid_edge_label_layout_dimensions(edge: &Edge) -> Option<(f64, f64)> {
@@ -146,7 +148,10 @@ pub fn run_layered_layout(
 
     let direction = diagram.direction;
     let edge_label_spacing = lc.edge_label_spacing;
-    let mut result = match mode {
+    // This deref-match relies on `MeasurementMode` staying `Copy` (currently
+    // a unit variant or provider reference). If a future variant stores
+    // non-Copy data, switch the match arms to borrow patterns.
+    let mut result = match *mode {
         // Grid-mode label-dummy dims are padded in whole-cell increments
         // via `pad_edge_label_dims_grid` so the Text renderer honors
         // `edge_label_spacing`. Default spacing 2.0 + default thickness 1.0
@@ -172,7 +177,7 @@ pub fn run_layered_layout(
         MeasurementMode::Proportional(metrics) => build_layered_layout_with_config(
             diagram,
             &lc,
-            |node| proportional_node_dimensions(metrics, node, direction),
+            |node| proportional_node_dimensions_with_provider(metrics, node, direction),
             |edge| {
                 edge_label_dims_proportional_for_run(metrics, edge).map(|dims| {
                     super::float_layout::pad_edge_label_dims(

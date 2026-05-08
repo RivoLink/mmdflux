@@ -14,9 +14,13 @@ use crate::graph::attachment::{EdgePort, PortFace};
 use crate::graph::geometry::{
     EdgeLabelSide, GraphGeometry, PositionedNode, RoutedEdgeGeometry, RoutedGraphGeometry,
 };
-use crate::graph::measure::{TextMetricsProfileDescriptor, default_proportional_text_metrics};
+use crate::graph::measure::{
+    TextMetricsProfileDescriptor, TextMetricsProvider, default_proportional_text_metrics,
+};
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
-use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::graph::routing::{
+    EdgeRouting, route_graph_geometry, route_graph_geometry_with_provider,
+};
 use crate::graph::style::NodeStyle;
 use crate::graph::{Arrow, Direction, GeometryLevel, Graph, Shape, Stroke};
 use crate::simplification::PathSimplification;
@@ -244,6 +248,7 @@ pub(crate) fn to_document_typed_with_routing(
         path_simplification,
         engine_id,
         None,
+        None,
     )
 }
 
@@ -257,12 +262,24 @@ pub(crate) fn to_document_typed_with_routing_and_text_metrics(
     path_simplification: PathSimplification,
     engine_id: Option<&str>,
     text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
+    text_metrics_provider: Option<&dyn TextMetricsProvider>,
 ) -> Result<Document, RenderError> {
-    // MMDS fallback routing: default metrics are sufficient since this path
-    // only fires when no pre-routed geometry was provided (design §6.3).
-    let metrics = default_proportional_text_metrics();
-    let routed_owned = (routed.is_none() && matches!(level, GeometryLevel::Routed))
-        .then(|| route_graph_geometry(diagram, geometry, EdgeRouting::OrthogonalRoute, &metrics));
+    let routed_owned = (routed.is_none() && matches!(level, GeometryLevel::Routed)).then(|| {
+        match text_metrics_provider {
+            Some(metrics) => route_graph_geometry_with_provider(
+                diagram,
+                geometry,
+                EdgeRouting::OrthogonalRoute,
+                metrics,
+            ),
+            None => {
+                // Static MMDS fallback routing for legacy adapter callers that
+                // request routed output without already carrying resolved metrics.
+                let metrics = default_proportional_text_metrics();
+                route_graph_geometry(diagram, geometry, EdgeRouting::OrthogonalRoute, &metrics)
+            }
+        }
+    });
     let routed = routed.or(routed_owned.as_ref());
 
     to_document_typed_with_text_metrics(
@@ -1119,7 +1136,101 @@ fn is_default_minlen(value: &i32) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
+
     use super::*;
+    use crate::graph::geometry::LayoutEdge;
+    use crate::graph::space::{FPoint, FRect};
+    use crate::graph::{Edge as GraphEdge, Node as GraphNode};
+    use crate::internal_tests::stub_metrics::WideMProvider;
+
+    fn labeled_graph_geometry() -> (Graph, GraphGeometry) {
+        let mut diagram = Graph::new(Direction::TopDown);
+        diagram.add_node(GraphNode::new("A"));
+        diagram.add_node(GraphNode::new("B"));
+        diagram.add_edge(GraphEdge::new("A", "B").with_label("mmmm"));
+
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "A".to_string(),
+            PositionedNode {
+                id: "A".to_string(),
+                rect: FRect::new(40.0, 20.0, 50.0, 30.0),
+                shape: Shape::Rectangle,
+                label: "A".to_string(),
+                parent: None,
+            },
+        );
+        nodes.insert(
+            "B".to_string(),
+            PositionedNode {
+                id: "B".to_string(),
+                rect: FRect::new(40.0, 110.0, 50.0, 30.0),
+                shape: Shape::Rectangle,
+                label: "B".to_string(),
+                parent: None,
+            },
+        );
+
+        let geometry = GraphGeometry {
+            nodes,
+            edges: vec![LayoutEdge {
+                index: 0,
+                from: "A".to_string(),
+                to: "B".to_string(),
+                waypoints: vec![],
+                label_position: Some(FPoint::new(65.0, 80.0)),
+                label_side: None,
+                from_subgraph: None,
+                to_subgraph: None,
+                layout_path_hint: Some(vec![FPoint::new(65.0, 50.0), FPoint::new(65.0, 110.0)]),
+                preserve_orthogonal_topology: false,
+                label_geometry: None,
+                effective_wrapped_lines: None,
+            }],
+            subgraphs: HashMap::new(),
+            self_edges: vec![],
+            direction: Direction::TopDown,
+            node_directions: HashMap::new(),
+            bounds: FRect::new(0.0, 0.0, 130.0, 160.0),
+            reversed_edges: vec![],
+            engine_hints: None,
+            grid_projection: None,
+            rerouted_edges: HashSet::new(),
+            enhanced_backward_routing: false,
+        };
+
+        (diagram, geometry)
+    }
+
+    #[test]
+    fn mmds_fallback_routing_uses_supplied_provider_when_available() {
+        let provider = WideMProvider;
+        let (diagram, geometry) = labeled_graph_geometry();
+
+        let document = to_document_typed_with_routing_and_text_metrics(
+            "flowchart",
+            &diagram,
+            &geometry,
+            None,
+            GeometryLevel::Routed,
+            PathSimplification::None,
+            None,
+            None,
+            Some(&provider),
+        )
+        .expect("fallback routed document should serialize");
+
+        let label_rect = document.edges[0]
+            .label_rect
+            .as_ref()
+            .expect("fallback routing should populate label_rect");
+        assert!(
+            label_rect.width > 160.0,
+            "label_rect width should come from supplied provider, got {}",
+            label_rect.width
+        );
+    }
 
     #[test]
     fn mmds_port_serializes_correctly() {

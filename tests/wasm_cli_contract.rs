@@ -234,6 +234,29 @@ fn runtime_config_input_rejects_unsupported_font_metrics_profile() {
 }
 
 #[test]
+fn runtime_config_input_rejects_dynamic_font_config_fields() {
+    use mmdflux::RuntimeConfigInput;
+
+    for (json, field) in [
+        (
+            r#"{"fontFamily":"Inter","fontMetricsProfile":"browser-dynamic-v1"}"#,
+            "fontFamily",
+        ),
+        (
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"18px"}}"#,
+            "themeVariables",
+        ),
+    ] {
+        let err = serde_json::from_str::<RuntimeConfigInput>(json).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains(&format!("unknown field `{field}`")),
+            "{err}"
+        );
+    }
+}
+
+#[test]
 fn runtime_config_input_rejects_cli_only_svg_theme_auto_field() {
     use mmdflux::RuntimeConfigInput;
 

@@ -12,22 +12,25 @@ use super::{float_router, from_layered_layout};
 use crate::graph::direction_policy::build_node_directions;
 use crate::graph::geometry::{GraphGeometry, RoutedEdgeGeometry};
 use crate::graph::grid::GridLayoutConfig;
-use crate::graph::measure::{ProportionalTextMetrics, proportional_node_dimensions};
-use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::graph::measure::{
+    TextMetricsProvider, edge_label_dimensions_for_provider,
+    edge_label_dimensions_wrapped_for_provider, proportional_node_dimensions_with_provider,
+};
+use crate::graph::routing::{EdgeRouting, route_graph_geometry_with_provider};
 use crate::graph::{Direction, Edge, Graph, Stroke};
 
 /// Edge-label sizing that honors the pre-engine wrap artifact when present.
 /// Falls back to single-line measurement otherwise.
 fn edge_label_dims_proportional(
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     edge: &Edge,
 ) -> Option<(f64, f64)> {
     if let Some(lines) = edge.wrapped_label_lines.as_deref() {
-        return Some(metrics.edge_label_dimensions_wrapped(lines));
+        return Some(edge_label_dimensions_wrapped_for_provider(metrics, lines));
     }
     edge.label
         .as_deref()
-        .map(|label| metrics.edge_label_dimensions(label))
+        .map(|label| edge_label_dimensions_for_provider(metrics, label))
 }
 
 /// Stroke thickness in layout units used for ELK label-dummy padding.
@@ -90,7 +93,7 @@ pub(super) fn pad_edge_label_dims_grid(
 pub(crate) fn build_float_layout_with_flags(
     diagram: &Graph,
     config: &GridLayoutConfig,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     edge_routing: EdgeRouting,
     skip_non_isolated_overrides: bool,
     engine_flags: Option<&LayoutConfig>,
@@ -116,7 +119,7 @@ pub(crate) fn build_float_layout_with_flags(
     let mut layout = build_layered_layout_with_config(
         diagram,
         &layered_config,
-        |node| proportional_node_dimensions(metrics, node, direction),
+        |node| proportional_node_dimensions_with_provider(metrics, node, direction),
         |edge| {
             edge_label_dims_proportional(metrics, edge).map(|dims| {
                 pad_edge_label_dims(dims, edge_label_spacing, edge_thickness(edge), direction)
@@ -126,7 +129,7 @@ pub(crate) fn build_float_layout_with_flags(
     let sublayouts = compute_sublayouts(
         diagram,
         &layered_config,
-        |node| proportional_node_dimensions(metrics, node, direction),
+        |node| proportional_node_dimensions_with_provider(metrics, node, direction),
         |edge| {
             edge_label_dims_proportional(metrics, edge).map(|dims| {
                 pad_edge_label_dims(dims, edge_label_spacing, edge_thickness(edge), direction)
@@ -134,8 +137,8 @@ pub(crate) fn build_float_layout_with_flags(
         },
         skip_non_isolated_overrides,
     );
-    let title_pad_y = metrics.font_size;
-    let content_pad_y = metrics.font_size * 0.3;
+    let title_pad_y = metrics.font_size();
+    let content_pad_y = metrics.font_size() * 0.3;
     reconcile_sublayouts(
         diagram,
         &mut layout,
@@ -145,14 +148,14 @@ pub(crate) fn build_float_layout_with_flags(
     );
 
     // Expand parent subgraph bounds to encompass repositioned children.
-    let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
-    let title_margin = metrics.font_size;
+    let child_margin = metrics.node_padding_x().max(metrics.node_padding_y());
+    let title_margin = metrics.font_size();
     expand_parent_bounds(diagram, &mut layout, child_margin, title_margin);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
     // Account for post-padding expansion (2 * node_padding_y for adjacent
     // subgraphs) plus visual breathing room (font_size).
-    let overlap_gap = metrics.node_padding_y * 2.0 + metrics.font_size;
+    let overlap_gap = metrics.node_padding_y() * 2.0 + metrics.font_size();
     resolve_sublayout_overlaps(diagram, &mut layout, overlap_gap);
 
     // Align sibling nodes with their cross-boundary edge targets on the
@@ -192,8 +195,8 @@ pub(crate) fn build_float_layout_with_flags(
     apply_subgraph_float_padding(
         diagram,
         &mut layout,
-        metrics.node_padding_x,
-        metrics.node_padding_y,
+        metrics.node_padding_x(),
+        metrics.node_padding_y(),
     );
 
     // Push external nodes away from subgraph borders so that subgraph-as-node
@@ -240,9 +243,9 @@ fn inject_routed_paths(
     diagram: &Graph,
     geom: &GraphGeometry,
     edge_routing: EdgeRouting,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> GraphGeometry {
-    let routed = route_graph_geometry(diagram, geom, edge_routing, metrics);
+    let routed = route_graph_geometry_with_provider(diagram, geom, edge_routing, metrics);
     let mut updated = geom.clone();
     apply_routed_edge_paths(&mut updated, routed.edges);
     updated

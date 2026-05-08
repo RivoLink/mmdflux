@@ -14,9 +14,9 @@ use crate::graph::geometry::{
     EdgeLabelGeometry, EdgeLabelSide, GraphGeometry, LayoutEdge, PositionedNode,
     RoutedGraphGeometry, SelfEdgeGeometry, SubgraphGeometry,
 };
-use crate::graph::measure::default_proportional_text_metrics;
+use crate::graph::measure::{TextMetricsProvider, default_proportional_text_metrics};
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
-use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::graph::routing::{EdgeRouting, route_graph_geometry_with_provider};
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::style::{ColorToken, NodeStyle};
 use crate::graph::{Edge as GraphEdge, GeometryLevel, Graph, Node, Subgraph};
@@ -352,16 +352,22 @@ pub(crate) fn hydrate_routed_geometry_from_mmds(
 pub fn hydrate_routed_geometry_from_document(
     output: &Document,
 ) -> Result<RoutedGraphGeometry, HydrationError> {
+    let metrics = default_proportional_text_metrics();
+    hydrate_routed_geometry_from_document_with_provider(output, &metrics)
+}
+
+/// Hydrate routed geometry IR from a parsed MMDS document with caller-supplied metrics.
+pub(crate) fn hydrate_routed_geometry_from_document_with_provider(
+    output: &Document,
+    metrics: &dyn TextMetricsProvider,
+) -> Result<RoutedGraphGeometry, HydrationError> {
     let (diagram, geometry) = hydrate_geometry_parts(output)?;
     let edge_routing = if output.geometry_level == GeometryLevel::Routed {
         EdgeRouting::EngineProvided
     } else {
         EdgeRouting::PolylineRoute
     };
-    // MMDS replay hydration: default metrics are sufficient since the MMDS
-    // replay path does not carry a request-specific metrics handle (design §6.3).
-    let metrics = default_proportional_text_metrics();
-    let mut routed = route_graph_geometry(&diagram, &geometry, edge_routing, &metrics);
+    let mut routed = route_graph_geometry_with_provider(&diagram, &geometry, edge_routing, metrics);
 
     // Preserve authoritative routed label geometry by overwriting
     // `label_geometry` on routed edges with the semantics carried by the MMDS
@@ -370,7 +376,7 @@ pub fn hydrate_routed_geometry_from_document(
     // lose the authoritative `label_rect` whenever `label_position` and
     // `label_rect` disagree.
     if output.geometry_level == GeometryLevel::Routed {
-        overlay_authoritative_label_geometry(&mut routed, output, &metrics);
+        overlay_authoritative_label_geometry(&mut routed, output, metrics);
     }
 
     Ok(routed)
@@ -391,7 +397,7 @@ pub fn hydrate_routed_geometry_from_output(
 fn overlay_authoritative_label_geometry(
     routed: &mut RoutedGraphGeometry,
     output: &Document,
-    metrics: &crate::graph::measure::ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) {
     let edges = sorted_output_edges(output);
     for (routed_index, (_, mmds_edge)) in edges.into_iter().enumerate() {
@@ -420,7 +426,7 @@ fn overlay_authoritative_label_geometry(
         routed_edge.label_geometry = Some(EdgeLabelGeometry {
             center,
             rect,
-            padding: (metrics.label_padding_x, metrics.label_padding_y),
+            padding: (metrics.label_padding_x(), metrics.label_padding_y()),
             side,
             // Synthesized trust markers: replay consumers that gate on
             // `track != 0 || compartment_size > 1` treat the hydrated
@@ -994,6 +1000,92 @@ impl Error for HydrationError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::{Arrow, Shape, Stroke};
+    use crate::internal_tests::stub_metrics::PaddedProvider;
+
+    fn routed_document_with_authoritative_label_rect() -> Document {
+        Document {
+            version: 1,
+            profiles: vec![],
+            extensions: Default::default(),
+            defaults: crate::mmds::Defaults::default(),
+            geometry_level: GeometryLevel::Routed,
+            metadata: crate::mmds::Metadata {
+                diagram_type: "flowchart".to_string(),
+                direction: Direction::TopDown,
+                bounds: crate::mmds::Bounds {
+                    width: 130.0,
+                    height: 160.0,
+                },
+                engine: None,
+            },
+            nodes: vec![
+                crate::mmds::Node {
+                    id: "A".to_string(),
+                    label: "A".to_string(),
+                    shape: Shape::Rectangle,
+                    parent: None,
+                    position: crate::mmds::Position { x: 65.0, y: 35.0 },
+                    size: crate::mmds::Size {
+                        width: 50.0,
+                        height: 30.0,
+                    },
+                },
+                crate::mmds::Node {
+                    id: "B".to_string(),
+                    label: "B".to_string(),
+                    shape: Shape::Rectangle,
+                    parent: None,
+                    position: crate::mmds::Position { x: 65.0, y: 125.0 },
+                    size: crate::mmds::Size {
+                        width: 50.0,
+                        height: 30.0,
+                    },
+                },
+            ],
+            edges: vec![crate::mmds::Edge {
+                id: "e0".to_string(),
+                source: "A".to_string(),
+                target: "B".to_string(),
+                from_subgraph: None,
+                to_subgraph: None,
+                label: Some("mmmm".to_string()),
+                stroke: Stroke::Solid,
+                arrow_start: Arrow::None,
+                arrow_end: Arrow::Normal,
+                minlen: 1,
+                path: Some(vec![[65.0, 50.0], [65.0, 110.0]]),
+                label_position: Some(crate::mmds::Position { x: 65.0, y: 80.0 }),
+                is_backward: Some(false),
+                source_port: None,
+                target_port: None,
+                label_side: Some(EdgeLabelSide::Center),
+                label_rect: Some(crate::mmds::Rect {
+                    x: 40.0,
+                    y: 70.0,
+                    width: 50.0,
+                    height: 20.0,
+                }),
+            }],
+            subgraphs: vec![],
+        }
+    }
+
+    #[test]
+    fn routed_hydration_uses_supplied_provider_for_authoritative_label_padding() {
+        let output = routed_document_with_authoritative_label_rect();
+        let provider = PaddedProvider;
+
+        let routed = hydrate_routed_geometry_from_document_with_provider(&output, &provider)
+            .expect("routed geometry should hydrate");
+
+        let label_geometry = routed.edges[0]
+            .label_geometry
+            .as_ref()
+            .expect("authoritative label geometry should overlay");
+        assert_eq!(label_geometry.padding, (11.0, 7.0));
+        assert_eq!(label_geometry.rect.width, 50.0);
+    }
 
     #[test]
     fn reconstruct_compound_membership_includes_descendants_for_ancestors() {

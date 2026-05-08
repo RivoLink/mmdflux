@@ -13,7 +13,9 @@
 //! so wrapping happens before engine sizing.
 
 use crate::graph::Edge;
-use crate::graph::measure::{ProportionalTextMetrics, wrap_lines};
+use crate::graph::measure::{
+    ProportionalTextMetrics, TextMetricsProvider, wrap_lines_with_provider,
+};
 
 /// Greedy-wrap every labeled edge's `label` against `max_width` using
 /// `metrics`, persisting the result as `edge.wrapped_label_lines`.
@@ -31,6 +33,14 @@ pub fn prepare_wrapped_labels(
     metrics: &ProportionalTextMetrics,
     max_width: Option<f64>,
 ) {
+    prepare_wrapped_labels_with_provider(edges, metrics, max_width);
+}
+
+pub(crate) fn prepare_wrapped_labels_with_provider(
+    edges: &mut [Edge],
+    provider: &dyn TextMetricsProvider,
+    max_width: Option<f64>,
+) {
     let Some(max_width) = max_width else {
         return;
     };
@@ -44,7 +54,7 @@ pub fn prepare_wrapped_labels(
         if label.is_empty() {
             continue;
         }
-        edge.wrapped_label_lines = Some(wrap_lines(metrics, label, max_width));
+        edge.wrapped_label_lines = Some(wrap_lines_with_provider(provider, label, max_width));
     }
 }
 

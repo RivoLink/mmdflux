@@ -41,6 +41,7 @@ pub use document::{
     SVG_PROFILE, TEXT_EXTENSION_NAMESPACE, TEXT_METRICS_EXTENSION_NAMESPACE, TEXT_METRICS_PROFILE,
     TEXT_PROFILE,
 };
+pub(crate) use hydrate::hydrate_routed_geometry_from_document_with_provider;
 pub use hydrate::{
     HydrationError, from_document, from_str, hydrate_graph_geometry_from_document_with_diagram,
     hydrate_routed_geometry_from_document,

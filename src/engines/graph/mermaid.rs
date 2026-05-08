@@ -17,7 +17,7 @@ use crate::engines::graph::{
 };
 use crate::errors::RenderError;
 use crate::graph::geometry::RoutedGraphGeometry;
-use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::graph::routing::{EdgeRouting, route_graph_geometry_with_provider};
 use crate::graph::{GeometryLevel, Graph};
 
 /// Mermaid dagre default for isolated subgraphs without explicit direction:
@@ -165,9 +165,9 @@ impl GraphEngine for MermaidLayeredEngine {
         };
         let diagram = compat_diagram.as_ref().unwrap_or(diagram);
 
-        let mode = request.measurement_mode.clone();
+        let mode = request.measurement_mode;
 
-        let MeasurementMode::Proportional(ref metrics) = mode else {
+        let MeasurementMode::Proportional(metrics) = mode else {
             return Err(RenderError {
                 message: "internal: Mermaid float geometry requires proportional measurement mode"
                     .to_string(),
@@ -189,7 +189,7 @@ impl GraphEngine for MermaidLayeredEngine {
             (request.geometry_contract, request.geometry_level),
             (GraphGeometryContract::Canonical, GeometryLevel::Routed)
         ) {
-            Some(route_graph_geometry(
+            Some(route_graph_geometry_with_provider(
                 diagram,
                 &geometry,
                 EdgeRouting::PolylineRoute,

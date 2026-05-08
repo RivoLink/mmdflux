@@ -12,7 +12,9 @@ use crate::engines::graph::EngineConfig;
 use crate::engines::graph::algorithms::layered::run_layered_layout;
 use crate::engines::graph::contracts::MeasurementMode;
 use crate::graph::geometry::*;
-use crate::graph::measure::default_proportional_text_metrics;
+use crate::graph::measure::{
+    default_proportional_text_metrics, default_proportional_text_metrics_provider,
+};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
 use crate::mermaid::parse_flowchart;
 
@@ -73,8 +75,8 @@ fn layout_test_svg(input: &str) -> (crate::graph::Graph, GraphGeometry) {
     (diagram, geom)
 }
 
-fn default_proportional_mode() -> MeasurementMode {
-    MeasurementMode::Proportional(default_proportional_text_metrics())
+fn default_proportional_mode() -> MeasurementMode<'static> {
+    MeasurementMode::Proportional(default_proportional_text_metrics_provider())
 }
 
 fn layout_fixture_svg(name: &str) -> (crate::graph::Graph, GraphGeometry) {
@@ -5486,7 +5488,7 @@ mod plan_0145_q9_routed_red {
         let config = EngineConfig::Layered(
             crate::engines::graph::algorithms::layered::LayoutConfig::default(),
         );
-        let mode = MeasurementMode::Proportional(metrics.clone());
+        let mode = MeasurementMode::Proportional(&metrics);
         let geom = run_layered_layout(&mode, &diagram, &config).expect("layout should succeed");
         let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute, &metrics);
         (diagram, routed)
@@ -5664,7 +5666,7 @@ mod plan_0151_producer_alignment {
 
         let metrics = default_proportional_text_metrics();
         let request = GraphSolveRequest::new(
-            MeasurementMode::Proportional(metrics),
+            MeasurementMode::Proportional(&metrics),
             GraphGeometryContract::Canonical,
             GeometryLevel::Routed,
             None,
@@ -5693,7 +5695,7 @@ mod plan_0151_producer_alignment {
 
         let metrics = default_proportional_text_metrics();
         let request = GraphSolveRequest::new(
-            MeasurementMode::Proportional(metrics),
+            MeasurementMode::Proportional(&metrics),
             GraphGeometryContract::Canonical,
             GeometryLevel::Routed,
             None,

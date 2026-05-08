@@ -13,9 +13,10 @@ use super::{
 };
 use crate::engines::graph::algorithms::layered::kernel::types::AcyclicPolicy;
 use crate::format::RoutingStyle;
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::{ProportionalTextMetrics, default_proportional_text_metrics};
 use crate::graph::routing::EdgeRouting;
 use crate::graph::{GeometryLevel, Graph};
+use crate::internal_tests::stub_metrics::{NonCloneProvider, WideMProvider};
 
 fn build_simple_diagram() -> Graph {
     let flowchart = crate::mermaid::parse_flowchart("graph TD\nA-->B").unwrap();
@@ -38,8 +39,9 @@ fn solve_request_fields_round_trip() {
 
 #[test]
 fn solve_request_new_preserves_visual_proportional_fields() {
+    let metrics = ProportionalTextMetrics::new(16.0, 12.0, 10.0);
     let req = GraphSolveRequest::new(
-        MeasurementMode::Proportional(ProportionalTextMetrics::new(16.0, 12.0, 10.0)),
+        MeasurementMode::Proportional(&metrics),
         GraphGeometryContract::Visual,
         GeometryLevel::Routed,
         None,
@@ -56,8 +58,9 @@ fn solve_request_new_preserves_visual_proportional_fields() {
 
 #[test]
 fn solve_request_new_keeps_routing_style_independent_of_geometry_contract() {
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let req = GraphSolveRequest::new(
-        MeasurementMode::Proportional(ProportionalTextMetrics::new(16.0, 15.0, 15.0)),
+        MeasurementMode::Proportional(&metrics),
         GraphGeometryContract::Canonical,
         GeometryLevel::Routed,
         Some(RoutingStyle::Direct),
@@ -72,7 +75,54 @@ fn solve_request_new_keeps_routing_style_independent_of_geometry_contract() {
     assert_eq!(req.routing_style, Some(RoutingStyle::Direct));
 }
 
-fn grid_request(level: GeometryLevel, routing_style: Option<RoutingStyle>) -> GraphSolveRequest {
+#[test]
+fn graph_solve_request_borrows_non_clone_provider() {
+    let backing = NonCloneProvider::new(default_proportional_text_metrics());
+    let request = GraphSolveRequest::new(
+        MeasurementMode::Proportional(&backing),
+        GraphGeometryContract::Visual,
+        GeometryLevel::Layout,
+        None,
+        Default::default(),
+    );
+
+    assert!(matches!(
+        request.measurement_mode,
+        MeasurementMode::Proportional(_)
+    ));
+}
+
+#[test]
+fn layered_measurement_uses_provider_for_node_widths() {
+    let provider = WideMProvider;
+    let flowchart =
+        crate::mermaid::parse_flowchart("graph TD\nA[mmmm] --> B[iiii]\n").expect("fixture parses");
+    let diagram = crate::diagrams::flowchart::compile_to_graph(&flowchart);
+    let request = GraphSolveRequest::new(
+        MeasurementMode::Proportional(&provider),
+        GraphGeometryContract::Visual,
+        GeometryLevel::Layout,
+        None,
+        Default::default(),
+    );
+    let config = EngineConfig::Layered(LayoutConfig::default());
+
+    let result = FluxLayeredEngine::text()
+        .solve(&diagram, &config, &request)
+        .expect("solve should succeed");
+
+    let a_width = result.geometry.nodes["A"].rect.width;
+    let b_width = result.geometry.nodes["B"].rect.width;
+    assert!(
+        a_width > b_width + 100.0,
+        "provider should make m-label node wider than i-label node: A={a_width} B={b_width}"
+    );
+}
+
+fn grid_request(
+    level: GeometryLevel,
+    routing_style: Option<RoutingStyle>,
+) -> GraphSolveRequest<'static> {
     GraphSolveRequest::new(
         MeasurementMode::Grid,
         GraphGeometryContract::Canonical,
@@ -83,11 +133,11 @@ fn grid_request(level: GeometryLevel, routing_style: Option<RoutingStyle>) -> Gr
 }
 
 fn proportional_request(
-    metrics: ProportionalTextMetrics,
+    metrics: &ProportionalTextMetrics,
     geometry_contract: GraphGeometryContract,
     level: GeometryLevel,
     routing_style: Option<RoutingStyle>,
-) -> GraphSolveRequest {
+) -> GraphSolveRequest<'_> {
     GraphSolveRequest::new(
         MeasurementMode::Proportional(metrics),
         geometry_contract,
@@ -184,8 +234,9 @@ fn mermaid_layered_capabilities_are_hint_driven() {
 fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
     let diagram = build_simple_diagram();
     let engine = MermaidLayeredEngine::new();
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let request = proportional_request(
-        ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        &metrics,
         GraphGeometryContract::Canonical,
         GeometryLevel::Layout,
         None,
@@ -206,8 +257,9 @@ fn mermaid_layered_layout_matches_flux_layered_layout() {
     let diagram = build_simple_diagram();
     let config =
         EngineConfig::Layered(crate::engines::graph::algorithms::layered::LayoutConfig::default());
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let layout_req = proportional_request(
-        ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        &metrics,
         GraphGeometryContract::Canonical,
         GeometryLevel::Layout,
         None,
@@ -243,8 +295,9 @@ fn mermaid_layered_layout_matches_flux_layered_layout() {
 fn mermaid_layered_solve_routed_level_has_routed_geometry() {
     let diagram = build_simple_diagram();
     let engine = MermaidLayeredEngine::new();
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let request = proportional_request(
-        ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        &metrics,
         GraphGeometryContract::Canonical,
         GeometryLevel::Routed,
         None,
@@ -331,12 +384,9 @@ fn run_layered_layout_proportional_mode_produces_larger_dimensions() {
 
     let config = EngineConfig::Layered(LayoutConfig::default());
     let text_geom = run_layered_layout(&MeasurementMode::Grid, &diagram, &config).unwrap();
-    let proportional_geom = run_layered_layout(
-        &MeasurementMode::Proportional(ProportionalTextMetrics::new(16.0, 15.0, 15.0)),
-        &diagram,
-        &config,
-    )
-    .unwrap();
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
+    let proportional_geom =
+        run_layered_layout(&MeasurementMode::Proportional(&metrics), &diagram, &config).unwrap();
 
     let text_w = text_geom.nodes["A"].rect.width;
     let proportional_w = proportional_geom.nodes["A"].rect.width;
@@ -575,7 +625,8 @@ fn adaptive_reversed_chain_policy_relaxes_for_inline_label_crowding() {
     let input = include_str!("../../../tests/fixtures/flowchart/inline_label_flowchart.mmd");
     let flowchart = crate::mermaid::parse_flowchart(input).expect("fixture should parse");
     let diagram = crate::diagrams::flowchart::compile_to_graph(&flowchart);
-    let mode = MeasurementMode::Proportional(ProportionalTextMetrics::new(16.0, 15.0, 15.0));
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
+    let mode = MeasurementMode::Proportional(&metrics);
 
     let input_cfg = LayoutConfig {
         model_order_tiebreak: true,
@@ -616,7 +667,8 @@ fn adaptive_reversed_chain_policy_preserves_crossing_minimize_ordering() {
     let input = include_str!("../../../tests/fixtures/flowchart/crossing_minimize.mmd");
     let flowchart = crate::mermaid::parse_flowchart(input).expect("fixture should parse");
     let diagram = crate::diagrams::flowchart::compile_to_graph(&flowchart);
-    let mode = MeasurementMode::Proportional(ProportionalTextMetrics::new(16.0, 15.0, 15.0));
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
+    let mode = MeasurementMode::Proportional(&metrics);
 
     let input_cfg = LayoutConfig {
         model_order_tiebreak: true,
@@ -642,8 +694,9 @@ fn adaptive_reversed_chain_policy_preserves_crossing_minimize_ordering() {
 
 fn solve_visual_proportional(engine: &dyn GraphEngine, diagram: &Graph) -> GraphSolveResult {
     let config = EngineConfig::Layered(LayoutConfig::default());
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let request = proportional_request(
-        ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        &metrics,
         GraphGeometryContract::Visual,
         GeometryLevel::Layout,
         Some(RoutingStyle::Polyline),
@@ -656,8 +709,9 @@ fn solve_canonical_proportional_layout(
     diagram: &Graph,
 ) -> GraphSolveResult {
     let config = EngineConfig::Layered(LayoutConfig::default());
+    let metrics = ProportionalTextMetrics::new(16.0, 15.0, 15.0);
     let request = proportional_request(
-        ProportionalTextMetrics::new(16.0, 15.0, 15.0),
+        &metrics,
         GraphGeometryContract::Canonical,
         GeometryLevel::Layout,
         Some(RoutingStyle::Polyline),

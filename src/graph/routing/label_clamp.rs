@@ -15,7 +15,7 @@ use crate::graph::edge_marker::marker_avoidance_distance;
 use crate::graph::geometry::{
     EdgeLabelSide, FRect, PositionedNode, RoutedEdgeGeometry, UnfitOverlap,
 };
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::routing::label_gap::Axis;
 use crate::graph::{Direction, Graph};
 
@@ -30,10 +30,10 @@ pub(crate) fn clamp_label_geometry_to_node_bounds(
     nodes: &HashMap<String, PositionedNode>,
     diagram: &Graph,
     direction: Direction,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     unfit_overlaps: &mut Vec<UnfitOverlap>,
 ) {
-    let spacing = metrics.label_padding_y;
+    let spacing = metrics.label_padding_y();
 
     for edge in edges.iter_mut() {
         // Skip early when there's no label geometry to clamp.

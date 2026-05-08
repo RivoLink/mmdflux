@@ -275,7 +275,7 @@ fn canonical_proportional_solve_honors_edge_label_spacing_override() {
     let flowchart = parse_flowchart("graph TD\n    A -->|label| B\n").expect("fixture parses");
     let diagram = compile_to_graph(&flowchart);
     let metrics = default_proportional_text_metrics();
-    let mode = MeasurementMode::Proportional(metrics);
+    let mode = MeasurementMode::Proportional(&metrics);
 
     let baseline = LayoutConfig {
         label_dummy_placement: LabelDummyPlacement::WidestLayer,

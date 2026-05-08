@@ -683,7 +683,9 @@ mod edge_rendering_regression {
         AttachDirection, GridLayout, GridLayoutConfig, NodeBounds, SubgraphBounds,
         geometry_to_grid_layout_with_routed, route_all_edges, route_edge, route_edge_with_probe,
     };
-    use crate::graph::measure::default_proportional_text_metrics;
+    use crate::graph::measure::{
+        default_proportional_text_metrics, default_proportional_text_metrics_provider,
+    };
     use crate::graph::routing::{EdgeRouting, route_graph_geometry};
     use crate::graph::{Arrow, Direction, Edge, Graph, Node, Stroke};
     use crate::mermaid::parse_flowchart;
@@ -909,7 +911,7 @@ mod edge_rendering_regression {
     fn compute_layout_with_mode(
         diagram: &Graph,
         config: &GridLayoutConfig,
-        measurement_mode: MeasurementMode,
+        measurement_mode: MeasurementMode<'_>,
     ) -> (crate::graph::geometry::RoutedGraphGeometry, GridLayout) {
         let engine = FluxLayeredEngine::text();
         let request = GraphSolveRequest::new(
@@ -941,8 +943,9 @@ mod edge_rendering_regression {
         name: &str,
     ) -> (Graph, crate::graph::geometry::RoutedGraphGeometry) {
         let diagram = flowchart_fixture_diagram(name);
+        let metrics = default_proportional_text_metrics_provider();
         let geom = run_layered_layout(
-            &MeasurementMode::Proportional(default_proportional_text_metrics()),
+            &MeasurementMode::Proportional(metrics),
             &diagram,
             &flux_layout_config(),
         )

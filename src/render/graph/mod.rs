@@ -16,7 +16,7 @@ pub use self::svg::SvgRenderOptions;
 use crate::format::{OutputFormat, RoutingStyle, TextColorMode};
 use crate::graph::direction_policy::build_node_directions;
 use crate::graph::geometry::{GraphGeometry, LayoutEdge, RoutedGraphGeometry, SelfEdgeGeometry};
-use crate::graph::measure::{ProportionalTextMetrics, default_proportional_text_metrics};
+use crate::graph::measure::{TextMetricsProvider, default_proportional_text_metrics};
 use crate::graph::routing::{self, EdgeRouting};
 use crate::graph::{Direction, Graph};
 use crate::render::svg::theme::ResolvedSvgTheme;
@@ -102,7 +102,7 @@ pub(crate) fn render_svg_from_geometry_with_theme_routing_and_metrics(
     options: &SvgRenderOptions,
     edge_routing: EdgeRouting,
     theme: Option<&ResolvedSvgTheme>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> String {
     svg::render_svg_from_geometry_with_theme(
         diagram,
@@ -119,7 +119,7 @@ pub(crate) fn render_svg_from_routed_geometry_with_theme_and_metrics(
     routed: &RoutedGraphGeometry,
     options: &SvgRenderOptions,
     theme: Option<&ResolvedSvgTheme>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> String {
     let geometry = geometry_for_routed_svg(diagram, routed);
     render_svg_from_geometry_with_theme_routing_and_metrics(

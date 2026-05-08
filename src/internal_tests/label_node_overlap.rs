@@ -150,7 +150,7 @@ fn flowchart_routed_for_fixture(path: &Path) -> (Graph, RoutedGraphGeometry) {
         .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
     let diagram = compile_to_graph(&fc);
     let metrics = default_proportional_text_metrics();
-    let mode = MeasurementMode::Proportional(metrics.clone());
+    let mode = MeasurementMode::Proportional(&metrics);
     let config = EngineConfig::Layered(crate::engines::graph::algorithms::layered::LayoutConfig {
         greedy_switch: true,
         model_order_tiebreak: true,

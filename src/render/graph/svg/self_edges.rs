@@ -4,15 +4,18 @@ use std::collections::HashMap;
 
 use super::{Point, Rect};
 use crate::graph::geometry::GraphGeometry;
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::{Direction, Graph, Shape};
 
 pub(super) fn compute_self_edge_paths(
     diagram: &Graph,
     geom: &GraphGeometry,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> HashMap<usize, Vec<Point>> {
-    let pad = metrics.node_padding_x.max(metrics.node_padding_y).max(4.0);
+    let pad = metrics
+        .node_padding_x()
+        .max(metrics.node_padding_y())
+        .max(4.0);
     let mut paths = HashMap::new();
 
     for se in &geom.self_edges {

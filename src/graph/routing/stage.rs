@@ -13,7 +13,10 @@ use crate::graph::geometry::{
     EdgeLabelGeometry, EdgeLabelSide, GraphGeometry, LayoutEdge, RoutedEdgeGeometry,
     RoutedGraphGeometry, RoutedSelfEdge,
 };
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::{
+    ProportionalTextMetrics, TextMetricsProvider, edge_label_dimensions_for_provider,
+    edge_label_dimensions_wrapped_for_provider,
+};
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::{Direction, Graph, Shape};
 
@@ -39,6 +42,15 @@ pub fn route_graph_geometry(
     geometry: &GraphGeometry,
     edge_routing: EdgeRouting,
     metrics: &ProportionalTextMetrics,
+) -> RoutedGraphGeometry {
+    route_graph_geometry_with_provider(diagram, geometry, edge_routing, metrics)
+}
+
+pub(crate) fn route_graph_geometry_with_provider(
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    edge_routing: EdgeRouting,
+    metrics: &dyn TextMetricsProvider,
 ) -> RoutedGraphGeometry {
     let port_attachments = compute_port_attachments_from_geometry(diagram, geometry);
     #[cfg(test)]
@@ -238,7 +250,7 @@ pub fn route_graph_geometry(
             .as_ref()
             .map(|g| (g.padding, g.side))
             .unwrap_or((
-                (metrics.label_padding_x, metrics.label_padding_y),
+                (metrics.label_padding_x(), metrics.label_padding_y()),
                 EdgeLabelSide::Center,
             ));
         routed_edge.label_position = Some(outcome.label_center);
@@ -923,7 +935,7 @@ fn snap_to_primary_face(
 fn populate_label_geometry(
     edges: &mut [RoutedEdgeGeometry],
     diagram: &Graph,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) {
     for routed_edge in edges.iter_mut() {
         let Some(center) = routed_edge.label_position else {
@@ -939,14 +951,14 @@ fn populate_label_geometry(
         // Prefer the pre-engine wrap artifact when present so the reserved
         // rect matches what SVG text and the MMDS replay emit.
         let (w, h) = match diagram_edge.and_then(|e| e.wrapped_label_lines.as_deref()) {
-            Some(lines) => metrics.edge_label_dimensions_wrapped(lines),
-            None => metrics.edge_label_dimensions(label),
+            Some(lines) => edge_label_dimensions_wrapped_for_provider(metrics, lines),
+            None => edge_label_dimensions_for_provider(metrics, label),
         };
         let side = routed_edge.label_side.unwrap_or(EdgeLabelSide::Center);
         routed_edge.label_geometry = Some(EdgeLabelGeometry {
             center,
             rect: FRect::new(center.x - w / 2.0, center.y - h / 2.0, w, h),
-            padding: (metrics.label_padding_x, metrics.label_padding_y),
+            padding: (metrics.label_padding_x(), metrics.label_padding_y()),
             side,
             track: 0,
             compartment_size: 1,
@@ -973,7 +985,7 @@ fn populate_label_geometry(
 fn align_backward_side_offset_labels(
     edges: &mut [RoutedEdgeGeometry],
     diagram: &Graph,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     edge_routing: EdgeRouting,
 ) {
     if !matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
@@ -1001,8 +1013,8 @@ fn align_backward_side_offset_labels(
             continue;
         }
         let (_, label_height) = match diagram_edge.wrapped_label_lines.as_deref() {
-            Some(lines) => metrics.edge_label_dimensions_wrapped(lines),
-            None => metrics.edge_label_dimensions(label),
+            Some(lines) => edge_label_dimensions_wrapped_for_provider(metrics, lines),
+            None => edge_label_dimensions_for_provider(metrics, label),
         };
         if let Some(aligned) = project_side_aware_anchor(&routed_edge.path, label_height, side) {
             routed_edge.label_position = Some(aligned);

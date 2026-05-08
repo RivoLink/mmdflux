@@ -20,7 +20,7 @@
 use crate::graph::edge::{Arrow, Edge};
 use crate::graph::edge_marker::marker_avoidance_distance;
 use crate::graph::geometry::{RoutedEdgeGeometry, RoutedGraphGeometry};
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::{Direction, Graph};
 
 /// Edge-parallel axis along which the gap is measured.
@@ -103,7 +103,7 @@ pub(crate) fn compute_label_gap_and_span(
     routed: &RoutedGraphGeometry,
     diagram: &Graph,
     direction: Direction,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> Option<LabelGapMeasurement> {
     let geom = edge.label_geometry.as_ref()?;
     let diagram_edge = diagram.edges.get(edge.index)?;
@@ -143,8 +143,8 @@ pub(crate) fn compute_label_gap_and_span(
 /// avoidance zone. We reuse `label_padding_y` as a proxy for "margin past
 /// the marker bbox" — it's the same scale (~2 px) and is already part of
 /// the metrics struct, so we don't need a separate constant.
-fn edge_label_spacing(metrics: &ProportionalTextMetrics) -> f64 {
-    metrics.label_padding_y
+fn edge_label_spacing(metrics: &dyn TextMetricsProvider) -> f64 {
+    metrics.label_padding_y()
 }
 
 #[cfg(test)]

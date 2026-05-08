@@ -24,6 +24,7 @@ pub use self::float_core::{
 };
 pub use self::labels::compute_end_label_positions;
 pub use self::orthogonal::{OrthogonalRoutingOptions, route_edges_orthogonal};
+pub(crate) use self::stage::route_graph_geometry_with_provider;
 pub use self::stage::{EdgeRouting, route_graph_geometry};
 #[cfg(test)]
 use crate::graph::Graph;
@@ -38,6 +39,7 @@ mod tests {
     use crate::graph::attachment::PortFace;
     use crate::graph::measure::default_proportional_text_metrics;
     use crate::graph::routing::EdgeRouting;
+    use crate::internal_tests::stub_metrics::WideMProvider;
 
     fn simple_geometry() -> (Graph, GraphGeometry) {
         let mut diagram = Graph::new(crate::graph::Direction::TopDown);
@@ -1612,6 +1614,79 @@ mod tests {
 
         // track: 0 — singleton compartment, no displacement needed.
         assert_eq!(lg.track, 0);
+    }
+
+    #[test]
+    fn routed_label_geometry_uses_provider_label_dimensions() {
+        let provider = WideMProvider;
+
+        let mut diagram = Graph::new(crate::graph::Direction::TopDown);
+        diagram.add_node(crate::graph::Node::new("A"));
+        diagram.add_node(crate::graph::Node::new("B"));
+        diagram.add_edge(crate::graph::Edge::new("A", "B").with_label("mmmm"));
+
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "A".into(),
+            PositionedNode {
+                id: "A".into(),
+                rect: FRect::new(50.0, 25.0, 40.0, 20.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "A".into(),
+                parent: None,
+            },
+        );
+        nodes.insert(
+            "B".into(),
+            PositionedNode {
+                id: "B".into(),
+                rect: FRect::new(50.0, 95.0, 40.0, 20.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "B".into(),
+                parent: None,
+            },
+        );
+
+        let geom = GraphGeometry {
+            nodes,
+            edges: vec![LayoutEdge {
+                index: 0,
+                from: "A".into(),
+                to: "B".into(),
+                waypoints: vec![],
+                label_position: Some(FPoint::new(70.0, 60.0)),
+                label_side: None,
+                from_subgraph: None,
+                to_subgraph: None,
+                layout_path_hint: Some(vec![FPoint::new(70.0, 35.0), FPoint::new(70.0, 105.0)]),
+                preserve_orthogonal_topology: false,
+                label_geometry: None,
+                effective_wrapped_lines: None,
+            }],
+            subgraphs: HashMap::new(),
+            self_edges: vec![],
+            direction: crate::graph::Direction::TopDown,
+            node_directions: HashMap::new(),
+            bounds: FRect::new(0.0, 0.0, 100.0, 140.0),
+            reversed_edges: vec![],
+            engine_hints: None,
+            grid_projection: None,
+            rerouted_edges: std::collections::HashSet::new(),
+            enhanced_backward_routing: false,
+        };
+
+        let routed = route_graph_geometry_with_provider(
+            &diagram,
+            &geom,
+            EdgeRouting::PolylineRoute,
+            &provider,
+        );
+
+        let label_rect = routed.edges[0].label_geometry.as_ref().unwrap().rect;
+        assert!(
+            label_rect.width > 160.0,
+            "provider label width should drive routed label rect, got {label_rect:?}"
+        );
     }
 
     /// Routed bounds must cover all edge path points, even when routing

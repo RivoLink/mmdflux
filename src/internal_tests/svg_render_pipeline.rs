@@ -11,17 +11,25 @@ use crate::engines::graph::contracts::{
 use crate::engines::graph::flux::FluxLayeredEngine;
 use crate::format::{CornerStyle, Curve, RoutingStyle};
 use crate::graph::Stroke;
-use crate::graph::measure::default_proportional_text_metrics;
+use crate::graph::measure::{
+    TextMetricsProvider, default_proportional_text_metrics,
+    default_proportional_text_metrics_provider,
+};
 use crate::graph::routing::{EdgeRouting, route_graph_geometry};
+use crate::internal_tests::stub_metrics::WideMProvider;
 use crate::mermaid::parse_flowchart;
-use crate::render::graph::{render_svg_from_geometry, render_svg_from_routed_geometry};
+use crate::render::graph::{
+    SvgRenderOptions, render_svg_from_geometry,
+    render_svg_from_geometry_with_theme_routing_and_metrics, render_svg_from_routed_geometry,
+};
 use crate::simplification::PathSimplification;
-use crate::{OutputFormat, RenderConfig, SvgThemeConfig};
+use crate::{OutputFormat, RenderConfig, SvgThemeConfig, render_diagram};
 
 fn render_svg(diagram: &crate::graph::Graph, config: &RenderConfig) -> String {
     let engine = FluxLayeredEngine::text();
+    let metrics = default_proportional_text_metrics();
     let request = GraphSolveRequest::new(
-        MeasurementMode::Proportional(default_proportional_text_metrics()),
+        MeasurementMode::Proportional(&metrics),
         GraphGeometryContract::Visual,
         config.geometry_level,
         config
@@ -45,13 +53,76 @@ fn render_svg(diagram: &crate::graph::Graph, config: &RenderConfig) -> String {
     }
 }
 
+fn render_svg_with_provider_for_test(input: &str, provider: &dyn TextMetricsProvider) -> String {
+    let flowchart = parse_flowchart(input).expect("fixture parses");
+    let diagram = compile_to_graph(&flowchart);
+    let request = GraphSolveRequest::new(
+        MeasurementMode::Proportional(provider),
+        GraphGeometryContract::Visual,
+        crate::graph::GeometryLevel::Layout,
+        Some(RoutingStyle::Polyline),
+        Default::default(),
+    );
+    let result = FluxLayeredEngine::text()
+        .solve(
+            &diagram,
+            &EngineConfig::Layered(Default::default()),
+            &request,
+        )
+        .expect("provider-backed visual solve succeeds");
+
+    render_svg_from_geometry_with_theme_routing_and_metrics(
+        &diagram,
+        &result.geometry,
+        &SvgRenderOptions::default(),
+        EdgeRouting::PolylineRoute,
+        None,
+        provider,
+    )
+}
+
+#[test]
+fn internal_stub_provider_changes_svg_geometry_without_public_config() {
+    let input = "graph TD\nA[mmmm] --> B[iiii]\n";
+    let provider = WideMProvider;
+    let default_config = RenderConfig::default();
+    let default_svg = render_diagram(input, OutputFormat::Svg, &default_config)
+        .expect("default public SVG render should succeed");
+
+    let stub_svg = render_svg_with_provider_for_test(input, &provider);
+
+    assert_ne!(default_svg, stub_svg);
+    assert_eq!(
+        render_diagram(input, OutputFormat::Svg, &RenderConfig::default())
+            .expect("default public SVG render should still succeed"),
+        default_svg
+    );
+}
+
+#[test]
+fn svg_label_background_uses_provider_widths() {
+    let provider = WideMProvider;
+    let svg = render_svg_with_provider_for_test("graph TD\nA -->|mmmm| B\n", &provider);
+    let rects = extract_label_bg_rects(&svg);
+    let max_width = rects
+        .iter()
+        .map(|(_, _, width, _)| *width)
+        .fold(0.0, f64::max);
+
+    assert!(
+        max_width > 160.0,
+        "provider should drive SVG label background width; max={max_width}, svg={svg}"
+    );
+}
+
 fn solve_visual_geometry(
     diagram: &crate::graph::Graph,
     config: &RenderConfig,
 ) -> crate::graph::geometry::GraphGeometry {
     let engine = FluxLayeredEngine::text();
+    let metrics = default_proportional_text_metrics();
     let request = GraphSolveRequest::new(
-        MeasurementMode::Proportional(default_proportional_text_metrics()),
+        MeasurementMode::Proportional(&metrics),
         GraphGeometryContract::Visual,
         config.geometry_level,
         config
@@ -69,8 +140,8 @@ fn solve_visual_geometry(
         .geometry
 }
 
-fn default_proportional_mode() -> MeasurementMode {
-    MeasurementMode::Proportional(default_proportional_text_metrics())
+fn default_proportional_mode() -> MeasurementMode<'static> {
+    MeasurementMode::Proportional(default_proportional_text_metrics_provider())
 }
 
 fn routing_style_for(edge_routing: EdgeRouting) -> RoutingStyle {
@@ -5754,8 +5825,9 @@ fn render_svg_from_routed_geometry_preserves_label_geometry_rect() {
     let engine = FluxLayeredEngine::text();
     let config =
         EngineConfig::Layered(crate::engines::graph::algorithms::layered::LayoutConfig::default());
+    let metrics = default_proportional_text_metrics();
     let request = GraphSolveRequest::new(
-        MeasurementMode::Proportional(default_proportional_text_metrics()),
+        MeasurementMode::Proportional(&metrics),
         GraphGeometryContract::Canonical,
         GeometryLevel::Routed,
         Some(RoutingStyle::Polyline),

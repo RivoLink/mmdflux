@@ -2,7 +2,8 @@
 
 use crate::graph::geometry::FPoint;
 use crate::graph::measure::{
-    DEFAULT_LABEL_PADDING_X, DEFAULT_LABEL_PADDING_Y, ProportionalTextMetrics,
+    DEFAULT_LABEL_PADDING_X, DEFAULT_LABEL_PADDING_Y, TextMetricsProvider,
+    edge_label_dimensions_wrapped_for_provider, measure_text_with_padding_for_provider,
 };
 use crate::render::svg::{SvgWriter, escape_text, fmt_f64};
 
@@ -26,7 +27,7 @@ pub(super) fn render_text_centered(
     writer: &mut SvgWriter,
     center: FPoint,
     text: &str,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     scale: f64,
     style: TextRenderStyle<'_>,
 ) {
@@ -42,7 +43,7 @@ pub(super) fn render_text_centered_with_wrap(
     center: FPoint,
     text: &str,
     wrapped_lines: Option<&[String]>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     scale: f64,
     style: TextRenderStyle<'_>,
 ) {
@@ -51,7 +52,12 @@ pub(super) fn render_text_centered_with_wrap(
             Some(lines) => {
                 measure_wrapped_with_padding(metrics, lines, LABEL_BG_PAD_X, LABEL_BG_PAD_Y)
             }
-            None => metrics.measure_text_with_padding(text, LABEL_BG_PAD_X, LABEL_BG_PAD_Y),
+            None => measure_text_with_padding_for_provider(
+                metrics,
+                text,
+                LABEL_BG_PAD_X,
+                LABEL_BG_PAD_Y,
+            ),
         };
         let rect_w = w * scale;
         let rect_h = h * scale;
@@ -94,7 +100,7 @@ pub(super) fn render_text_centered_with_wrap(
         return;
     }
 
-    let line_height = metrics.line_height * scale;
+    let line_height = metrics.line_height() * scale;
     let total_height = line_height * (lines.len().saturating_sub(1) as f64);
     let start_y = center.y - total_height / 2.0;
 
@@ -113,18 +119,18 @@ pub(super) fn render_text_centered_with_wrap(
 }
 
 fn measure_wrapped_with_padding(
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     lines: &[String],
     padding_x: f64,
     padding_y: f64,
 ) -> (f64, f64) {
     // Mirrors ProportionalTextMetrics::measure_text_with_padding but sources
     // the line vector from the caller's pre-wrapped artifact.
-    let (w, h) = metrics.edge_label_dimensions_wrapped(lines);
+    let (w, h) = edge_label_dimensions_wrapped_for_provider(metrics, lines);
     // `edge_label_dimensions_wrapped` bakes in `metrics.label_padding_*`; peel
     // those off and add the caller-requested padding to match the untreated
     // `measure_text_with_padding` behavior.
-    let raw_w = w - 2.0 * metrics.label_padding_x;
-    let raw_h = h - 2.0 * metrics.label_padding_y;
+    let raw_w = w - 2.0 * metrics.label_padding_x();
+    let raw_h = h - 2.0 * metrics.label_padding_y();
     (raw_w + 2.0 * padding_x, raw_h + 2.0 * padding_y)
 }

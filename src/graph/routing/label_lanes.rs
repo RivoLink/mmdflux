@@ -10,7 +10,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::graph::geometry::GraphGeometry;
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::{
+    TextMetricsProvider, edge_label_dimensions_for_provider,
+    edge_label_dimensions_wrapped_for_provider,
+};
 use crate::graph::routing::labels::arc_length_midpoint;
 use crate::graph::space::{FPoint, FRect};
 use crate::graph::{Direction, Graph};
@@ -258,7 +261,7 @@ pub(super) fn assign_label_tracks(
     geometry: &GraphGeometry,
     paths: &HashMap<usize, Vec<FPoint>>,
     backward_flags: &HashMap<usize, bool>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     direction: Direction,
 ) -> HashMap<usize, LabelTrackOutcome> {
     let descriptors = build_label_descriptors(diagram, geometry, paths, backward_flags, metrics);
@@ -511,7 +514,7 @@ pub(super) fn build_label_descriptors(
     geometry: &GraphGeometry,
     paths: &HashMap<usize, Vec<FPoint>>,
     backward_flags: &HashMap<usize, bool>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
 ) -> Vec<LabelDescriptor> {
     let direction = diagram.direction;
     let mut out = Vec::new();
@@ -542,8 +545,8 @@ pub(super) fn build_label_descriptors(
         // to single-line measurement for edges that opted out of the
         // pre-engine wrap (dagre-parity mode).
         let (w, h) = match edge.wrapped_label_lines.as_deref() {
-            Some(lines) => metrics.edge_label_dimensions_wrapped(lines),
-            None => metrics.edge_label_dimensions(label_text),
+            Some(lines) => edge_label_dimensions_wrapped_for_provider(metrics, lines),
+            None => edge_label_dimensions_for_provider(metrics, label_text),
         };
 
         let direction_sign = if *backward_flags.get(&edge_index).unwrap_or(&false) {
@@ -831,6 +834,7 @@ fn label_lane_subcluster_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::measure::ProportionalTextMetrics;
 
     fn make_descriptor(
         edge_index: usize,

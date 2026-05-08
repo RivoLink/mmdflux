@@ -7,11 +7,12 @@ use crate::engines::graph::{
 };
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
-use crate::graph::label_wrap::prepare_wrapped_labels;
+use crate::graph::label_wrap::prepare_wrapped_labels_with_provider;
 use crate::graph::measure::{
     COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
     DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ProportionalTextMetrics, ResolvedTextMetrics,
-    TextMetricsProfileConfig, TextMetricsProfileDescriptor, resolve_text_metrics_profile,
+    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsProvider,
+    resolve_text_metrics_profile,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -37,6 +38,7 @@ pub(crate) fn render_graph_family(
             diagram,
             &render_result.solve,
             &render_result.text_metrics.descriptor,
+            &render_result.text_metrics.metrics,
             config.geometry_level,
             config.path_simplification,
         ),
@@ -77,6 +79,7 @@ pub(crate) fn materialize_graph_family(
         diagram,
         &render_result.solve,
         &render_result.text_metrics.descriptor,
+        &render_result.text_metrics.metrics,
         config.geometry_level,
         config.path_simplification,
     )
@@ -112,7 +115,7 @@ fn solve_graph_family_for_render(
     // user-facing LayoutConfig default is `Some(200.0)` so wrap is on by
     // default. Explicit `None` disables wrap (dagre-parity fallback).
     let text_metrics = resolve_text_metrics_for_config(format, config)?;
-    prepare_wrapped_labels(
+    prepare_wrapped_labels_with_provider(
         &mut diagram.edges,
         &text_metrics.metrics,
         config.layout.edge_label_max_width,
@@ -136,12 +139,12 @@ fn subgraph_direction_policy_for(diagram_id: &str) -> SubgraphDirectionPolicy {
     }
 }
 
-fn graph_solve_request_for(
+fn graph_solve_request_for<'a>(
     format: OutputFormat,
     config: &RenderConfig,
     diagram_id: &str,
-    text_metrics: &ProportionalTextMetrics,
-) -> GraphSolveRequest {
+    text_metrics: &'a ProportionalTextMetrics,
+) -> GraphSolveRequest<'a> {
     let routing_style = config
         .routing_style
         .or_else(|| config.edge_preset.map(|preset| preset.expand().0));
@@ -157,11 +160,9 @@ fn graph_solve_request_for(
 fn measurement_mode_for_format(
     format: OutputFormat,
     text_metrics: &ProportionalTextMetrics,
-) -> MeasurementMode {
+) -> MeasurementMode<'_> {
     match format {
-        OutputFormat::Svg | OutputFormat::Mmds => {
-            MeasurementMode::Proportional(text_metrics.clone())
-        }
+        OutputFormat::Svg | OutputFormat::Mmds => MeasurementMode::Proportional(text_metrics),
         _ => MeasurementMode::Grid,
     }
 }
@@ -249,6 +250,7 @@ fn render_mmds_from_solve_result(
     diagram: &Graph,
     result: &GraphSolveResult,
     text_metrics_descriptor: &TextMetricsProfileDescriptor,
+    text_metrics: &dyn TextMetricsProvider,
     level: GeometryLevel,
     path_simplification: PathSimplification,
 ) -> Result<String, RenderError> {
@@ -257,6 +259,7 @@ fn render_mmds_from_solve_result(
         diagram,
         result,
         text_metrics_descriptor,
+        text_metrics,
         level,
         path_simplification,
     )?;
@@ -270,6 +273,7 @@ fn mmds_document_from_solve_result(
     diagram: &Graph,
     result: &GraphSolveResult,
     text_metrics_descriptor: &TextMetricsProfileDescriptor,
+    text_metrics: &dyn TextMetricsProvider,
     level: GeometryLevel,
     path_simplification: PathSimplification,
 ) -> Result<Document, RenderError> {
@@ -283,6 +287,7 @@ fn mmds_document_from_solve_result(
         path_simplification,
         Some(engine_id.as_str()),
         Some(text_metrics_descriptor),
+        Some(text_metrics),
     )
 }
 
@@ -369,6 +374,7 @@ mod tests {
             &diagram,
             &result,
             &text_metrics.descriptor,
+            &text_metrics.metrics,
             GeometryLevel::Routed,
             PathSimplification::default(),
         )

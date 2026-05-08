@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::labels::{fallback_label_position, precomputed_label_positions};
 use super::{Point, Rect};
 use crate::graph::geometry::GraphGeometry;
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::{TextMetricsProvider, edge_label_dimensions_for_provider};
 use crate::graph::{Graph, Stroke};
 
 pub(super) struct SvgBounds {
@@ -52,7 +52,7 @@ impl SvgBounds {
 pub(super) fn compute_svg_bounds(
     diagram: &Graph,
     geom: &GraphGeometry,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rendered_edge_paths: &HashMap<usize, Vec<Point>>,
 ) -> SvgBounds {
@@ -147,7 +147,7 @@ pub(super) fn compute_svg_bounds(
         let Some(point) = position else {
             continue;
         };
-        let (w, h) = metrics.edge_label_dimensions(label);
+        let (w, h) = edge_label_dimensions_for_provider(metrics, label);
         let rect = Rect {
             x: point.x - w / 2.0,
             y: point.y - h / 2.0,

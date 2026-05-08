@@ -7,7 +7,7 @@ use super::text::{
 };
 use super::{GraphSvgPalette, Point, dynamic_css_attrs};
 use crate::graph::geometry::GraphGeometry;
-use crate::graph::measure::ProportionalTextMetrics;
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::routing::compute_end_label_positions;
 use crate::graph::{Graph, Stroke};
 use crate::render::svg::SvgWriter;
@@ -106,7 +106,7 @@ pub(super) fn render_edge_labels(
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rendered_edge_paths: &HashMap<usize, Vec<Point>>,
     override_nodes: &HashMap<String, String>,
-    metrics: &ProportionalTextMetrics,
+    metrics: &dyn TextMetricsProvider,
     scale: f64,
     palette: &GraphSvgPalette,
 ) {

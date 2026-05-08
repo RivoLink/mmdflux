@@ -17,8 +17,8 @@ use crate::graph::measure::{
 };
 use crate::mmds::{
     Document, TEXT_METRICS_EXTENSION_NAMESPACE, from_document, generate_mermaid,
-    hydrate_graph_geometry_from_document_with_diagram, hydrate_routed_geometry_from_document,
-    parse_input, resolve_logical_diagram_id,
+    hydrate_graph_geometry_from_document_with_diagram,
+    hydrate_routed_geometry_from_document_with_provider, parse_input, resolve_logical_diagram_id,
 };
 use crate::render::graph::{
     SvgRenderOptions, TextRenderOptions, edge_routing_from_style,
@@ -91,7 +91,7 @@ pub(crate) fn render_document(
     // the direct runtime render. New MMDS payloads persist the metrics
     // identity and layout-time values under the text-metrics extension; older
     // payloads fall back to the compatibility profile.
-    crate::graph::label_wrap::prepare_wrapped_labels(
+    crate::graph::label_wrap::prepare_wrapped_labels_with_provider(
         &mut diagram.edges,
         &text_metrics.metrics,
         text_metrics.descriptor.layout_text.edge_label_max_width,
@@ -100,7 +100,9 @@ pub(crate) fn render_document(
     let geometry = hydrate_graph_geometry_from_document_with_diagram(payload, &diagram)
         .map_err(display_error)?;
     let routed = has_routed_geometry
-        .then(|| hydrate_routed_geometry_from_document(payload))
+        .then(|| {
+            hydrate_routed_geometry_from_document_with_provider(payload, &text_metrics.metrics)
+        })
         .transpose()
         .map_err(display_error)?;
 

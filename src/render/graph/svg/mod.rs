@@ -22,6 +22,7 @@ use crate::graph::direction_policy::build_override_node_map;
 use crate::graph::geometry::{FPoint, FRect, GraphGeometry};
 use crate::graph::measure::{
     DEFAULT_GRAPH_FONT_FAMILY, DEFAULT_PROPORTIONAL_FONT_SIZE, ProportionalTextMetrics,
+    TextMetricsProvider,
 };
 use crate::graph::routing::EdgeRouting;
 use crate::graph::{Graph, Stroke};
@@ -156,7 +157,7 @@ pub(crate) fn render_svg_from_geometry_with_theme(
     geom: &GraphGeometry,
     edge_routing: EdgeRouting,
     theme: Option<&ResolvedSvgTheme>,
-    resolved_metrics: Option<&ProportionalTextMetrics>,
+    resolved_metrics: Option<&dyn TextMetricsProvider>,
 ) -> String {
     // Merge mode-derived rerouted edges with any engine-provided rerouted edges
     // (e.g., direction-override subgraph edges set by build_float_layout).
@@ -207,7 +208,7 @@ fn render_svg_with_geometry_context(
     geom: &GraphGeometry,
     context: GeometryContext<'_>,
     theme: Option<&ResolvedSvgTheme>,
-    resolved_metrics: Option<&ProportionalTextMetrics>,
+    resolved_metrics: Option<&dyn TextMetricsProvider>,
 ) -> String {
     let scale = options.scale;
     let owned_metrics;
