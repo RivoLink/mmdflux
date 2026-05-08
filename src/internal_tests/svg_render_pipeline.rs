@@ -6347,6 +6347,130 @@ mod sibling_subgraph_label_placement {
     }
 }
 
+mod issue_301_backward_route_stability {
+    use super::{edge_path_data, parse_flowchart_diagram_for_test, parse_svg_path_points};
+    use crate::graph::measure::{
+        COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+    };
+    use crate::{OutputFormat, RenderConfig};
+
+    struct Case<'a> {
+        label: &'a str,
+        input: &'a str,
+        profile: &'a str,
+    }
+
+    #[test]
+    fn backward_port_spread_e_to_a_uses_outer_channel_under_width_perturbations() {
+        let cases = [
+            Case {
+                label: "recorded default fixture",
+                input: include_str!("../../tests/fixtures/flowchart/backward_port_spread.mmd"),
+                profile: RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility bare fixture",
+                input: include_str!("../../tests/fixtures/flowchart/backward_port_spread.mmd"),
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility widened A",
+                input: r#"graph TD
+    A[Alpha] --> B --> C --> D --> E
+    E --> A
+    E --> B
+    E --> C
+"#,
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility widened B",
+                input: r#"graph TD
+    A --> B[Beta] --> C --> D --> E
+    E --> A
+    E --> B
+    E --> C
+"#,
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility widened C",
+                input: r#"graph TD
+    A --> B --> C[Gamma] --> D --> E
+    E --> A
+    E --> B
+    E --> C
+"#,
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility widened D",
+                input: r#"graph TD
+    A --> B --> C --> D[Delta] --> E
+    E --> A
+    E --> B
+    E --> C
+"#,
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+            Case {
+                label: "compatibility widened E",
+                input: r#"graph TD
+    A --> B --> C --> D --> E[Epsilon]
+    E --> A
+    E --> B
+    E --> C
+"#,
+                profile: COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+            },
+        ];
+
+        for case in cases {
+            let diagram = parse_flowchart_diagram_for_test(case.input);
+            let svg = crate::render_diagram(
+                case.input,
+                OutputFormat::Svg,
+                &RenderConfig {
+                    font_metrics_profile: Some(case.profile.to_string()),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap_or_else(|err| panic!("{} should render: {err}", case.label));
+            let edge_idx = diagram
+                .edges
+                .iter()
+                .position(|edge| edge.from == "E" && edge.to == "A")
+                .unwrap_or_else(|| panic!("{} should contain E -> A", case.label));
+            let paths = edge_path_data(&svg);
+            let path = paths
+                .get(edge_idx)
+                .unwrap_or_else(|| panic!("{} should render E -> A path", case.label));
+            let points = parse_svg_path_points(path);
+
+            assert!(
+                starts_with_rightward_outer_channel(&points),
+                "{} should route E -> A on the outer right channel; points={points:?}\nSVG:\n{svg}",
+                case.label
+            );
+        }
+    }
+
+    fn starts_with_rightward_outer_channel(points: &[(f64, f64)]) -> bool {
+        let Some([start, support, rest @ ..]) = points.get(0..) else {
+            return false;
+        };
+        let first_segment_is_rightward =
+            (support.1 - start.1).abs() <= 1.0 && support.0 > start.0 + 8.0;
+        let vertical_channel_span = rest
+            .windows(2)
+            .filter(|segment| (segment[0].0 - segment[1].0).abs() <= 1.0)
+            .map(|segment| (segment[0].1 - segment[1].1).abs())
+            .fold(0.0, f64::max);
+
+        first_segment_is_rightward && vertical_channel_span > 250.0
+    }
+}
+
 // -- Plan 0147 Task 4.1: user RL repro edges bow around peer label rects --
 
 // -- Plan 0147 Task 4.2: long_reciprocal_labels wraps + bends --

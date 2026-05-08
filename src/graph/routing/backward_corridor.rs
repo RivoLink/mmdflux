@@ -42,7 +42,8 @@ pub(in crate::graph::routing) struct BackwardCorridorSlot {
 }
 
 /// Per-edge corridor slot assignments for all backward edges that participate
-/// in corridor deconfliction (obstructed edges and same-target edges).
+/// in corridor deconfliction (obstructed edges, same-target edges, and TD/BT
+/// same-source return fan-outs).
 #[derive(Debug, Default)]
 pub(in crate::graph::routing) struct BackwardCorridorContext {
     slots: HashMap<usize, BackwardCorridorSlot>,
@@ -244,9 +245,11 @@ fn build_descriptors(
     has_obstructions: fn(&LayoutEdge, &GraphGeometry, Direction) -> bool,
 ) -> Vec<CorridorDescriptor> {
     let mut backward_target_counts: HashMap<&str, usize> = HashMap::new();
+    let mut backward_source_counts: HashMap<&str, usize> = HashMap::new();
     for edge in &geometry.edges {
         if geometry.reversed_edges.contains(&edge.index) {
             *backward_target_counts.entry(&edge.to).or_default() += 1;
+            *backward_source_counts.entry(&edge.from).or_default() += 1;
         }
     }
 
@@ -254,13 +257,24 @@ fn build_descriptors(
         .edges
         .iter()
         .filter(|edge| {
+            // Same-source return fan-outs need a shared corridor even when the
+            // longest return barely misses the obstruction heuristic. Keep
+            // ordinary two-edge cycles on their established independent routes.
+            let same_source_td_bt_fanout =
+                matches!(direction, Direction::TopDown | Direction::BottomTop)
+                    && backward_source_counts
+                        .get(edge.from.as_str())
+                        .copied()
+                        .unwrap_or(0)
+                        >= 3;
             geometry.reversed_edges.contains(&edge.index)
                 && (has_obstructions(edge, geometry, direction)
                     || backward_target_counts
                         .get(edge.to.as_str())
                         .copied()
                         .unwrap_or(0)
-                        >= 2)
+                        >= 2
+                    || same_source_td_bt_fanout)
         })
         .filter_map(|edge| build_one_descriptor(edge, geometry, direction))
         .collect()
