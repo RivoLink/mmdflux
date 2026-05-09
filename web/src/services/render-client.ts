@@ -4,6 +4,7 @@ import type {
   WorkerRequestMessage,
   WorkerResponseMessage,
 } from "../worker-protocol";
+import type { MainThreadBrowserTextMetricsRenderer } from "./main-thread-browser-text-metrics";
 
 export interface RenderRequest {
   seq: number;
@@ -29,6 +30,8 @@ interface PendingRenderRequest {
   kind: "render";
   resolve: (response: RenderResponse) => void;
   reject: (error: Error) => void;
+  mainThreadFallback?: () => Promise<RenderResponse>;
+  timeoutHandle?: ReturnType<typeof setTimeout>;
 }
 
 interface PendingValidateRequest {
@@ -48,6 +51,11 @@ export interface RenderWorkerClient {
   terminate: () => void;
 }
 
+export interface RenderWorkerClientOptions {
+  mainThreadBrowserTextMetricsRenderer?: MainThreadBrowserTextMetricsRenderer;
+  dynamicMetricsWorkerTimeoutMs?: number;
+}
+
 function createDefaultWorker(): Worker {
   return new Worker(new URL("../worker.ts", import.meta.url), {
     type: "module",
@@ -60,8 +68,12 @@ function toMessage(error: unknown): string {
 
 export function createRenderWorkerClient(
   worker: Worker = createDefaultWorker(),
+  options: RenderWorkerClientOptions = {},
 ): RenderWorkerClient {
   const pending = new Map<number, PendingRequest>();
+  const mainThreadRenderer = options.mainThreadBrowserTextMetricsRenderer;
+  const dynamicMetricsWorkerTimeoutMs =
+    options.dynamicMetricsWorkerTimeoutMs ?? 5_000;
   let nextValidationSeq = -1;
 
   worker.onmessage = (event: MessageEvent<WorkerResponseMessage>) => {
@@ -72,6 +84,9 @@ export function createRenderWorkerClient(
     }
 
     pending.delete(response.seq);
+    if (pendingRequest.kind === "render" && pendingRequest.timeoutHandle) {
+      clearTimeout(pendingRequest.timeoutHandle);
+    }
 
     if (response.type === "result") {
       if (pendingRequest.kind !== "render") {
@@ -98,6 +113,17 @@ export function createRenderWorkerClient(
       }
 
       pendingRequest.resolve(response.resultJson);
+      return;
+    }
+
+    if (
+      pendingRequest.kind === "render" &&
+      response.code === "dynamic-metrics-capability" &&
+      pendingRequest.mainThreadFallback
+    ) {
+      pendingRequest
+        .mainThreadFallback()
+        .then(pendingRequest.resolve, pendingRequest.reject);
       return;
     }
 
@@ -133,6 +159,15 @@ export function createRenderWorkerClient(
       const currentSeq = request.seq;
 
       return new Promise<RenderResponse>((resolve, reject) => {
+        const mainThreadFallback = mainThreadRenderer
+          ? () => mainThreadRenderer.renderWithBrowserTextMetrics(request)
+          : undefined;
+        const pendingRequest: PendingRenderRequest = {
+          kind: "render",
+          resolve,
+          reject,
+          mainThreadFallback,
+        };
         const message: WorkerRequestMessage = {
           type: "renderWithBrowserTextMetrics",
           seq: currentSeq,
@@ -142,11 +177,29 @@ export function createRenderWorkerClient(
           browserTextMetrics: request.browserTextMetrics,
         };
 
-        pending.set(currentSeq, { kind: "render", resolve, reject });
+        if (
+          mainThreadFallback &&
+          Number.isFinite(dynamicMetricsWorkerTimeoutMs) &&
+          dynamicMetricsWorkerTimeoutMs > 0
+        ) {
+          pendingRequest.timeoutHandle = setTimeout(() => {
+            if (pending.get(currentSeq) !== pendingRequest) {
+              return;
+            }
+
+            pending.delete(currentSeq);
+            mainThreadFallback().then(resolve, reject);
+          }, dynamicMetricsWorkerTimeoutMs);
+        }
+
+        pending.set(currentSeq, pendingRequest);
 
         try {
           worker.postMessage(message);
         } catch (error) {
+          if (pendingRequest.timeoutHandle) {
+            clearTimeout(pendingRequest.timeoutHandle);
+          }
           pending.delete(currentSeq);
           reject(
             new Error(

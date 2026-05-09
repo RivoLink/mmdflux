@@ -2,6 +2,7 @@ import "../styles/main.css";
 
 export {
   bootstrapPlaygroundApp,
+  createDefaultRenderWorkerClient,
   isBenchmarkModeEnabled,
   type RenderAppOptions,
   renderApp,

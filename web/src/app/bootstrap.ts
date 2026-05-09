@@ -23,6 +23,10 @@ import {
 } from "../preview";
 import { createPreviewControls } from "../preview-controls";
 import {
+  createMainThreadBrowserTextMetricsRenderer,
+  type MainThreadBrowserTextMetricsRenderer,
+} from "../services/main-thread-browser-text-metrics";
+import {
   persistPlaygroundState,
   readPersistedPlaygroundState,
   resolveStateStorage,
@@ -31,6 +35,7 @@ import {
 import {
   createRenderWorkerClient,
   type RenderWorkerClient,
+  type RenderWorkerClientOptions,
 } from "../services/render-client";
 import {
   copyTextToClipboard,
@@ -60,11 +65,44 @@ interface RenderControlBinding {
 
 export interface RenderAppOptions {
   renderClientFactory?: () => RenderWorkerClient | null;
+  mainThreadBrowserTextMetricsRendererFactory?: () => MainThreadBrowserTextMetricsRenderer;
   debounceMs?: LiveUpdateDebounceSetting;
   stateStorage?: StateStorage;
 }
 
 type SearchLocation = URL | Pick<Location, "search">;
+
+interface BrowserMetricsDebugOptions {
+  input?: string;
+  fontFamily?: string;
+  fontSizePx?: number;
+  lineHeightPx?: number;
+  configJson?: string;
+  show?: boolean;
+  forceMainThread?: boolean;
+}
+
+interface BrowserMetricsDebugResult {
+  seq: number;
+  format: "svg";
+  output: string;
+  source: "worker-client" | "main-thread";
+}
+
+interface BrowserMetricsDebugApi {
+  renderBrowserMetrics: (
+    options?: BrowserMetricsDebugOptions,
+  ) => Promise<BrowserMetricsDebugResult>;
+  renderBrowserMetricsMainThread: (
+    options?: Omit<BrowserMetricsDebugOptions, "forceMainThread">,
+  ) => Promise<BrowserMetricsDebugResult>;
+}
+
+declare global {
+  interface Window {
+    __mmdfluxDebug?: BrowserMetricsDebugApi;
+  }
+}
 
 function defaultAdaptiveDebounce(requestInput: string): number {
   const length = requestInput.length;
@@ -78,6 +116,31 @@ function defaultAdaptiveDebounce(requestInput: string): number {
     return 80;
   }
   return 120;
+}
+
+function isBrowserMetricsDebugEnabled(
+  locationValue: SearchLocation = window.location,
+): boolean {
+  const params = new URLSearchParams(locationValue.search);
+  const rawValue = params.get("debugBrowserMetrics");
+  if (rawValue === null) {
+    return false;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  return normalized === "" || normalized === "1" || normalized === "true";
+}
+
+function positiveFiniteNumber(value: number, label: string): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a positive finite number`);
+  }
+
+  return value;
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isLayoutEngine(value: string): value is ShareLayoutEngine {
@@ -133,6 +196,24 @@ const THEME_ICONS: Record<ThemePreference, string> = {
   system:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M9 20h6"></path><path d="M12 16v4"></path></svg>',
 };
+
+type RenderWorkerClientFactory = (
+  worker?: Worker,
+  options?: RenderWorkerClientOptions,
+) => RenderWorkerClient;
+
+export function createDefaultRenderWorkerClient(
+  createClient: RenderWorkerClientFactory = createRenderWorkerClient,
+  createMainThreadRenderer: () => MainThreadBrowserTextMetricsRenderer = createMainThreadBrowserTextMetricsRenderer,
+): RenderWorkerClient | null {
+  if (typeof Worker === "undefined") {
+    return null;
+  }
+
+  return createClient(undefined, {
+    mainThreadBrowserTextMetricsRenderer: createMainThreadRenderer(),
+  });
+}
 
 function viewportHeight(): number {
   return window.innerHeight || document.documentElement.clientHeight || 0;
@@ -553,11 +634,12 @@ export function renderApp(
     output: previewOutput,
     error: previewError,
   });
+  const createMainThreadRenderer =
+    options.mainThreadBrowserTextMetricsRendererFactory ??
+    createMainThreadBrowserTextMetricsRenderer;
   const workerClient = options.renderClientFactory
     ? options.renderClientFactory()
-    : typeof Worker === "undefined"
-      ? null
-      : createRenderWorkerClient();
+    : createDefaultRenderWorkerClient(undefined, createMainThreadRenderer);
   const editor = createEditorController({
     root: editorRoot,
     initialValue: stateStore.getState().input,
@@ -722,6 +804,20 @@ export function renderApp(
     return JSON.stringify(config);
   };
 
+  const currentSvgConfigJson = (): string => {
+    const { renderSettings } = stateStore.getState();
+    const config: Record<string, string> = {};
+    if (renderSettings.layoutEngine !== "auto") {
+      config.layoutEngine = renderSettings.layoutEngine;
+    }
+    if (renderSettings.edgePreset !== "auto") {
+      config.edgePreset = renderSettings.edgePreset;
+    }
+    config.pathSimplification = renderSettings.pathSimplification;
+
+    return JSON.stringify(config);
+  };
+
   const setAdvancedPanelOpen = (open: boolean): void => {
     stateStore.setAdvancedOpen(open);
     advancedPanel.hidden = !open;
@@ -839,6 +935,91 @@ export function renderApp(
       previewControls.onResult("text");
     },
   });
+
+  let nextBrowserMetricsDebugSeq = -1_000_000;
+  let browserMetricsDebugMainThreadRenderer: MainThreadBrowserTextMetricsRenderer | null =
+    null;
+
+  const getBrowserMetricsDebugMainThreadRenderer =
+    (): MainThreadBrowserTextMetricsRenderer => {
+      browserMetricsDebugMainThreadRenderer ??= createMainThreadRenderer();
+      return browserMetricsDebugMainThreadRenderer;
+    };
+
+  const renderBrowserMetricsDebug = async (
+    options: BrowserMetricsDebugOptions = {},
+  ): Promise<BrowserMetricsDebugResult> => {
+    const fontFamily = (options.fontFamily ?? "Arial, sans-serif").trim();
+    if (fontFamily.length === 0) {
+      throw new Error("fontFamily must not be empty");
+    }
+
+    const fontSizePx = positiveFiniteNumber(
+      options.fontSizePx ?? 16,
+      "fontSizePx",
+    );
+    const lineHeightPx = positiveFiniteNumber(
+      options.lineHeightPx ?? fontSizePx * 1.5,
+      "lineHeightPx",
+    );
+    const request = {
+      seq: nextBrowserMetricsDebugSeq,
+      input: options.input ?? editor.getValue(),
+      configJson: options.configJson ?? currentSvgConfigJson(),
+      browserTextMetrics: {
+        fontFamily,
+        fontSizePx,
+        lineHeightPx,
+      },
+    };
+    nextBrowserMetricsDebugSeq -= 1;
+
+    const source = options.forceMainThread ? "main-thread" : "worker-client";
+
+    try {
+      const response = options.forceMainThread
+        ? await getBrowserMetricsDebugMainThreadRenderer().renderWithBrowserTextMetrics(
+            request,
+          )
+        : await workerClient.renderWithBrowserTextMetrics(request);
+      const result: BrowserMetricsDebugResult = {
+        seq: response.seq,
+        format: "svg",
+        output: response.output,
+        source,
+      };
+
+      if (options.show !== false) {
+        setFormat("svg");
+        preview.showResult({
+          format: "svg",
+          output: result.output,
+        });
+        previewControls.onResult("svg");
+        updateShareStatus(`Rendered browser metrics via ${source}.`);
+      }
+
+      return result;
+    } catch (error) {
+      if (options.show !== false) {
+        preview.showError(toErrorMessage(error));
+        previewControls.onResult("text");
+      }
+      throw error;
+    }
+  };
+
+  // Hidden manual-QA hook for preview deployments. This is not product UI or a
+  // public playground API.
+  if (isBrowserMetricsDebugEnabled()) {
+    window.__mmdfluxDebug = {
+      renderBrowserMetrics: renderBrowserMetricsDebug,
+      renderBrowserMetricsMainThread: (options = {}) =>
+        renderBrowserMetricsDebug({ ...options, forceMainThread: true }),
+    };
+  } else {
+    delete window.__mmdfluxDebug;
+  }
 
   scheduleRender = (inputOverride?: string): void => {
     const currentState = stateStore.getState();

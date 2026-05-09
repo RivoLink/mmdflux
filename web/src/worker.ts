@@ -1,4 +1,8 @@
-import { prepareBrowserTextMetrics } from "./browser-text-metrics";
+import {
+  isBrowserTextMetricsCapabilityError,
+  prepareBrowserTextMetrics,
+} from "./browser-text-metrics";
+import { loadWasmModule, type WasmModule } from "./wasm-module";
 import type {
   WorkerRequestMessage,
   WorkerResponseMessage,
@@ -9,27 +13,10 @@ export type {
   WorkerResponseMessage,
 } from "./worker-protocol";
 
-interface WasmModule {
-  default: () => Promise<void>;
-  render: (input: string, format: string, configJson: string) => string;
-  renderWithBrowserTextMetrics: (
-    input: string,
-    format: string,
-    configJson: string,
-    metricsJson: string,
-    measureText: (text: string, cssFont: string) => number,
-  ) => string;
-  validate: (input: string) => string;
-}
-
 interface RenderRequestHandlerOptions {
   loadWasmModule?: () => Promise<WasmModule>;
   prepareBrowserTextMetrics?: typeof prepareBrowserTextMetrics;
   postMessage: (message: WorkerResponseMessage) => void;
-}
-
-export async function loadWasmModule(): Promise<WasmModule> {
-  return (await import("./wasm-pkg/mmdflux_wasm.js")) as unknown as WasmModule;
 }
 
 export function createWorkerRequestHandler(
@@ -101,6 +88,9 @@ export function createWorkerRequestHandler(
         type: "error",
         seq: message.seq,
         error: formatError(error),
+        ...(isBrowserTextMetricsCapabilityError(error) && error.fallbackEligible
+          ? { code: "dynamic-metrics-capability" as const }
+          : {}),
       });
     }
   };

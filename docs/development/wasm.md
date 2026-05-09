@@ -133,13 +133,25 @@ static profile.
 are rejected on this export even when they match `metricsJson`.
 
 The JavaScript adapter must complete async font preflight before Rust layout
-starts. The v1 worker path requires `OffscreenCanvas` and a worker
-`FontFaceSet`: call `fonts.load(cssFont)`, await `fonts.ready`, and then use a
-post-load `fonts.check(cssFont)` validity gate before invoking Rust. The
-`measureText` callback itself is synchronous from Rust's perspective and must
-return a finite non-negative width number for each `(text, cssFont)` request.
-Promises, objects, `NaN`, `Infinity`, negative values, and thrown errors fail
-the render.
+starts. Both browser modes call `load(cssFont)`, await `ready`, and then use a
+post-load `check(cssFont)` validity gate before invoking Rust. `check()` alone
+is not proof that a requested font loaded.
+
+| Mode | Required browser capabilities | Notes |
+| ---- | ----------------------------- | ----- |
+| Worker dynamic metrics | worker `FontFaceSet` (`self.fonts`) and `OffscreenCanvas` | Preferred path. Layout and `measureText` stay inside the worker. |
+| Main-thread dynamic metrics | `document.fonts` and a normal canvas | Fallback for worker font/canvas capability gaps. This can block the UI during render. |
+
+Main-thread fallback is used only when worker dynamic metrics fail because the
+worker lacks font or canvas capabilities. Missing fonts, failed post-load
+`check()`, invalid `measureText` output, and Rust render errors remain explicit
+failures; they do not retry through another mode or fall back to static
+profiles.
+
+The `measureText` callback itself is synchronous from Rust's perspective and
+must return a finite non-negative width number for each `(text, cssFont)`
+request. Promises, objects, `NaN`, `Infinity`, negative values, and thrown errors
+fail the render.
 
 The dynamic path does not fall back to `mmdflux-sans-v1` or
 `mmdflux-heuristic-proportional-v1` after a measurement failure. It also does

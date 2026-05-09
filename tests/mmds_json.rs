@@ -1659,6 +1659,11 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
     assert!(wasm_docs.contains("SVG font-family and metrics profile are intentionally decoupled"));
     assert!(wasm_docs.contains("renderWithBrowserTextMetrics"));
     assert!(wasm_docs.contains("existing `render` export remains static and deterministic"));
+    assert!(wasm_docs.contains("Worker dynamic metrics"));
+    assert!(wasm_docs.contains("Main-thread dynamic metrics"));
+    assert!(wasm_docs.contains("document.fonts"));
+    assert!(wasm_docs.contains("normal canvas"));
+    assert!(wasm_docs.contains("can block the UI"));
     assert!(wasm_docs.contains("OffscreenCanvas"));
     assert!(wasm_docs.contains("FontFaceSet"));
     assert!(wasm_docs.contains("does not fall back"));

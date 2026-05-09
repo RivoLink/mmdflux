@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { BrowserTextMetricsCapabilityError } from "./browser-text-metrics";
 import { createWorkerRequestHandler } from "./worker";
 import type {
   WorkerRequestMessage,
@@ -263,6 +264,102 @@ describe("createWorkerRequestHandler", () => {
         type: "error",
         seq: 10,
         error: "Dynamic text metrics require OffscreenCanvas",
+      },
+    ]);
+  });
+
+  it("codes dynamic metric capability errors without leaking adapter subcodes", async () => {
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: async () => {},
+        render: () => "static unused",
+        renderWithBrowserTextMetrics: () => "dynamic unused",
+        validate: () => '{"valid":true}',
+      }),
+    );
+    const responses: WorkerResponseMessage[] = [];
+    const handler = createWorkerRequestHandler({
+      loadWasmModule,
+      prepareBrowserTextMetrics: vi.fn(async () => {
+        throw new BrowserTextMetricsCapabilityError(
+          "worker-offscreen-canvas-unavailable",
+          "Dynamic text metrics require OffscreenCanvas in the worker.",
+        );
+      }),
+      postMessage: (message) => responses.push(message),
+    });
+
+    await handler({
+      type: "renderWithBrowserTextMetrics",
+      seq: 11,
+      input: "graph TD\nA-->B",
+      format: "svg",
+      configJson: "{}",
+      browserTextMetrics: {
+        fontFamily: "Inter",
+        fontSizePx: 16,
+        lineHeightPx: 24,
+      },
+    });
+
+    expect(responses).toEqual([
+      {
+        type: "error",
+        seq: 11,
+        error: "Dynamic text metrics require OffscreenCanvas in the worker.",
+        code: "dynamic-metrics-capability",
+      },
+    ]);
+    expect(responses[0]).not.toHaveProperty(
+      "code",
+      "worker-offscreen-canvas-unavailable",
+    );
+    expect(JSON.stringify(responses[0])).not.toContain(
+      "worker-offscreen-canvas-unavailable",
+    );
+  });
+
+  it("does not code fallback-ineligible dynamic metric capability errors", async () => {
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: async () => {},
+        render: () => "static unused",
+        renderWithBrowserTextMetrics: () => "dynamic unused",
+        validate: () => '{"valid":true}',
+      }),
+    );
+    const responses: WorkerResponseMessage[] = [];
+    const handler = createWorkerRequestHandler({
+      loadWasmModule,
+      prepareBrowserTextMetrics: vi.fn(async () => {
+        throw new BrowserTextMetricsCapabilityError(
+          "main-thread-font-face-set-unavailable",
+          "Dynamic text metrics require document.fonts on the main thread.",
+          false,
+        );
+      }),
+      postMessage: (message) => responses.push(message),
+    });
+
+    await handler({
+      type: "renderWithBrowserTextMetrics",
+      seq: 12,
+      input: "graph TD\nA-->B",
+      format: "svg",
+      configJson: "{}",
+      browserTextMetrics: {
+        fontFamily: "Inter",
+        fontSizePx: 16,
+        lineHeightPx: 24,
+      },
+    });
+
+    expect(responses).toEqual([
+      {
+        type: "error",
+        seq: 12,
+        error:
+          "Dynamic text metrics require document.fonts on the main thread.",
       },
     ]);
   });

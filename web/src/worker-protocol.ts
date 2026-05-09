@@ -47,6 +47,7 @@ export interface WorkerErrorMessage {
   type: "error";
   seq: number;
   error: string;
+  code?: "dynamic-metrics-capability";
 }
 
 export type WorkerResponseMessage =
