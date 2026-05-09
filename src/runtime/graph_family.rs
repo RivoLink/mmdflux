@@ -12,6 +12,7 @@ use crate::graph::measure::{
     COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
     DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ResolvedTextMetrics, TextMetricsProfileConfig,
     TextMetricsProfileDescriptor, TextMetricsProvider, resolve_text_metrics_profile,
+    text_style_matches_descriptor,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -114,6 +115,7 @@ fn solve_graph_family_for_render(
     config: &RenderConfig,
 ) -> Result<GraphFamilyRenderResult, RenderError> {
     let text_metrics = resolve_text_metrics_for_config(format, config)?;
+    validate_provider_free_graph_text_style(format, config, &text_metrics.descriptor)?;
     let solve = solve_graph_family_with_provider(
         diagram_id,
         diagram,
@@ -126,6 +128,51 @@ fn solve_graph_family_for_render(
         solve,
         text_metrics,
     })
+}
+
+fn validate_provider_free_graph_text_style(
+    format: OutputFormat,
+    config: &RenderConfig,
+    descriptor: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    let Some(style) = &config.graph_text_style else {
+        return Ok(());
+    };
+
+    if matches!(format, OutputFormat::Text | OutputFormat::Ascii) {
+        return Err(RenderError {
+            message: format!(
+                "graph font style is not supported for {format} output; remove fontFamily/fontSize"
+            ),
+        });
+    }
+
+    if !matches!(format, OutputFormat::Svg | OutputFormat::Mmds) {
+        return Ok(());
+    }
+
+    match text_style_matches_descriptor(
+        &style.font_family,
+        style.font_size_px,
+        &descriptor.default_text_style,
+    ) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(provider_free_graph_text_style_error(descriptor)),
+        Err(message) => Err(RenderError {
+            message: format!("fontFamily {message}"),
+        }),
+    }
+}
+
+fn provider_free_graph_text_style_error(descriptor: &TextMetricsProfileDescriptor) -> RenderError {
+    RenderError {
+        message: format!(
+            "custom graph font style requires dynamic text metrics; provider-free static rendering only accepts fontFamily '{}' and fontSize {} for text metrics profile '{}'",
+            descriptor.default_text_style.font_family,
+            descriptor.default_text_style.font_size,
+            descriptor.profile_id
+        ),
+    }
 }
 
 fn solve_graph_family_with_provider(

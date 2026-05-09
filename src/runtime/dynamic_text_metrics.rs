@@ -1,4 +1,4 @@
-//! Experimental dynamic text metrics contract for browser/WASM adapters.
+//! Experimental dynamic text metrics contract for callback-backed adapters.
 //!
 //! This module is feature-gated and doc-hidden because its callback-backed
 //! provider API is not part of the stable Rust facade.
@@ -268,20 +268,25 @@ where
 {
     if !matches!(format, OutputFormat::Svg) {
         return Err(RenderError {
-            message: format!(
-                "browser dynamic text metrics only supports SVG output (requested {format})"
-            ),
+            message: format!("dynamic text metrics only supports SVG output (requested {format})"),
         });
     }
     if config.layout_engine.is_some() {
         return Err(RenderError {
-            message: "browser dynamic text metrics does not accept layoutEngine; it always uses flux-layered SVG"
-                .to_string(),
+            message:
+                "dynamic text metrics does not accept layoutEngine; it always uses flux-layered SVG"
+                    .to_string(),
         });
     }
     if config.font_metrics_profile.is_some() {
         return Err(RenderError {
-            message: "browser dynamic text metrics does not accept fontMetricsProfile; dynamic provider measurement is selected by this API"
+            message: "dynamic text metrics does not accept fontMetricsProfile; provider measurement is selected by this API"
+                .to_string(),
+        });
+    }
+    if config.graph_text_style.is_some() {
+        return Err(RenderError {
+            message: "dynamic text metrics uses DynamicMetricsInput for font identity; do not pass RenderConfig.graph_text_style"
                 .to_string(),
         });
     }
@@ -292,7 +297,7 @@ where
     match detect_input_frontend(input) {
         Some(InputFrontend::Mmds) => {
             return Err(RenderError {
-                message: "browser dynamic text metrics does not support MMDS input".to_string(),
+                message: "dynamic text metrics does not support MMDS input".to_string(),
             });
         }
         Some(InputFrontend::Mermaid) => {}
@@ -310,7 +315,7 @@ where
     if !matches!(resolved.family(), DiagramFamily::Graph) {
         return Err(RenderError {
             message: format!(
-                "browser dynamic text metrics only supports graph-family Mermaid diagrams (detected {})",
+                "dynamic text metrics only supports graph-family Mermaid diagrams (detected {})",
                 resolved.diagram_id()
             ),
         });
@@ -337,7 +342,7 @@ where
     })?;
 
     let mut effective_config = super::effective_render_config(input, OutputFormat::Svg, config);
-    // Match the existing WASM SVG surface while keeping browser-measured layout
+    // Match the existing Wasm SVG surface while keeping dynamic-measured layout
     // on this separate export instead of accepting a caller layoutEngine knob.
     apply_svg_surface_defaults(OutputFormat::Svg, &mut effective_config, true);
     let mut options = effective_config.svg_render_options();
@@ -388,8 +393,7 @@ where
             )
         }
         Diagram::Sequence(_) => Err(RenderError {
-            message: "browser dynamic text metrics only supports graph-family Mermaid diagrams"
-                .to_string(),
+            message: "dynamic text metrics only supports graph-family Mermaid diagrams".to_string(),
         }),
     }?;
 
@@ -408,7 +412,7 @@ mod tests {
         DEFAULT_GRAPH_FONT_FAMILY, TextMetricsProfileConfig, TextMetricsProvider,
         resolve_text_metrics_profile,
     };
-    use crate::runtime::config::RenderConfig;
+    use crate::runtime::config::{GraphTextStyleConfig, RenderConfig};
     use crate::runtime::render_diagram;
 
     fn valid_input() -> DynamicMetricsInput {
@@ -677,6 +681,28 @@ mod tests {
 
         assert!(
             err.message.contains("does not accept fontMetricsProfile"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn dynamic_svg_rejects_config_graph_text_style() {
+        let config = RenderConfig {
+            graph_text_style: Some(GraphTextStyleConfig::new("Inter", 16.0)),
+            ..RenderConfig::default()
+        };
+
+        let err = render_graph_family_svg_with_dynamic_text_metrics(
+            "graph TD\nA-->B",
+            &config,
+            valid_input(),
+            |_text, _css_font| Ok(8.0),
+        )
+        .expect_err("config graph text style should fail");
+
+        assert!(err.message.contains("DynamicMetricsInput"), "{err}");
+        assert!(
+            err.message.contains("RenderConfig.graph_text_style"),
             "{err}"
         );
     }

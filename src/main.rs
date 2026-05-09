@@ -711,6 +711,7 @@ fn main() -> io::Result<()> {
         svg_diagram_padding: cli.svg_diagram_padding,
         svg_theme: svg_theme_from_cli(&cli),
         font_metrics_profile,
+        graph_text_style: None,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_simplification: cli.path_simplification.map(Into::into).unwrap_or_default(),

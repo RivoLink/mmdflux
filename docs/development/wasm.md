@@ -1,10 +1,10 @@
-# WASM Build and Test Commands
+# Wasm Build and Test Commands
 
-Use these reproducible local entrypoints when validating WASM readiness.
+Use these reproducible local entrypoints when validating Wasm readiness.
 
 ## Prerequisite
 
-Install the WASM target and wasm-pack once per environment:
+Install the Wasm target and wasm-pack once per environment:
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -62,6 +62,11 @@ Supported top-level keys:
 - `svgNodePaddingY`
 - `fontMetricsProfile` (default: `mmdflux-sans-v1`; compatibility:
   `mmdflux-heuristic-proportional-v1`)
+- `fontFamily`
+- `fontSize`
+- `themeVariables` object:
+  - `fontFamily`
+  - `fontSize`
 - `showIds`
 - `color` (`off`, `auto`, `always`)
 - `geometryLevel` (`layout`, `routed`)
@@ -71,23 +76,30 @@ Supported top-level keys:
 
 Notes:
 
-- For SVG output, if `layoutEngine` is omitted, WASM defaults to `flux-layered`.
+- For SVG output, if `layoutEngine` is omitted, Wasm defaults to `flux-layered`.
 - When SVG rendering uses `flux-layered` and no explicit edge style is provided,
-  WASM defaults to the `smooth-step` preset.
+  Wasm defaults to the `smooth-step` preset.
 - `color` only affects text/ascii output. `always` forces ANSI escapes, while `auto`
-  resolves to plain text in WASM because there is no terminal-capability probe.
+  resolves to plain text in Wasm because there is no terminal-capability probe.
 - `fontMetricsProfile` defaults to `mmdflux-sans-v1` for direct graph-family
   rendering. The compatibility profile `mmdflux-heuristic-proportional-v1`
   remains available for callers that need the previous heuristic geometry.
   Text and ASCII output ignore this setting and remain pinned to
   compatibility metrics for wrap preparation. Unsupported profile IDs are
   rejected.
-- WASM uses the same static profile tables as native rendering; browser
+- Wasm uses the same static profile tables as native rendering; browser
   `measureText` is not used by these profiles.
-- SVG font-family and metrics profile are intentionally decoupled for now: the
-  default recorded profile uses Liberation Sans Regular advances, while emitted
-  SVG continues to use the existing Mermaid-style font stack. Exposing SVG
-  `fontFamily` remains future work.
+- `fontFamily` and `fontSize` are graph text-style inputs, not styling-only SVG
+  overrides. Provider-free static rendering accepts them only when they
+  normalize to the selected static profile descriptor. A different
+  custom graph font style requires dynamic text metrics through the separate dynamic
+  export.
+- `themeVariables` is intentionally narrow. Only `themeVariables.fontFamily`
+  and `themeVariables.fontSize` are accepted; other Mermaid theme variables are
+  rejected.
+- SVG font-family and metrics profile are intentionally decoupled for static
+  profiles: the default recorded profile uses Liberation Sans Regular advances,
+  while emitted SVG continues to use the existing Mermaid-style font stack.
 - Release wasm artifacts use a size-optimized Cargo profile:
   `opt-level=z`, `codegen-units=1`, `lto=fat`, `panic=abort`.
 - Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
@@ -115,6 +127,10 @@ static profile.
   "lineHeightPx": 24
 }
 ```
+
+`renderWithBrowserTextMetrics uses metricsJson for font identity`.
+`configJson.fontFamily`, `configJson.fontSize`, and `configJson.themeVariables`
+are rejected on this export even when they match `metricsJson`.
 
 The JavaScript adapter must complete async font preflight before Rust layout
 starts. The v1 worker path requires `OffscreenCanvas` and a worker
@@ -162,7 +178,7 @@ Example:
 
 ## npm Release Contract
 
-WASM publishing is tag-driven via:
+Wasm publishing is tag-driven via:
 
 - `.github/workflows/wasm-release.yml`
 

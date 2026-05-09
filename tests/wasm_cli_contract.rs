@@ -164,7 +164,7 @@ fn cli_and_wasm_use_the_same_render_config_contract() {
     use mmdflux::format::EdgePreset;
     use mmdflux::{RenderConfig, RuntimeConfigInput, SvgThemeConfig, SvgThemeMode};
 
-    // JSON config as WASM receives it.
+    // JSON config as Wasm receives it.
     let json = r##"{
         "edgePreset":"smooth-step",
         "svgTheme": {
@@ -258,27 +258,140 @@ fn runtime_config_input_rejects_unsupported_font_metrics_profile() {
 }
 
 #[test]
-fn runtime_config_input_rejects_dynamic_font_config_fields() {
+fn runtime_config_input_accepts_canonical_graph_font_style() {
     use mmdflux::RuntimeConfigInput;
 
-    for (json, field) in [
+    let input: RuntimeConfigInput =
+        serde_json::from_str(r#"{"fontFamily":"Inter, system-ui","fontSize":14}"#).unwrap();
+    let config = input.into_render_config().unwrap();
+    let style = config.graph_text_style.expect("graph text style");
+
+    assert_eq!(style.font_family, "Inter, system-ui");
+    assert_eq!(style.font_size_px, 14.0);
+}
+
+#[test]
+fn runtime_config_input_fills_missing_canonical_graph_font_style_defaults() {
+    use mmdflux::RuntimeConfigInput;
+    use mmdflux::graph::measure::{DEFAULT_GRAPH_FONT_FAMILY, DEFAULT_PROPORTIONAL_FONT_SIZE};
+
+    let input: RuntimeConfigInput = serde_json::from_str(r#"{"fontFamily":"Inter"}"#).unwrap();
+    let config = input.into_render_config().unwrap();
+    let style = config.graph_text_style.expect("graph text style");
+    assert_eq!(style.font_family, "Inter");
+    assert_eq!(style.font_size_px, DEFAULT_PROPORTIONAL_FONT_SIZE);
+
+    let input: RuntimeConfigInput = serde_json::from_str(r#"{"fontSize":14}"#).unwrap();
+    let config = input.into_render_config().unwrap();
+    let style = config.graph_text_style.expect("graph text style");
+    assert_eq!(style.font_family, DEFAULT_GRAPH_FONT_FAMILY);
+    assert_eq!(style.font_size_px, 14.0);
+}
+
+#[test]
+fn runtime_config_input_rejects_invalid_canonical_graph_font_style() {
+    use mmdflux::RuntimeConfigInput;
+
+    for (json, expected) in [
+        (r#"{"fontFamily":"","fontSize":14}"#, "fontFamily"),
         (
-            r#"{"fontFamily":"Inter","fontMetricsProfile":"browser-dynamic-v1"}"#,
+            r#"{"fontFamily":"Inter, , Arial","fontSize":14}"#,
             "fontFamily",
         ),
-        (r#"{"fontSize":16}"#, "fontSize"),
+        (r#"{"fontFamily":"Inter","fontSize":0}"#, "fontSize"),
+        (r#"{"fontFamily":"Inter","fontSize":-1}"#, "fontSize"),
+    ] {
+        let input: RuntimeConfigInput = serde_json::from_str(json).unwrap();
+        let err = input.into_render_config().unwrap_err();
+        assert!(err.message.contains(expected), "{err}");
+    }
+}
+
+#[test]
+fn runtime_config_input_accepts_theme_variables_font_aliases() {
+    use mmdflux::RuntimeConfigInput;
+
+    for (json, expected_size) in [
         (
-            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"18px"}}"#,
-            "themeVariables",
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":14}}"#,
+            14.0,
+        ),
+        (
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"14"}}"#,
+            14.0,
+        ),
+        (
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"14px"}}"#,
+            14.0,
+        ),
+        (
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"14PX"}}"#,
+            14.0,
+        ),
+        (
+            r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"14.5 px"}}"#,
+            14.5,
         ),
     ] {
-        let err = serde_json::from_str::<RuntimeConfigInput>(json).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains(&format!("unknown field `{field}`")),
-            "{err}"
-        );
+        let input: RuntimeConfigInput = serde_json::from_str(json).unwrap();
+        let config = input.into_render_config().unwrap();
+        let style = config.graph_text_style.expect("graph text style");
+        assert_eq!(style.font_family, "Inter");
+        assert_eq!(style.font_size_px, expected_size);
     }
+}
+
+#[test]
+fn runtime_config_input_rejects_unknown_theme_variables_and_units() {
+    use mmdflux::RuntimeConfigInput;
+
+    let unknown = serde_json::from_str::<RuntimeConfigInput>(
+        r##"{"themeVariables":{"primaryColor":"#fff"}}"##,
+    )
+    .unwrap_err();
+    assert!(unknown.to_string().contains("unknown field `primaryColor`"));
+
+    let input: RuntimeConfigInput =
+        serde_json::from_str(r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"1rem"}}"#)
+            .unwrap();
+    let err = input.into_render_config().unwrap_err();
+    assert!(err.message.contains("themeVariables.fontSize"), "{err}");
+
+    for json in [
+        r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"+14px"}}"#,
+        r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"1.4e1"}}"#,
+        r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"px"}}"#,
+    ] {
+        let input: RuntimeConfigInput = serde_json::from_str(json).unwrap();
+        let err = input.into_render_config().unwrap_err();
+        assert!(err.message.contains("themeVariables.fontSize"), "{err}");
+    }
+}
+
+#[test]
+fn runtime_config_input_rejects_conflicting_font_aliases() {
+    use mmdflux::RuntimeConfigInput;
+
+    for json in [
+        r#"{"fontFamily":"Inter","fontSize":14,"themeVariables":{"fontFamily":"Arial","fontSize":"14px"}}"#,
+        r#"{"fontFamily":"Inter","fontSize":14,"themeVariables":{"fontFamily":"Inter","fontSize":"16px"}}"#,
+    ] {
+        let input: RuntimeConfigInput = serde_json::from_str(json).unwrap();
+        let err = input.into_render_config().unwrap_err();
+        assert!(err.message.contains("conflicting"), "{err}");
+    }
+}
+
+#[test]
+fn runtime_config_input_accepts_equivalent_font_family_alias_spelling() {
+    use mmdflux::RuntimeConfigInput;
+
+    let input: RuntimeConfigInput = serde_json::from_str(
+        r#"{"fontFamily":"\"Trebuchet MS\", Verdana, Arial, sans-serif","fontSize":16,"themeVariables":{"fontFamily":"trebuchet ms,verdana,arial,sans-serif","fontSize":"16px"}}"#,
+    )
+    .unwrap();
+
+    input.into_render_config().unwrap();
 }
 
 #[cfg(feature = "unstable-text-metrics-provider")]
@@ -392,7 +505,7 @@ fn facade_render_unknown_diagram_uses_lowercase_error() {
     .unwrap_err();
 
     // The facade must use lowercase "unknown diagram type" to match the
-    // published WASM contract (web.rs line 92).
+    // published Wasm contract (web.rs line 92).
     assert!(
         err.message.contains("unknown diagram type"),
         "facade error must use lowercase: got {:?}",

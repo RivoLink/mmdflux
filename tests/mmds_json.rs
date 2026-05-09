@@ -11,7 +11,8 @@ use std::path::Path;
 use mmdflux::graph::attachment::PortFace;
 use mmdflux::graph::geometry::EdgeLabelSide;
 use mmdflux::graph::measure::{
-    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_FONT_SIZE,
+    RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
 };
 use mmdflux::graph::{Arrow, Direction, GeometryLevel, Shape, Stroke};
 use mmdflux::mmds::{
@@ -21,8 +22,8 @@ use mmdflux::mmds::{
 };
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
-    EngineAlgorithmId, OutputFormat, RenderConfig, TextColorMode, materialize_diagram,
-    render_diagram,
+    EngineAlgorithmId, GraphTextStyleConfig, OutputFormat, RenderConfig, TextColorMode,
+    materialize_diagram, render_diagram,
 };
 use serde_json::{Value, json};
 
@@ -428,6 +429,23 @@ fn font_metrics_explicit_recorded_profile_matches_default_mmds_geometry() {
     assert_eq!(explicit_mmds["nodes"], default_mmds["nodes"]);
     assert_eq!(explicit_mmds["edges"], default_mmds["edges"]);
     assert_eq!(explicit_mmds["subgraphs"], default_mmds["subgraphs"]);
+}
+
+#[test]
+fn provider_free_mmds_rejects_custom_graph_font_style() {
+    let config = RenderConfig {
+        graph_text_style: Some(GraphTextStyleConfig::new(
+            "Inter",
+            DEFAULT_PROPORTIONAL_FONT_SIZE,
+        )),
+        ..RenderConfig::default()
+    };
+
+    let err = render_diagram("graph TD\nA-->B", OutputFormat::Mmds, &config)
+        .expect_err("custom provider-free graph font style should fail");
+
+    assert!(err.message.contains("fontFamily"), "{err}");
+    assert!(err.message.contains("dynamic text metrics"), "{err}");
 }
 
 #[test]
@@ -1565,7 +1583,9 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(docs.contains("SVG font-family and metrics profile are intentionally decoupled"));
     assert!(docs.contains("Liberation Sans Regular advances"));
     assert!(docs.contains("emitted SVG continues to use the existing Mermaid-style font stack"));
-    assert!(docs.contains("Exposing SVG `fontFamily` remains future work"));
+    assert!(
+        docs.contains("provider-free static profiles do not accept arbitrary custom font style")
+    );
     assert!(docs.contains("experimental browser dynamic metrics export is SVG-only"));
     assert!(docs.contains("does not emit"));
     assert!(docs.contains("replay MMDS"));
@@ -1582,6 +1602,24 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(schema.contains("recorded"));
     assert!(schema.contains("dynamic"));
     assert!(schema.contains("edge-label-max-width"));
+}
+
+#[test]
+fn docs_describe_graph_font_config_contract() {
+    let wasm_docs = std::fs::read_to_string("docs/development/wasm.md").unwrap();
+    let mmds_docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+
+    assert!(wasm_docs.contains("fontFamily"));
+    assert!(wasm_docs.contains("fontSize"));
+    assert!(wasm_docs.contains("themeVariables"));
+    assert!(wasm_docs.contains("renderWithBrowserTextMetrics uses metricsJson for font identity"));
+    assert!(wasm_docs.contains("custom graph font style requires dynamic text metrics"));
+    assert!(
+        mmds_docs
+            .contains("provider-free static profiles do not accept arbitrary custom font style")
+    );
+    assert!(mmds_docs.contains("dynamic MMDS replay remains future work"));
+    assert!(mmds_docs.contains("Migrating from Mermaid init"));
 }
 
 #[test]

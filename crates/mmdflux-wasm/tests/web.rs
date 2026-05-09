@@ -107,6 +107,52 @@ fn static_render_export_stays_byte_stable_after_dynamic_render() {
 }
 
 #[wasm_bindgen_test]
+fn static_wasm_render_rejects_custom_provider_free_font_style() {
+    for (format, expected) in [
+        ("svg", "dynamic text metrics"),
+        ("mmds", "dynamic text metrics"),
+        ("text", "not supported"),
+        ("ascii", "not supported"),
+    ] {
+        let error = render(
+            "graph TD\nA-->B",
+            format,
+            r#"{"fontFamily":"Inter","fontSize":16}"#,
+        )
+        .expect_err("custom provider-free font style should fail");
+
+        let message = error_debug(error);
+        assert!(message.contains(expected), "{message}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn static_wasm_render_accepts_static_descriptor_matching_font_style() {
+    let output = render(
+        "graph TD\nA-->B",
+        "svg",
+        r#"{"fontFamily":"\"trebuchet ms\", verdana, arial, sans-serif","fontSize":16}"#,
+    )
+    .expect("static descriptor matching style should render");
+
+    assert!(output.contains("<svg"));
+}
+
+#[wasm_bindgen_test]
+fn static_wasm_render_accepts_equivalent_static_descriptor_spelling_byte_stable() {
+    let input = "graph TD\nA[mmmm]-->B[iiii]";
+    let default_output = render(input, "svg", "{}").expect("default render");
+    let styled_output = render(
+        input,
+        "svg",
+        r#"{"fontFamily":"Trebuchet MS, Verdana, Arial, sans-serif","fontSize":16}"#,
+    )
+    .expect("equivalent descriptor spelling should render");
+
+    assert_eq!(styled_output, default_output);
+}
+
+#[wasm_bindgen_test]
 fn dynamic_text_metrics_callback_throw_errors() {
     let measure = callback("throw new Error('canvas failed');");
     let err = render_with_browser_text_metrics(
@@ -247,6 +293,29 @@ fn dynamic_text_metrics_rejects_mmds_output() {
 
     let message = error_debug(err);
     assert!(message.contains("only supports SVG output"), "{message}");
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_rejects_config_json_font_style() {
+    let measure = callback("return text.length * 8;");
+
+    for config_json in [
+        r#"{"fontFamily":"Inter","fontSize":16}"#,
+        r#"{"themeVariables":{"fontFamily":"Inter","fontSize":"16px"}}"#,
+    ] {
+        let err = render_with_browser_text_metrics(
+            "graph TD\nA-->B",
+            "svg",
+            config_json,
+            dynamic_metrics_json_fixture(),
+            &measure,
+        )
+        .expect_err("dynamic export should reject configJson font style");
+
+        let message = error_debug(err);
+        assert!(message.contains("configJson"), "{message}");
+        assert!(message.contains("metricsJson"), "{message}");
+    }
 }
 
 #[wasm_bindgen_test]

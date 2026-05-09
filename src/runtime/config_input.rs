@@ -1,4 +1,4 @@
-//! Serde-friendly config input for JSON-based consumers (WASM, API, etc.).
+//! Serde-friendly config input for JSON-based consumers (Wasm, API, etc.).
 //!
 //! [`RuntimeConfigInput`] mirrors [`RenderConfig`] but uses `Option<String>`
 //! for enum fields so that it can be deserialized from camelCase JSON.
@@ -12,8 +12,11 @@ use crate::format::{
     ColorWhen, Curve, EdgePreset, OutputFormat, RoutingStyle, normalize_enum_token,
 };
 use crate::graph::GeometryLevel;
-use crate::graph::measure::validate_text_metrics_profile_id;
-use crate::runtime::config::{RenderConfig, SvgThemeConfig, SvgThemeMode};
+use crate::graph::measure::{
+    DEFAULT_GRAPH_FONT_FAMILY, DEFAULT_PROPORTIONAL_FONT_SIZE, font_family_compare_key,
+    validate_text_metrics_profile_id,
+};
+use crate::runtime::config::{GraphTextStyleConfig, RenderConfig, SvgThemeConfig, SvgThemeMode};
 use crate::simplification::PathSimplification;
 
 /// Serde-friendly render config accepted from JSON callers.
@@ -37,6 +40,9 @@ pub struct RuntimeConfigInput {
     pub svg_node_padding_x: Option<f64>,
     pub svg_node_padding_y: Option<f64>,
     pub font_metrics_profile: Option<String>,
+    pub font_family: Option<String>,
+    pub font_size: Option<f64>,
+    pub theme_variables: Option<ThemeVariablesInput>,
     pub show_ids: Option<bool>,
     pub color: Option<String>,
     pub geometry_level: Option<String>,
@@ -70,6 +76,22 @@ pub struct SvgThemeConfigInput {
     pub border: Option<String>,
 }
 
+/// Narrow Mermaid-compatible themeVariables subset for graph font style.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeVariablesInput {
+    pub font_family: Option<String>,
+    pub font_size: Option<ThemeFontSizeInput>,
+}
+
+/// Mermaid-compatible font-size alias accepted under themeVariables.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum ThemeFontSizeInput {
+    Number(f64),
+    String(String),
+}
+
 impl RuntimeConfigInput {
     /// Validate and convert into a typed [`RenderConfig`].
     pub fn into_render_config(self) -> Result<RenderConfig, RenderError> {
@@ -95,6 +117,8 @@ impl RuntimeConfigInput {
             })?;
             config.font_metrics_profile = Some(font_metrics_profile);
         }
+        config.graph_text_style =
+            graph_text_style_from_input(self.font_family, self.font_size, self.theme_variables)?;
         if let Some(layout_engine) = self.layout_engine {
             config.layout_engine = Some(EngineAlgorithmId::parse(&layout_engine)?);
         }
@@ -139,6 +163,147 @@ impl RuntimeConfigInput {
 
         Ok(config)
     }
+}
+
+fn graph_text_style_from_input(
+    font_family: Option<String>,
+    font_size: Option<f64>,
+    theme_variables: Option<ThemeVariablesInput>,
+) -> Result<Option<GraphTextStyleConfig>, RenderError> {
+    let theme_family = theme_variables
+        .as_ref()
+        .and_then(|theme| theme.font_family.as_ref());
+    let theme_size = theme_variables
+        .as_ref()
+        .and_then(|theme| theme.font_size.as_ref());
+
+    if font_family.is_none()
+        && font_size.is_none()
+        && theme_family.is_none()
+        && theme_size.is_none()
+    {
+        return Ok(None);
+    }
+
+    let canonical_family = font_family
+        .as_ref()
+        .map(|value| normalize_font_family("fontFamily", value))
+        .transpose()?;
+    let theme_family = theme_family
+        .map(|value| normalize_font_family("themeVariables.fontFamily", value))
+        .transpose()?;
+    if let (Some(canonical), Some(theme)) = (&canonical_family, &theme_family)
+        && canonical.compare_key != theme.compare_key
+    {
+        return Err(RenderError {
+            message: "conflicting fontFamily and themeVariables.fontFamily".to_string(),
+        });
+    }
+
+    let canonical_size = font_size
+        .map(|value| validate_font_size_px("fontSize", value))
+        .transpose()?;
+    let theme_size = theme_variables
+        .and_then(|theme| theme.font_size)
+        .map(theme_font_size_to_px)
+        .transpose()?;
+    if let (Some(canonical), Some(theme)) = (canonical_size, theme_size)
+        && (canonical - theme).abs() > f64::EPSILON
+    {
+        return Err(RenderError {
+            message: "conflicting fontSize and themeVariables.fontSize".to_string(),
+        });
+    }
+
+    let font_family = match canonical_family.or(theme_family) {
+        Some(value) => value.display,
+        None => DEFAULT_GRAPH_FONT_FAMILY.to_string(),
+    };
+    let font_size_px = match canonical_size.or(theme_size) {
+        Some(value) => value,
+        None => DEFAULT_PROPORTIONAL_FONT_SIZE,
+    };
+
+    Ok(Some(GraphTextStyleConfig {
+        font_family,
+        font_size_px,
+    }))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NormalizedFontFamily {
+    display: String,
+    compare_key: Vec<String>,
+}
+
+fn normalize_font_family(field: &str, value: &str) -> Result<NormalizedFontFamily, RenderError> {
+    let trimmed = value.trim();
+    let compare_key = font_family_compare_key_for_field(field, trimmed)?;
+    Ok(NormalizedFontFamily {
+        display: trimmed.to_string(),
+        compare_key,
+    })
+}
+
+fn validate_font_size_px(field: &str, value: f64) -> Result<f64, RenderError> {
+    if value.is_finite() && value > 0.0 {
+        Ok(value)
+    } else {
+        Err(RenderError {
+            message: format!("{field} must be a finite positive number"),
+        })
+    }
+}
+
+fn theme_font_size_to_px(input: ThemeFontSizeInput) -> Result<f64, RenderError> {
+    match input {
+        ThemeFontSizeInput::Number(value) => {
+            validate_font_size_px("themeVariables.fontSize", value)
+        }
+        ThemeFontSizeInput::String(value) => parse_theme_font_size_string(&value),
+    }
+}
+
+fn parse_theme_font_size_string(value: &str) -> Result<f64, RenderError> {
+    let field = "themeVariables.fontSize";
+    let trimmed = value.trim();
+    let numeric = if trimmed
+        .get(trimmed.len().saturating_sub(2)..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case("px"))
+    {
+        trimmed[..trimmed.len() - 2].trim_end()
+    } else {
+        trimmed
+    };
+
+    if !is_plain_decimal_number(numeric) {
+        return Err(RenderError {
+            message: format!("{field} must be a positive number or px value"),
+        });
+    }
+
+    let value = numeric.parse::<f64>().map_err(|_| RenderError {
+        message: format!("{field} must be a positive number or px value"),
+    })?;
+    validate_font_size_px(field, value)
+}
+
+fn is_plain_decimal_number(value: &str) -> bool {
+    let Some((head, tail)) = value.split_once('.') else {
+        return !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit());
+    };
+
+    !head.is_empty()
+        && !tail.is_empty()
+        && head.chars().all(|ch| ch.is_ascii_digit())
+        && tail.chars().all(|ch| ch.is_ascii_digit())
+        && !tail.contains('.')
+}
+
+fn font_family_compare_key_for_field(field: &str, value: &str) -> Result<Vec<String>, RenderError> {
+    font_family_compare_key(value).map_err(|message| RenderError {
+        message: format!("{field} {message}"),
+    })
 }
 
 impl SvgThemeConfigInput {
@@ -194,7 +359,7 @@ pub fn default_svg_engine() -> EngineAlgorithmId {
 ///
 /// The `force_engine` parameter controls whether to force the default SVG
 /// engine when none is set:
-/// - `true`: WASM behavior — always set flux-layered for SVG.
+/// - `true`: Wasm behavior — always set flux-layered for SVG.
 /// - `false`: CLI behavior — leave engine unset (auto-detect later).
 pub fn apply_svg_surface_defaults(
     format: OutputFormat,
@@ -215,5 +380,45 @@ pub fn apply_svg_surface_defaults(
 
     if config.layout_engine.unwrap_or(default_svg_engine()) == default_svg_engine() {
         config.edge_preset = Some(EdgePreset::SmoothStep);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn font_family_compare_key_normalizes_quotes_case_and_spacing() {
+        let first = font_family_compare_key_for_field(
+            "fontFamily",
+            r#" "Trebuchet   MS" , Verdana, ARIAL , sans-serif "#,
+        )
+        .unwrap();
+        let second = font_family_compare_key_for_field(
+            "fontFamily",
+            r#"trebuchet ms,verdana,arial,sans-serif"#,
+        )
+        .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(
+            first,
+            vec!["trebuchet ms", "verdana", "arial", "sans-serif"]
+        );
+    }
+
+    #[test]
+    fn font_family_compare_key_rejects_empty_tokens() {
+        let err = font_family_compare_key_for_field("fontFamily", "Inter, , Arial").unwrap_err();
+
+        assert!(err.message.contains("fontFamily"), "{err}");
+    }
+
+    #[test]
+    fn validate_font_size_rejects_non_finite_values() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let err = validate_font_size_px("fontSize", value).unwrap_err();
+            assert!(err.message.contains("fontSize"), "{err}");
+        }
     }
 }

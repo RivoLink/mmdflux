@@ -5,11 +5,13 @@ use std::path::Path;
 
 use mmdflux::format::{CornerStyle, Curve, RoutingStyle};
 use mmdflux::graph::measure::{
-    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_GRAPH_FONT_FAMILY,
+    DEFAULT_PROPORTIONAL_FONT_SIZE, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
 };
 use mmdflux::simplification::PathSimplification;
 use mmdflux::{
-    EngineAlgorithmId, OutputFormat, RenderConfig, SvgThemeConfig, SvgThemeMode, render_diagram,
+    EngineAlgorithmId, GraphTextStyleConfig, OutputFormat, RenderConfig, SvgThemeConfig,
+    SvgThemeMode, render_diagram,
 };
 
 fn load_flowchart_fixture(name: &str) -> String {
@@ -112,6 +114,87 @@ fn font_metrics_unsupported_profile_fails_svg_before_output() {
         err.message
             .contains("unsupported text metrics profile 'mermaid-sans-v1'"),
         "{err}"
+    );
+}
+
+#[test]
+fn provider_free_svg_rejects_custom_graph_font_style() {
+    let config = RenderConfig {
+        graph_text_style: Some(GraphTextStyleConfig::new(
+            "Inter",
+            DEFAULT_PROPORTIONAL_FONT_SIZE,
+        )),
+        ..RenderConfig::default()
+    };
+
+    let err = render_diagram("graph TD\nA-->B", OutputFormat::Svg, &config)
+        .expect_err("custom provider-free graph font style should fail");
+
+    assert!(err.message.contains("fontFamily"), "{err}");
+    assert!(err.message.contains("dynamic text metrics"), "{err}");
+    assert!(err.message.contains(DEFAULT_GRAPH_FONT_FAMILY), "{err}");
+}
+
+#[test]
+fn provider_free_svg_accepts_style_matching_static_profile_descriptor() {
+    let config = RenderConfig {
+        graph_text_style: Some(GraphTextStyleConfig::new(
+            DEFAULT_GRAPH_FONT_FAMILY,
+            DEFAULT_PROPORTIONAL_FONT_SIZE,
+        )),
+        ..RenderConfig::default()
+    };
+
+    let output = render_diagram("graph TD\nA-->B", OutputFormat::Svg, &config).unwrap();
+
+    assert!(output.contains("<svg"));
+}
+
+#[test]
+fn provider_free_svg_accepts_equivalent_static_profile_font_stack_spelling_byte_stable() {
+    let input = "graph TD\nA[mmmm]-->B[iiii]";
+    let default_output = render_diagram(input, OutputFormat::Svg, &RenderConfig::default())
+        .expect("default SVG render");
+    let config = RenderConfig {
+        graph_text_style: Some(GraphTextStyleConfig::new(
+            "Trebuchet MS, Verdana, Arial, sans-serif",
+            DEFAULT_PROPORTIONAL_FONT_SIZE,
+        )),
+        ..RenderConfig::default()
+    };
+
+    let styled_output =
+        render_diagram(input, OutputFormat::Svg, &config).expect("descriptor-matching style");
+
+    assert_eq!(styled_output, default_output);
+}
+
+#[test]
+fn provider_free_text_and_ascii_reject_custom_graph_font_style() {
+    let config = RenderConfig {
+        graph_text_style: Some(GraphTextStyleConfig::new(
+            "Inter",
+            DEFAULT_PROPORTIONAL_FONT_SIZE,
+        )),
+        ..RenderConfig::default()
+    };
+
+    for format in [OutputFormat::Text, OutputFormat::Ascii] {
+        let err = render_diagram("graph TD\nA-->B", format, &config)
+            .expect_err("terminal output should reject graph font style");
+        assert!(err.message.contains("font style"), "{err}");
+        assert!(err.message.contains("not supported"), "{err}");
+    }
+}
+
+#[test]
+fn default_svg_rendering_remains_byte_stable_after_graph_font_config_contract() {
+    let input = include_str!("fixtures/flowchart/labeled_edges.mmd");
+    let output = render_diagram(input, OutputFormat::Svg, &RenderConfig::default()).unwrap();
+
+    assert_eq!(
+        output,
+        include_str!("svg-snapshots/flowchart/labeled_edges.svg")
     );
 }
 

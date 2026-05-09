@@ -115,7 +115,7 @@ engine handles flowchart/class/state text, SVG, and MMDS output. Switch to
 | [`@mmds/core`](https://www.npmjs.com/package/@mmds/core)             | MMDS normalization, traversal, and validation utilities (npm) |
 | [`@mmds/excalidraw`](https://www.npmjs.com/package/@mmds/excalidraw) | MMDS to Excalidraw `.excalidraw` JSON (npm)                   |
 | [`@mmds/tldraw`](https://www.npmjs.com/package/@mmds/tldraw)         | MMDS to tldraw `.tldr` JSON (npm)                             |
-| [Playground](https://play.mmdflux.com)                               | Interactive browser editor (WASM-powered)                     |
+| [Playground](https://play.mmdflux.com)                               | Interactive browser editor (Wasm-powered)                     |
 
 ## Install
 
@@ -277,6 +277,15 @@ let svg = render_diagram(
 ```
 
 SVG `<defs>` blocks are also pruned to the markers each diagram actually uses, so simple flowcharts and sequence diagrams no longer carry unused arrowhead definitions.
+
+### Graph font config
+
+Rust and JSON/Wasm config can carry graph-family `fontFamily` and `fontSize`
+values, including the narrow Mermaid aliases `themeVariables.fontFamily` and
+`themeVariables.fontSize`. These fields describe text measurement identity, not
+SVG-only styling. Provider-free static rendering accepts only values that match
+the selected static profile descriptor; arbitrary browser fonts require the
+separate browser dynamic metrics export.
 
 ## Adapter workflows
 

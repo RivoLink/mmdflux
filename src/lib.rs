@@ -342,17 +342,17 @@ pub use engines::graph::EngineAlgorithmId;
 /// Engine identifier (e.g., `Flux`, `Mermaid`, `Elk`).
 pub use engines::graph::EngineId;
 pub use errors::RenderError;
-/// Policy for resolving `--color auto` in CLI/WASM adapters.
+/// Policy for resolving `--color auto` in CLI/Wasm adapters.
 pub use format::ColorWhen;
 pub use format::OutputFormat;
 /// Text output color mode (plain, styled, or ANSI).
 pub use format::TextColorMode;
+pub use runtime::config::{GraphTextStyleConfig, RenderConfig, SvgThemeConfig, SvgThemeMode};
 /// Layout configuration for the Sugiyama hierarchical engine.
 pub use runtime::config::{
     LabelDummyPlacement, LabelDummyRouting, LayoutConfig, LayoutDirection, Ranker,
 };
-pub use runtime::config::{RenderConfig, SvgThemeConfig, SvgThemeMode};
-/// Serde-friendly config input for JSON consumers (WASM, API).
+/// Serde-friendly config input for JSON consumers (Wasm, API).
 pub use runtime::config_input::RuntimeConfigInput;
 /// Apply default SVG surface settings (curve, engine) when format is SVG.
 pub use runtime::config_input::apply_svg_surface_defaults;

@@ -394,6 +394,71 @@ fn text_metrics_descriptor(
     }
 }
 
+pub(crate) fn text_style_matches_descriptor(
+    font_family: &str,
+    font_size_px: f64,
+    descriptor: &TextMetricsStyleDescriptor,
+) -> Result<bool, String> {
+    let requested_family = font_family_compare_key(font_family)?;
+    let descriptor_family = font_family_compare_key(&descriptor.font_family)?;
+    Ok(requested_family == descriptor_family
+        && (font_size_px - descriptor.font_size).abs() <= f64::EPSILON)
+}
+
+pub(crate) fn font_family_compare_key(value: &str) -> Result<Vec<String>, String> {
+    let tokens: Vec<String> = value
+        .split(',')
+        .map(normalize_font_family_token)
+        .collect::<Result<_, _>>()?;
+
+    if tokens.is_empty() {
+        return Err("must contain at least one font family".to_string());
+    }
+
+    Ok(tokens)
+}
+
+fn normalize_font_family_token(token: &str) -> Result<String, String> {
+    let token = token.trim();
+    let token = strip_one_quote_layer(token).trim();
+    let token = collapse_ascii_whitespace(token);
+    if token.is_empty() {
+        return Err("must not contain empty font family tokens".to_string());
+    }
+    Ok(token.to_ascii_lowercase())
+}
+
+fn strip_one_quote_layer(token: &str) -> &str {
+    if token.len() >= 2 {
+        let bytes = token.as_bytes();
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
+            return &token[1..token.len() - 1];
+        }
+    }
+    token
+}
+
+fn collapse_ascii_whitespace(value: &str) -> String {
+    let mut normalized = String::new();
+    let mut previous_was_space = false;
+
+    for ch in value.chars() {
+        if ch.is_ascii_whitespace() {
+            if !normalized.is_empty() && !previous_was_space {
+                normalized.push(' ');
+            }
+            previous_was_space = true;
+        } else {
+            normalized.push(ch);
+            previous_was_space = false;
+        }
+    }
+
+    normalized.trim().to_string()
+}
+
 /// Greedy word-wrap that honors `max_width` in pixels using `metrics` for
 /// per-character width estimates. `'\n'` in `text` is treated as a hard
 /// break; each segment is wrapped independently. Falls back to per-character

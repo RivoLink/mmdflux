@@ -42,6 +42,28 @@ pub struct SvgThemeConfig {
     pub border: Option<String>,
 }
 
+/// Graph-family text style requested through public render config.
+///
+/// This is a layout-affecting style identity, not a generic SVG font override.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphTextStyleConfig {
+    /// CSS font-family list used for graph-family text measurement identity.
+    pub font_family: String,
+    /// Font size in CSS pixels.
+    pub font_size_px: f64,
+}
+
+impl GraphTextStyleConfig {
+    /// Build graph-family text style config.
+    pub fn new(font_family: impl Into<String>, font_size_px: f64) -> Self {
+        Self {
+            font_family: font_family.into(),
+            font_size_px,
+        }
+    }
+}
+
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
 pub struct RenderConfig {
@@ -75,6 +97,8 @@ pub struct RenderConfig {
     pub svg_theme: Option<SvgThemeConfig>,
     /// Graph-family text metrics profile selector.
     pub font_metrics_profile: Option<String>,
+    /// Graph-family text style config.
+    pub graph_text_style: Option<GraphTextStyleConfig>,
     /// Show node IDs alongside labels.
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.
@@ -156,6 +180,24 @@ mod tests {
         assert_eq!(options.output_format, OutputFormat::Text);
         assert_eq!(options.routing_style, RoutingStyle::Orthogonal);
         assert!(!options.use_pinned_ranks);
+    }
+
+    #[test]
+    fn render_config_default_has_no_graph_text_style() {
+        let config = RenderConfig::default();
+
+        assert!(config.graph_text_style.is_none());
+    }
+
+    #[test]
+    fn graph_text_style_config_carries_family_and_size() {
+        let style = GraphTextStyleConfig {
+            font_family: "Inter, system-ui, sans-serif".to_string(),
+            font_size_px: 14.0,
+        };
+
+        assert_eq!(style.font_family, "Inter, system-ui, sans-serif");
+        assert_eq!(style.font_size_px, 14.0);
     }
 
     #[test]

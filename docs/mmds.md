@@ -419,8 +419,13 @@ Rules:
   reserved `dynamic` for future live measurement backends.
 - The recorded profile source font is provenance, not an exact Mermaid or
   browser font claim.
-- SVG font-family and metrics profile are intentionally decoupled for now: the default recorded profile uses Liberation Sans Regular advances, while emitted SVG continues to use the existing Mermaid-style font stack.
-- Exposing SVG `fontFamily` remains future work.
+- SVG font-family and metrics profile are intentionally decoupled for static
+  profiles: the default recorded profile uses Liberation Sans Regular advances,
+  while emitted SVG continues to use the existing Mermaid-style font stack.
+- provider-free static profiles do not accept arbitrary custom font style:
+  `fontFamily` and `fontSize` are accepted only when they normalize to the
+  selected static profile descriptor. A different custom style requires the
+  browser dynamic metrics export.
 - The experimental browser dynamic metrics export is SVG-only and does not emit
   or replay MMDS; provider-bound dynamic MMDS replay remains future work.
 - Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
@@ -428,6 +433,38 @@ Rules:
 - Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.
 - A recognized text metrics extension with an unsupported `metricsProfile.id` is a replay error.
 - Sequence-family full text-metrics parity remains deferred.
+
+### Graph Font Config And Mermaid Init
+
+Runtime JSON config accepts canonical top-level `fontFamily` and `fontSize`
+for graph-family text style. It also accepts the narrow Mermaid-compatible
+aliases `themeVariables.fontFamily` and `themeVariables.fontSize`.
+
+These fields are layout-affecting text-style identity, not SVG-only cosmetics.
+provider-free static profiles do not accept arbitrary custom font style. If the
+requested style matches the selected static profile descriptor after
+normalizing quote, case, comma spacing, and ASCII whitespace, rendering proceeds
+with descriptor-owned SVG spelling and byte-stable static geometry. If it does
+not match, SVG/MMDS rendering fails and tells callers to use dynamic text
+metrics.
+
+`themeVariables.fontSize` accepts positive numbers, bare numeric strings, and
+`px` strings such as `"14px"` or `"14.5 px"`. Other units are rejected.
+Matching top-level and `themeVariables` values are accepted; conflicting values
+are rejected.
+
+#### Migrating from Mermaid init
+
+mmdflux does not import Mermaid's full `themeVariables` object. Only
+`themeVariables.fontFamily` and `themeVariables.fontSize` are supported here.
+Other Mermaid theme variables such as `primaryColor`, `lineColor`, `textColor`,
+and `darkMode` are rejected so callers do not accidentally assume broader theme
+parity.
+
+Browser dynamic metrics keep font identity in `metricsJson`, not `configJson`.
+`renderWithBrowserTextMetrics` rejects `configJson.fontFamily`,
+`configJson.fontSize`, and `configJson.themeVariables`; provider-bound dynamic
+MMDS replay remains future work.
 
 ### Node
 

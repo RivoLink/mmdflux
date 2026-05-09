@@ -77,7 +77,7 @@ pub fn validate(input: &str) -> String {
 fn parse_render_config(format: OutputFormat, config_json: &str) -> Result<RenderConfig, JsError> {
     if config_json.trim().is_empty() {
         let mut config = RenderConfig::default();
-        // WASM forces flux-layered for SVG.
+        // Wasm forces flux-layered for SVG.
         apply_svg_surface_defaults(format, &mut config, true);
         return Ok(config);
     }
@@ -87,7 +87,7 @@ fn parse_render_config(format: OutputFormat, config_json: &str) -> Result<Render
     let mut config = input
         .into_render_config()
         .map_err(|err| js_error(err.message))?;
-    // WASM forces flux-layered for SVG.
+    // Wasm forces flux-layered for SVG.
     apply_svg_surface_defaults(format, &mut config, true);
     Ok(config)
 }
@@ -99,9 +99,15 @@ fn parse_dynamic_render_config(config_json: &str) -> Result<RenderConfig, JsErro
 
     let input: RuntimeConfigInput = serde_json::from_str(config_json)
         .map_err(|error| js_error(format!("invalid config_json: {error}")))?;
-    input
+    let config = input
         .into_render_config()
-        .map_err(|err| js_error(err.message))
+        .map_err(|err| js_error(err.message))?;
+    if config.graph_text_style.is_some() {
+        return Err(js_error(
+            "renderWithBrowserTextMetrics uses metricsJson for font identity; do not pass fontFamily, fontSize, or themeVariables in configJson",
+        ));
+    }
+    Ok(config)
 }
 
 fn parse_dynamic_metrics_input(metrics_json: &str) -> Result<DynamicMetricsInput, RenderError> {
