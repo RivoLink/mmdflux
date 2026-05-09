@@ -310,6 +310,7 @@ fn dynamic_text_metrics_renders_provider_bound_mmds_output() {
     .expect("dynamic browser metrics should render provider-bound MMDS");
 
     assert!(output.contains("\"org.mmdflux.text-metrics.v1\""));
+    assert!(output.contains("\"org.mmdflux.text-measurements.v1\""));
     assert!(output.contains("\"source\": \"dynamic\""));
     assert!(output.contains("\"id\": \"mmdflux-browser-canvas-v1\""));
 }
@@ -343,6 +344,34 @@ fn dynamic_text_metrics_replays_provider_bound_mmds_output() {
         &measure,
     )
     .expect("dynamic mmds replay should render");
+
+    assert_eq!(replay_svg, direct_svg);
+}
+
+#[wasm_bindgen_test]
+fn browser_dynamic_mmds_replays_provider_free_through_static_render() {
+    let measure = callback("return text.length * 8;");
+    let input = "graph TD\nA[Alpha] -->|a labeled edge| B[Beta]";
+    let config = r#"{"geometryLevel":"routed"}"#;
+    let direct_svg = render_with_browser_text_metrics(
+        input,
+        "svg",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("direct dynamic svg should render");
+    let mmds = render_with_browser_text_metrics(
+        input,
+        "mmds",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("dynamic mmds should render");
+
+    let replay_svg =
+        render(&mmds, "svg", config).expect("static render should replay measured dynamic MMDS");
 
     assert_eq!(replay_svg, direct_svg);
 }

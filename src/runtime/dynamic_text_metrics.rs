@@ -15,8 +15,8 @@ use crate::format::OutputFormat;
 use crate::frontends::{InputFrontend, detect_input_frontend};
 use crate::graph::measure::{
     DEFAULT_LABEL_PADDING_X, DEFAULT_LABEL_PADDING_Y, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, TextMetricsLayoutDescriptor, TextMetricsProfileDescriptor,
-    TextMetricsProvider, TextMetricsStyleDescriptor,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, TextMeasurementCache, TextMetricsLayoutDescriptor,
+    TextMetricsProfileDescriptor, TextMetricsProvider, TextMetricsStyleDescriptor,
 };
 use crate::payload::Diagram;
 use crate::registry::DiagramFamily;
@@ -141,7 +141,8 @@ where
 {
     input: DynamicMetricsInput,
     callback: RefCell<F>,
-    cache: RefCell<HashMap<String, f64>>,
+    line_cache: RefCell<HashMap<String, f64>>,
+    scalar_cache: RefCell<HashMap<char, f64>>,
     first_error: RefCell<Option<DynamicTextMetricsError>>,
     in_callback: Cell<bool>,
     node_padding_x: f64,
@@ -170,7 +171,8 @@ where
         Self {
             input,
             callback: RefCell::new(callback),
-            cache: RefCell::new(HashMap::new()),
+            line_cache: RefCell::new(HashMap::new()),
+            scalar_cache: RefCell::new(HashMap::new()),
             first_error: RefCell::new(None),
             in_callback: Cell::new(false),
             node_padding_x,
@@ -187,17 +189,61 @@ where
         }
     }
 
-    fn measure_text(&self, text: &str) -> f64 {
-        if let Some(width) = self.cache.borrow().get(text).copied() {
+    pub(crate) fn measurement_cache_snapshot(&self) -> Result<TextMeasurementCache, RenderError> {
+        self.finish()?;
+        Ok(TextMeasurementCache {
+            line_widths: self
+                .line_cache
+                .borrow()
+                .iter()
+                .map(|(text, width)| (text.clone(), *width))
+                .collect(),
+            scalar_widths: self
+                .scalar_cache
+                .borrow()
+                .iter()
+                .map(|(ch, width)| (*ch, *width))
+                .collect(),
+        })
+    }
+
+    fn measure_line_text(&self, text: &str) -> f64 {
+        if let Some(width) = self.line_cache.borrow().get(text).copied() {
             return width;
         }
 
+        match self.measure_uncached_text(text) {
+            Some(width) => {
+                self.line_cache.borrow_mut().insert(text.to_string(), width);
+                width
+            }
+            None => 0.0,
+        }
+    }
+
+    fn measure_scalar_char(&self, ch: char) -> f64 {
+        if let Some(width) = self.scalar_cache.borrow().get(&ch).copied() {
+            return width;
+        }
+
+        let mut text = [0_u8; 4];
+        let text = ch.encode_utf8(&mut text);
+        match self.measure_uncached_text(text) {
+            Some(width) => {
+                self.scalar_cache.borrow_mut().insert(ch, width);
+                width
+            }
+            None => 0.0,
+        }
+    }
+
+    fn measure_uncached_text(&self, text: &str) -> Option<f64> {
         if self.in_callback.get() {
             self.record_error(DynamicTextMetricsError::new(format!(
                 "dynamic text measurement callback re-entered while measuring {text:?} with font {:?}",
                 self.input.css_font
             )));
-            return 0.0;
+            return None;
         }
 
         self.in_callback.set(true);
@@ -213,13 +259,10 @@ where
         };
 
         match validated {
-            Ok(width) => {
-                self.cache.borrow_mut().insert(text.to_string(), width);
-                width
-            }
+            Ok(width) => Some(width),
             Err(error) => {
                 self.record_error(error);
-                0.0
+                None
             }
         }
     }
@@ -258,12 +301,11 @@ where
     F: FnMut(&str, &str) -> Result<f64, DynamicTextMetricsError>,
 {
     fn measure_line_width(&self, text: &str) -> f64 {
-        self.measure_text(text)
+        self.measure_line_text(text)
     }
 
     fn measure_scalar_width(&self, ch: char) -> f64 {
-        let mut text = [0_u8; 4];
-        self.measure_text(ch.encode_utf8(&mut text))
+        self.measure_scalar_char(ch)
     }
 
     fn font_size(&self) -> f64 {
@@ -515,19 +557,25 @@ where
     Ok(rendered)
 }
 
-struct DynamicGraphFamilyRenderContext<'a> {
+struct DynamicGraphFamilyRenderContext<'a, F>
+where
+    F: FnMut(&str, &str) -> Result<f64, DynamicTextMetricsError>,
+{
     format: OutputFormat,
     config: &'a RenderConfig,
     svg_options: &'a SvgRenderOptions,
     text_metrics_descriptor: Option<&'a TextMetricsProfileDescriptor>,
-    provider: &'a dyn TextMetricsProvider,
+    provider: &'a CallbackTextMetricsProvider<F>,
 }
 
-fn render_graph_family_payload_with_dynamic_metrics(
+fn render_graph_family_payload_with_dynamic_metrics<F>(
     diagram_id: &str,
     graph: &mut crate::graph::Graph,
-    context: &DynamicGraphFamilyRenderContext<'_>,
-) -> Result<String, RenderError> {
+    context: &DynamicGraphFamilyRenderContext<'_, F>,
+) -> Result<String, RenderError>
+where
+    F: FnMut(&str, &str) -> Result<f64, DynamicTextMetricsError>,
+{
     match context.format {
         OutputFormat::Svg => crate::runtime::graph_family::render_graph_family_svg_with_provider(
             diagram_id,
@@ -542,12 +590,13 @@ fn render_graph_family_payload_with_dynamic_metrics(
                     "dynamic text metrics field `profileId` is required for dynamic MMDS descriptor"
                         .to_string(),
             })?;
-            crate::runtime::graph_family::render_graph_family_mmds_with_provider(
+            crate::runtime::graph_family::render_graph_family_mmds_with_provider_and_measurements(
                 diagram_id,
                 graph,
                 context.config,
                 descriptor,
                 context.provider,
+                || context.provider.measurement_cache_snapshot(),
             )
         }
         _ => unreachable!("format validation restricts dynamic text metrics output"),
@@ -927,6 +976,61 @@ mod tests {
     }
 
     #[test]
+    fn callback_provider_exports_line_and_scalar_queries_after_success() {
+        let provider = CallbackTextMetricsProvider::new(valid_input(), |text, _font| {
+            Ok(text.len() as f64 * 8.0)
+        });
+
+        assert_eq!(provider.measure_line_width("Alpha"), 40.0);
+        assert_eq!(provider.measure_scalar_width('A'), 8.0);
+        assert_eq!(provider.measure_scalar_width(' '), 8.0);
+        provider.finish().unwrap();
+
+        let snapshot = provider
+            .measurement_cache_snapshot()
+            .expect("successful provider should export measurements");
+        assert_eq!(snapshot.line_width("Alpha"), Some(40.0));
+        assert_eq!(snapshot.scalar_width('A'), Some(8.0));
+        assert_eq!(snapshot.scalar_width(' '), Some(8.0));
+    }
+
+    #[test]
+    fn callback_provider_keeps_line_and_scalar_query_keys_distinct() {
+        let calls = Rc::new(Cell::new(0));
+        let observed_calls = Rc::clone(&calls);
+        let provider = CallbackTextMetricsProvider::new(valid_input(), move |text, _font| {
+            calls.set(calls.get() + 1);
+            Ok(text.len() as f64 * 8.0)
+        });
+
+        assert_eq!(provider.measure_line_width("A"), 8.0);
+        assert_eq!(provider.measure_scalar_width('A'), 8.0);
+        provider.finish().unwrap();
+
+        let snapshot = provider
+            .measurement_cache_snapshot()
+            .expect("successful provider should export measurements");
+        assert_eq!(snapshot.line_width("A"), Some(8.0));
+        assert_eq!(snapshot.scalar_width('A'), Some(8.0));
+        assert_eq!(observed_calls.get(), 2);
+    }
+
+    #[test]
+    fn callback_provider_refuses_measurement_cache_snapshot_after_error() {
+        let provider = CallbackTextMetricsProvider::new(valid_input(), |_text, _font| {
+            Err(DynamicTextMetricsError::new("canvas failed"))
+        });
+
+        assert_eq!(provider.measure_line_width("Alpha"), 0.0);
+        let err = provider
+            .measurement_cache_snapshot()
+            .expect_err("failed provider should not export measurements");
+
+        assert!(err.message.contains("Alpha"), "{err}");
+        assert!(err.message.contains("canvas failed"), "{err}");
+    }
+
+    #[test]
     fn dynamic_svg_bridge_changes_label_background_width() {
         let input = "graph TD\nA -->|mmmm| B";
         let static_svg =
@@ -943,6 +1047,10 @@ mod tests {
         assert!(dynamic_svg.contains("<svg"), "{dynamic_svg}");
         assert!(dynamic_svg.contains("width=\"108.00\""), "{dynamic_svg}");
         assert!(!dynamic_svg.contains("metricsProfile"), "{dynamic_svg}");
+        assert!(
+            !dynamic_svg.contains("org.mmdflux.text-measurements.v1"),
+            "{dynamic_svg}"
+        );
     }
 
     #[test]
@@ -969,9 +1077,9 @@ mod tests {
     }
 
     #[test]
-    fn dynamic_mmds_output_emits_provider_bound_text_metrics_extension() {
+    fn dynamic_mmds_output_emits_text_measurements_sidecar() {
         let output = render_graph_family_with_dynamic_text_metrics(
-            "graph TD\nA[Alpha] --> B[Beta]",
+            "graph TD\nA[Alpha] -->|edge label| B[Beta]",
             OutputFormat::Mmds,
             &RenderConfig::default(),
             profiled_input("browser-test-v1"),
@@ -987,10 +1095,263 @@ mod tests {
         assert_eq!(extension["defaultTextStyle"]["font-family"], "Inter");
         assert_eq!(extension["defaultTextStyle"]["font-size"], 16.0);
         assert_eq!(extension["defaultTextStyle"]["line-height"], 24.0);
+
+        let sidecar = &value["extensions"]["org.mmdflux.text-measurements.v1"];
+        assert_eq!(sidecar["profileRef"]["id"], "browser-test-v1");
+        assert_eq!(sidecar["profileRef"]["source"], "dynamic");
+        assert_eq!(sidecar["profileRef"]["version"], 1);
+        assert!(
+            sidecar["lineWidths"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| {
+                    entry["text"] == "Alpha" && entry["width"].as_f64().unwrap() > 0.0
+                })
+        );
+        assert!(
+            sidecar["scalarWidths"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| { entry["text"] == " " && entry["width"].as_f64().unwrap() > 0.0 })
+        );
+        let line_texts: Vec<_> = sidecar["lineWidths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["text"].as_str().unwrap().to_string())
+            .collect();
+        let mut sorted_line_texts = line_texts.clone();
+        sorted_line_texts.sort();
+        assert_eq!(line_texts, sorted_line_texts);
+        let scalar_texts: Vec<_> = sidecar["scalarWidths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["text"].as_str().unwrap().to_string())
+            .collect();
+        let mut sorted_scalar_texts = scalar_texts.clone();
+        sorted_scalar_texts.sort();
+        assert_eq!(scalar_texts, sorted_scalar_texts);
+        assert!(
+            value["profiles"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|profile| profile == "mmdflux-text-measurements-v1")
+        );
+    }
+
+    #[test]
+    fn static_mmds_output_does_not_emit_text_measurements_sidecar() {
+        let output = render_diagram(
+            "graph TD\nA[Alpha] -->|edge label| B[Beta]",
+            OutputFormat::Mmds,
+            &RenderConfig::default(),
+        )
+        .expect("static MMDS output should render");
+
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert!(
             value["extensions"]
                 .get("org.mmdflux.text-measurements.v1")
                 .is_none()
+        );
+        assert!(
+            !value["profiles"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|profile| profile == "mmdflux-text-measurements-v1")
+        );
+    }
+
+    #[test]
+    fn dynamic_mmds_with_measurements_replays_provider_free_to_same_svg() {
+        let input = "graph TD\nA[Alpha] -->|edge label| B[Beta]";
+        let config = routed_config();
+
+        let direct_svg = render_graph_family_with_dynamic_text_metrics(
+            input,
+            OutputFormat::Svg,
+            &config,
+            profiled_input("browser-test-v1"),
+            deterministic_width,
+        )
+        .expect("direct dynamic SVG should render");
+        let dynamic_mmds = render_graph_family_with_dynamic_text_metrics(
+            input,
+            OutputFormat::Mmds,
+            &config,
+            profiled_input("browser-test-v1"),
+            deterministic_width,
+        )
+        .expect("dynamic MMDS output should render");
+
+        let replay_svg = render_diagram(&dynamic_mmds, OutputFormat::Svg, &RenderConfig::default())
+            .expect("persisted measurements should allow provider-free replay");
+
+        assert_eq!(replay_svg, direct_svg);
+    }
+
+    #[test]
+    fn dynamic_mmds_without_measurements_still_requires_provider_free_replay_provider() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut value: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        value["extensions"]
+            .as_object_mut()
+            .unwrap()
+            .remove("org.mmdflux.text-measurements.v1");
+        value["profiles"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|profile| profile != "mmdflux-text-measurements-v1");
+        let without_measurements = serde_json::to_string_pretty(&value).unwrap();
+
+        let err = render_diagram(
+            &without_measurements,
+            OutputFormat::Svg,
+            &RenderConfig::default(),
+        )
+        .expect_err("dynamic MMDS without persisted measurements should still require provider");
+
+        assert!(
+            err.message.contains("requires a matching provider"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn dynamic_mmds_with_measurements_rejects_provider_free_text_replay() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+
+        for format in [OutputFormat::Text, OutputFormat::Ascii] {
+            let err = render_diagram(&dynamic_mmds, format, &RenderConfig::default())
+                .expect_err("provider-free dynamic text metrics replay stays SVG-only");
+
+            assert!(
+                err.message.contains("requires a matching provider"),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
+    fn live_provider_replay_does_not_consume_stale_measurement_sidecar() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut stale: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        stale["extensions"]["org.mmdflux.text-measurements.v1"]["lineWidths"][0]["width"] =
+            serde_json::json!(9999.0);
+        let stale = serde_json::to_string_pretty(&stale).unwrap();
+
+        let expected = render_graph_family_with_dynamic_text_metrics(
+            &dynamic_mmds,
+            OutputFormat::Svg,
+            &RenderConfig::default(),
+            profiled_input("browser-test-v1"),
+            deterministic_width,
+        )
+        .expect("matching live provider replay should render");
+        let actual = render_graph_family_with_dynamic_text_metrics(
+            &stale,
+            OutputFormat::Svg,
+            &RenderConfig::default(),
+            profiled_input("browser-test-v1"),
+            deterministic_width,
+        )
+        .expect("matching live provider remains authoritative");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn live_provider_replay_validates_measurement_sidecar_shape_when_present() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut malformed: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        malformed["extensions"]["org.mmdflux.text-measurements.v1"]["profileRef"]["id"] =
+            serde_json::json!("wrong-provider");
+        let malformed = serde_json::to_string_pretty(&malformed).unwrap();
+
+        let err = render_graph_family_with_dynamic_text_metrics(
+            &malformed,
+            OutputFormat::Svg,
+            &RenderConfig::default(),
+            profiled_input("browser-test-v1"),
+            deterministic_width,
+        )
+        .expect_err("recognized malformed sidecar should reject provider-bound replay");
+
+        assert!(err.message.contains("profileRef.id"), "{err}");
+        assert!(
+            err.message.contains("org.mmdflux.text-measurements.v1"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn mmds_to_mmds_pass_through_preserves_measurements_sidecar() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+
+        let output = render_diagram(&dynamic_mmds, OutputFormat::Mmds, &RenderConfig::default())
+            .expect("pass-through does not measure text");
+
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert!(
+            value["extensions"]
+                .get("org.mmdflux.text-measurements.v1")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn mmds_to_mmds_pass_through_validates_measurements_sidecar_shape() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut malformed: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        malformed["extensions"]["org.mmdflux.text-measurements.v1"]["lineWidths"][0]["width"] =
+            serde_json::json!("wide");
+        let malformed = serde_json::to_string_pretty(&malformed).unwrap();
+
+        let err = render_diagram(&malformed, OutputFormat::Mmds, &RenderConfig::default())
+            .expect_err("pass-through should validate recognized sidecar shape");
+
+        assert!(err.message.contains("lineWidths[0].width"), "{err}");
+        assert!(
+            err.message.contains("org.mmdflux.text-measurements.v1"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn provider_free_dynamic_replay_rejects_missing_scalar_measurement() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut missing_query: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        missing_query["extensions"]["org.mmdflux.text-measurements.v1"]["scalarWidths"] =
+            serde_json::json!([]);
+        let missing_query = serde_json::to_string_pretty(&missing_query).unwrap();
+
+        let err = render_diagram(&missing_query, OutputFormat::Svg, &RenderConfig::default())
+            .expect_err("missing measured query should reject provider-free replay");
+
+        assert!(err.message.contains("scalarWidths"), "{err}");
+        assert!(err.message.contains("missing persisted"), "{err}");
+    }
+
+    #[test]
+    fn provider_free_dynamic_replay_rejects_sidecar_profile_ref_mismatch() {
+        let dynamic_mmds = dynamic_mmds_fixture();
+        let mut mismatched: serde_json::Value = serde_json::from_str(&dynamic_mmds).unwrap();
+        mismatched["extensions"]["org.mmdflux.text-measurements.v1"]["profileRef"]["id"] =
+            serde_json::json!("wrong-provider");
+        let mismatched = serde_json::to_string_pretty(&mismatched).unwrap();
+
+        let err = render_diagram(&mismatched, OutputFormat::Svg, &RenderConfig::default())
+            .expect_err("profileRef mismatch should reject provider-free replay");
+
+        assert!(err.message.contains("profileRef.id"), "{err}");
+        assert!(
+            err.message.contains("org.mmdflux.text-measurements.v1"),
+            "{err}"
         );
     }
 

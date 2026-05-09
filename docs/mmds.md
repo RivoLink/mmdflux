@@ -308,6 +308,7 @@ MMDS keeps core graph semantics compact while allowing renderer- or adapter-spec
 - `mmdflux-text-v1` — text/ASCII-oriented controls and expectations.
 - `mmdflux-node-style-v1` — node style extension contract for `fill`, `stroke`, and `color` replay.
 - `mmdflux-text-metrics-v1` — graph-family text metrics identity and layout text values for deterministic replay.
+- `mmdflux-text-measurements-v1` — measured dynamic text query cache for provider-free SVG replay.
 
 ### Extension Namespace Rules
 
@@ -426,14 +427,20 @@ Rules:
   `fontFamily` and `fontSize` are accepted only when they normalize to the
   selected static profile descriptor. A different custom style requires the
   browser dynamic metrics export.
-- Dynamic MMDS (`source = "dynamic"`) is provider-bound. Measurement-dependent
-  replay to SVG requires a matching dynamic provider descriptor; provider-free
-  SVG/Text/ASCII replay rejects it instead of falling back to static metrics.
+- Dynamic MMDS (`source = "dynamic"`) is provider-bound unless it also carries
+  a complete `org.mmdflux.text-measurements.v1` sidecar. With that sidecar,
+  public `mmdflux::render_diagram` accepts graph-family dynamic MMDS for
+  provider-free SVG replay. Text/ASCII replay remains unsupported.
+- `org.mmdflux.text-measurements.v1` stores the exact line and scalar width
+  queries observed during dynamic rendering. Missing measured queries fail
+  replay instead of falling back to `mmdflux-sans-v1`, the compatibility
+  heuristic, or a live provider.
+- Measured sidecars increase MMDS document size in proportion to the number of
+  unique line/scalar queries. This is the portability cost of provider-free
+  dynamic snapshots.
 - Provider-free MMDS-to-MMDS pass-through may preserve a dynamic text-metrics
   extension when no text measurement is performed, but still validates the
   extension shape.
-- Provider-free measured dimensions are deferred to
-  [#308](https://github.com/kevinswiber/mmdflux/issues/308).
 - Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
 - Replay is document-owned: a caller-supplied `fontMetricsProfile` must match the replay profile, and the replay profile plus persisted `layoutText` values override SVG font and node-padding config.
 - Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.

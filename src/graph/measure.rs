@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
+
 use crate::graph::font_metrics::{
     RECORDED_SANS_CSS_LINE_HEIGHT_RATIO, RECORDED_SANS_PROFILE_ID, RECORDED_SANS_PROFILE_SOURCE,
     RecordedMetricsProfile,
@@ -77,6 +79,22 @@ pub(crate) trait TextMetricsProvider {
 
     fn measure_space_width(&self) -> f64 {
         self.measure_scalar_width(' ')
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TextMeasurementCache {
+    pub line_widths: BTreeMap<String, f64>,
+    pub scalar_widths: BTreeMap<char, f64>,
+}
+
+impl TextMeasurementCache {
+    pub(crate) fn line_width(&self, text: &str) -> Option<f64> {
+        self.line_widths.get(text).copied()
+    }
+
+    pub(crate) fn scalar_width(&self, ch: char) -> Option<f64> {
+        self.scalar_widths.get(&ch).copied()
     }
 }
 

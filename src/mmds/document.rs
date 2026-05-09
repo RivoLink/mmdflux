@@ -15,7 +15,8 @@ use crate::graph::geometry::{
     EdgeLabelSide, GraphGeometry, PositionedNode, RoutedEdgeGeometry, RoutedGraphGeometry,
 };
 use crate::graph::measure::{
-    TextMetricsProfileDescriptor, TextMetricsProvider, default_proportional_text_metrics,
+    TextMeasurementCache, TextMetricsProfileDescriptor, TextMetricsProvider,
+    default_proportional_text_metrics,
 };
 use crate::graph::projection::{GridProjection, OverrideSubgraphProjection};
 use crate::graph::routing::{
@@ -30,15 +31,18 @@ pub const SVG_PROFILE: &str = "mmdflux-svg-v1";
 pub const TEXT_PROFILE: &str = "mmdflux-text-v1";
 pub const NODE_STYLE_PROFILE: &str = "mmdflux-node-style-v1";
 pub const TEXT_METRICS_PROFILE: &str = "mmdflux-text-metrics-v1";
+pub const TEXT_MEASUREMENTS_PROFILE: &str = "mmdflux-text-measurements-v1";
 pub const TEXT_EXTENSION_NAMESPACE: &str = "org.mmdflux.render.text.v1";
 pub const NODE_STYLE_EXTENSION_NAMESPACE: &str = "org.mmdflux.node-style.v1";
 pub const TEXT_METRICS_EXTENSION_NAMESPACE: &str = "org.mmdflux.text-metrics.v1";
+pub const TEXT_MEASUREMENTS_EXTENSION_NAMESPACE: &str = "org.mmdflux.text-measurements.v1";
 pub const SUPPORTED_PROFILES: &[&str] = &[
     CORE_PROFILE,
     SVG_PROFILE,
     TEXT_PROFILE,
     NODE_STYLE_PROFILE,
     TEXT_METRICS_PROFILE,
+    TEXT_MEASUREMENTS_PROFILE,
 ];
 
 /// Serialize a graph-family diagram to MMDS JSON at layout level.
@@ -164,6 +168,7 @@ pub(crate) fn to_document_typed(
     )
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn to_document_typed_with_text_metrics(
     diagram_type: &str,
@@ -175,32 +180,51 @@ pub(crate) fn to_document_typed_with_text_metrics(
     engine_id: Option<&str>,
     text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
 ) -> Result<Document, RenderError> {
+    to_document_typed_with_text_metrics_and_measurements(
+        diagram_type,
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_simplification,
+        engine_id,
+        text_metrics_descriptor,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn to_document_typed_with_text_metrics_and_measurements(
+    diagram_type: &str,
+    diagram: &Graph,
+    geometry: &GraphGeometry,
+    routed: Option<&RoutedGraphGeometry>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
+    engine_id: Option<&str>,
+    text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
+    text_measurements: Option<&TextMeasurementCache>,
+) -> Result<Document, RenderError> {
+    let options = DocumentBuildOptions {
+        path_simplification,
+        engine_id,
+        text_metrics_descriptor,
+        text_measurements,
+    };
     match level {
         GeometryLevel::Layout => Ok(build_document(
             diagram_type,
             diagram,
             geometry,
             None,
-            path_simplification,
-            engine_id,
-            text_metrics_descriptor,
+            options,
         )),
         GeometryLevel::Routed => routed
             .ok_or_else(|| RenderError {
                 message: "routed MMDS output requested but routed geometry was not provided"
                     .to_string(),
             })
-            .map(|routed| {
-                build_document(
-                    diagram_type,
-                    diagram,
-                    geometry,
-                    Some(routed),
-                    path_simplification,
-                    engine_id,
-                    text_metrics_descriptor,
-                )
-            }),
+            .map(|routed| build_document(diagram_type, diagram, geometry, Some(routed), options)),
     }
 }
 
@@ -249,6 +273,7 @@ pub(crate) fn to_document_typed_with_routing(
         engine_id,
         None,
         None,
+        None,
     )
 }
 
@@ -263,6 +288,7 @@ pub(crate) fn to_document_typed_with_routing_and_text_metrics(
     engine_id: Option<&str>,
     text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
     text_metrics_provider: Option<&dyn TextMetricsProvider>,
+    text_measurements: Option<&TextMeasurementCache>,
 ) -> Result<Document, RenderError> {
     let routed_owned = (routed.is_none() && matches!(level, GeometryLevel::Routed)).then(|| {
         match text_metrics_provider {
@@ -282,7 +308,7 @@ pub(crate) fn to_document_typed_with_routing_and_text_metrics(
     });
     let routed = routed.or(routed_owned.as_ref());
 
-    to_document_typed_with_text_metrics(
+    to_document_typed_with_text_metrics_and_measurements(
         diagram_type,
         diagram,
         geometry,
@@ -291,6 +317,7 @@ pub(crate) fn to_document_typed_with_routing_and_text_metrics(
         path_simplification,
         engine_id,
         text_metrics_descriptor,
+        text_measurements,
     )
 }
 
@@ -308,9 +335,12 @@ fn render_document_json(
         diagram,
         geometry,
         routed,
-        path_simplification,
-        engine_id,
-        None,
+        DocumentBuildOptions {
+            path_simplification,
+            engine_id,
+            text_metrics_descriptor: None,
+            text_measurements: None,
+        },
     );
     serialize_document(&document)
 }
@@ -358,14 +388,20 @@ fn mmds_edge_label_rect(routed_edge: Option<&RoutedEdgeGeometry>, is_routed: boo
     })
 }
 
+#[derive(Clone, Copy)]
+struct DocumentBuildOptions<'a> {
+    path_simplification: PathSimplification,
+    engine_id: Option<&'a str>,
+    text_metrics_descriptor: Option<&'a TextMetricsProfileDescriptor>,
+    text_measurements: Option<&'a TextMeasurementCache>,
+}
+
 fn build_document(
     diagram_type: &str,
     diagram: &Graph,
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
-    path_simplification: PathSimplification,
-    engine_id: Option<&str>,
-    text_metrics_descriptor: Option<&TextMetricsProfileDescriptor>,
+    options: DocumentBuildOptions<'_>,
 ) -> Document {
     let level = if routed.is_some() {
         GeometryLevel::Routed
@@ -384,7 +420,7 @@ fn build_document(
             width: effective_bounds.width,
             height: effective_bounds.height,
         },
-        engine: engine_id.map(|id| id.to_string()),
+        engine: options.engine_id.map(|id| id.to_string()),
     };
 
     // Build nodes from geometry (float positions)
@@ -426,7 +462,8 @@ fn build_document(
                 if let Some(re) = routed_edge {
                     let full_path: Vec<[f64; 2]> = re.path.iter().map(|p| [p.x, p.y]).collect();
                     mmds_edge.path = Some(
-                        path_simplification
+                        options
+                            .path_simplification
                             .simplify_with_coords(&full_path, |point| (point[0], point[1])),
                     );
                     mmds_edge.label_position =
@@ -439,7 +476,8 @@ fn build_document(
                     let full_path: Vec<[f64; 2]> =
                         self_edge.path.iter().map(|p| [p.x, p.y]).collect();
                     mmds_edge.path = Some(
-                        path_simplification
+                        options
+                            .path_simplification
                             .simplify_with_coords(&full_path, |point| (point[0], point[1])),
                     );
                 }
@@ -506,13 +544,20 @@ fn build_document(
             node_style_extension(styled_nodes),
         );
     }
-    if let Some(text_metrics_descriptor) = text_metrics_descriptor {
+    if let Some(text_metrics_descriptor) = options.text_metrics_descriptor {
         push_profile(&mut profiles, CORE_PROFILE);
         push_profile(&mut profiles, TEXT_METRICS_PROFILE);
         extensions.insert(
             TEXT_METRICS_EXTENSION_NAMESPACE.to_string(),
             text_metrics_extension(text_metrics_descriptor),
         );
+        if let Some(text_measurements) = options.text_measurements {
+            push_profile(&mut profiles, TEXT_MEASUREMENTS_PROFILE);
+            extensions.insert(
+                TEXT_MEASUREMENTS_EXTENSION_NAMESPACE.to_string(),
+                text_measurements_extension(text_metrics_descriptor, text_measurements),
+            );
+        }
     }
 
     Document {
@@ -787,6 +832,58 @@ fn text_metrics_extension(descriptor: &TextMetricsProfileDescriptor) -> Map<Stri
         Value::Object(default_text_style),
     );
     extension.insert("layoutText".to_string(), Value::Object(layout_text));
+    extension
+}
+
+fn text_measurements_extension(
+    descriptor: &TextMetricsProfileDescriptor,
+    measurements: &TextMeasurementCache,
+) -> Map<String, Value> {
+    let mut profile_ref = Map::new();
+    profile_ref.insert(
+        "id".to_string(),
+        Value::String(descriptor.profile_id.clone()),
+    );
+    profile_ref.insert(
+        "source".to_string(),
+        Value::String(descriptor.source.clone()),
+    );
+    profile_ref.insert(
+        "version".to_string(),
+        Value::Number(Number::from(descriptor.version)),
+    );
+
+    let line_widths = measurements
+        .line_widths
+        .iter()
+        .map(|(text, width)| {
+            let mut entry = Map::new();
+            entry.insert("text".to_string(), Value::String(text.clone()));
+            entry.insert(
+                "width".to_string(),
+                finite_number_value(*width, "lineWidths.width"),
+            );
+            Value::Object(entry)
+        })
+        .collect();
+    let scalar_widths = measurements
+        .scalar_widths
+        .iter()
+        .map(|(ch, width)| {
+            let mut entry = Map::new();
+            entry.insert("text".to_string(), Value::String(ch.to_string()));
+            entry.insert(
+                "width".to_string(),
+                finite_number_value(*width, "scalarWidths.width"),
+            );
+            Value::Object(entry)
+        })
+        .collect();
+
+    let mut extension = Map::new();
+    extension.insert("profileRef".to_string(), Value::Object(profile_ref));
+    extension.insert("lineWidths".to_string(), Value::Array(line_widths));
+    extension.insert("scalarWidths".to_string(), Value::Array(scalar_widths));
     extension
 }
 
@@ -1218,6 +1315,7 @@ mod tests {
             None,
             None,
             Some(&provider),
+            None,
         )
         .expect("fallback routed document should serialize");
 

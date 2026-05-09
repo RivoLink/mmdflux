@@ -39,6 +39,9 @@
         "org.mmdflux.text-metrics.v1": {
           "$ref": "#/$defs/TextMetricsExtension"
         },
+        "org.mmdflux.text-measurements.v1": {
+          "$ref": "#/$defs/TextMeasurementsExtension"
+        },
         "org.mmdflux.view.v1": {
           "$ref": "#/$defs/ViewExtension"
         }
@@ -427,6 +430,85 @@
       },
       "additionalProperties": false,
       "description": "Graph-family text metrics identity and layout-time values used for deterministic MMDS replay."
+    },
+    "TextMeasurementsExtension": {
+      "type": "object",
+      "required": ["profileRef", "lineWidths", "scalarWidths"],
+      "properties": {
+        "profileRef": {
+          "$ref": "#/$defs/TextMeasurementsProfileRef"
+        },
+        "lineWidths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TextMeasurementLineWidth"
+          },
+          "description": "Measured widths returned by dynamic measure_line_width(text) calls."
+        },
+        "scalarWidths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TextMeasurementScalarWidth"
+          },
+          "description": "Measured widths returned by dynamic measure_scalar_width(ch) calls."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Provider-free replay cache for dynamic graph-family text measurement queries."
+    },
+    "TextMeasurementsProfileRef": {
+      "type": "object",
+      "required": ["id", "source", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Dynamic text metrics profile identifier this measurement cache belongs to."
+        },
+        "source": {
+          "const": "dynamic",
+          "description": "Text measurements sidecars are only valid for dynamic profile provenance."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Dynamic text metrics profile version this measurement cache belongs to."
+        }
+      },
+      "additionalProperties": false
+    },
+    "TextMeasurementLineWidth": {
+      "type": "object",
+      "required": ["text", "width"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Exact text passed to measure_line_width."
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Measured line width in pixels."
+        }
+      },
+      "additionalProperties": false
+    },
+    "TextMeasurementScalarWidth": {
+      "type": "object",
+      "required": ["text", "width"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1,
+          "description": "Exact single Unicode scalar passed to measure_scalar_width; runtime validates with Rust char semantics."
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Measured scalar width in pixels."
+        }
+      },
+      "additionalProperties": false
     },
     "TextMetricsProfile": {
       "type": "object",

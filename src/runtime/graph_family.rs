@@ -10,9 +10,9 @@ use crate::format::OutputFormat;
 use crate::graph::label_wrap::prepare_wrapped_labels_with_provider;
 use crate::graph::measure::{
     COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ResolvedTextMetrics, TextMetricsProfileConfig,
-    TextMetricsProfileDescriptor, TextMetricsProvider, resolve_text_metrics_profile,
-    text_style_matches_descriptor,
+    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, ResolvedTextMetrics, TextMeasurementCache,
+    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsProvider,
+    resolve_text_metrics_profile, text_style_matches_descriptor,
 };
 use crate::graph::{GeometryLevel, Graph};
 use crate::mmds::Document;
@@ -37,10 +37,13 @@ pub(crate) fn render_graph_family(
             diagram_id,
             diagram,
             &render_result.solve,
-            &render_result.text_metrics.descriptor,
-            &render_result.text_metrics.metrics,
-            config.geometry_level,
-            config.path_simplification,
+            MmdsSolveContext {
+                text_metrics_descriptor: &render_result.text_metrics.descriptor,
+                text_metrics: &render_result.text_metrics.metrics,
+                text_measurements: None,
+                level: config.geometry_level,
+                path_simplification: config.path_simplification,
+            },
         ),
         OutputFormat::Svg => {
             let options = config.svg_render_options();
@@ -78,10 +81,13 @@ pub(crate) fn materialize_graph_family(
         diagram_id,
         diagram,
         &render_result.solve,
-        &render_result.text_metrics.descriptor,
-        &render_result.text_metrics.metrics,
-        config.geometry_level,
-        config.path_simplification,
+        MmdsSolveContext {
+            text_metrics_descriptor: &render_result.text_metrics.descriptor,
+            text_metrics: &render_result.text_metrics.metrics,
+            text_measurements: None,
+            level: config.geometry_level,
+            path_simplification: config.path_simplification,
+        },
     )
 }
 
@@ -104,12 +110,13 @@ pub(in crate::runtime) fn render_graph_family_svg_with_provider(
 }
 
 #[cfg(feature = "unstable-text-metrics-provider")]
-pub(in crate::runtime) fn render_graph_family_mmds_with_provider(
+pub(in crate::runtime) fn render_graph_family_mmds_with_provider_and_measurements(
     diagram_id: &str,
     diagram: &mut Graph,
     config: &RenderConfig,
     text_metrics_descriptor: &TextMetricsProfileDescriptor,
     text_metrics: &dyn TextMetricsProvider,
+    measurement_cache: impl FnOnce() -> Result<TextMeasurementCache, RenderError>,
 ) -> Result<String, RenderError> {
     let solve = solve_graph_family_with_provider(
         diagram_id,
@@ -118,14 +125,18 @@ pub(in crate::runtime) fn render_graph_family_mmds_with_provider(
         config,
         text_metrics,
     )?;
-    render_mmds_from_solve_result(
+    let measurements = measurement_cache()?;
+    render_mmds_from_solve_result_with_measurements(
         diagram_id,
         diagram,
         &solve,
-        text_metrics_descriptor,
-        text_metrics,
-        config.geometry_level,
-        config.path_simplification,
+        MmdsSolveContext {
+            text_metrics_descriptor,
+            text_metrics,
+            text_measurements: Some(&measurements),
+            level: config.geometry_level,
+            path_simplification: config.path_simplification,
+        },
     )
 }
 
@@ -355,33 +366,37 @@ fn render_mmds_from_solve_result(
     diagram_type: &str,
     diagram: &Graph,
     result: &GraphSolveResult,
-    text_metrics_descriptor: &TextMetricsProfileDescriptor,
-    text_metrics: &dyn TextMetricsProvider,
-    level: GeometryLevel,
-    path_simplification: PathSimplification,
+    context: MmdsSolveContext<'_>,
 ) -> Result<String, RenderError> {
-    let document = mmds_document_from_solve_result(
-        diagram_type,
-        diagram,
-        result,
-        text_metrics_descriptor,
-        text_metrics,
-        level,
-        path_simplification,
-    )?;
+    render_mmds_from_solve_result_with_measurements(diagram_type, diagram, result, context)
+}
+
+fn render_mmds_from_solve_result_with_measurements(
+    diagram_type: &str,
+    diagram: &Graph,
+    result: &GraphSolveResult,
+    context: MmdsSolveContext<'_>,
+) -> Result<String, RenderError> {
+    let document = mmds_document_from_solve_result(diagram_type, diagram, result, context)?;
     serde_json::to_string_pretty(&document).map_err(|error| RenderError {
         message: format!("MMDS serialization error: {error}"),
     })
+}
+
+#[derive(Clone, Copy)]
+struct MmdsSolveContext<'a> {
+    text_metrics_descriptor: &'a TextMetricsProfileDescriptor,
+    text_metrics: &'a dyn TextMetricsProvider,
+    text_measurements: Option<&'a TextMeasurementCache>,
+    level: GeometryLevel,
+    path_simplification: PathSimplification,
 }
 
 fn mmds_document_from_solve_result(
     diagram_type: &str,
     diagram: &Graph,
     result: &GraphSolveResult,
-    text_metrics_descriptor: &TextMetricsProfileDescriptor,
-    text_metrics: &dyn TextMetricsProvider,
-    level: GeometryLevel,
-    path_simplification: PathSimplification,
+    context: MmdsSolveContext<'_>,
 ) -> Result<Document, RenderError> {
     let engine_id = result.engine_id.to_string();
     crate::mmds::document::to_document_typed_with_routing_and_text_metrics(
@@ -389,11 +404,12 @@ fn mmds_document_from_solve_result(
         diagram,
         &result.geometry,
         result.routed.as_ref(),
-        level,
-        path_simplification,
+        context.level,
+        context.path_simplification,
         Some(engine_id.as_str()),
-        Some(text_metrics_descriptor),
-        Some(text_metrics),
+        Some(context.text_metrics_descriptor),
+        Some(context.text_metrics),
+        context.text_measurements,
     )
 }
 
@@ -479,10 +495,13 @@ mod tests {
             "flowchart",
             &diagram,
             &result,
-            &text_metrics.descriptor,
-            &text_metrics.metrics,
-            GeometryLevel::Routed,
-            PathSimplification::default(),
+            MmdsSolveContext {
+                text_metrics_descriptor: &text_metrics.descriptor,
+                text_metrics: &text_metrics.metrics,
+                text_measurements: None,
+                level: GeometryLevel::Routed,
+                path_simplification: PathSimplification::default(),
+            },
         )
         .expect("MMDS render should succeed");
         assert!(json.contains("\"nodes\""));

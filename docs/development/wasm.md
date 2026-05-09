@@ -112,10 +112,10 @@ browser measurement APIs, and importing the browser metrics export does not
 change `render` output.
 
 `renderWithBrowserTextMetrics(input, format, configJson, metricsJson, measureText)`
-is a separate experimental export for browser-owned font measurement. It only
-supports SVG graph-family Mermaid input. Text, ASCII, MMDS output, MMDS input,
-and sequence-family diagrams are rejected instead of silently falling back to a
-static profile.
+is a separate experimental export for browser-owned font measurement. It
+supports SVG graph-family Mermaid input, dynamic graph-family MMDS output, and
+provider-bound dynamic MMDS-to-SVG replay. Text, ASCII, and sequence-family
+diagrams are rejected instead of silently falling back to a static profile.
 
 `metricsJson` is intentionally separate from `configJson`:
 
@@ -155,12 +155,14 @@ fail the render.
 
 The dynamic path does not fall back to `mmdflux-sans-v1` or
 `mmdflux-heuristic-proportional-v1` after a measurement failure. For dynamic
-MMDS output and replay, `metricsJson` carries provider identity
+MMDS output and provider-bound replay, `metricsJson` carries provider identity
 (`profileId = "mmdflux-browser-canvas-v1"`, `profileVersion = 1`, font style,
-font weight, and line height). MMDS with `metricsProfile.source = "dynamic"` is
-provider-bound: replay succeeds only when the supplied dynamic descriptor
-matches the persisted extension. Provider-free measured dimensions remain
-deferred to [#308](https://github.com/kevinswiber/mmdflux/issues/308).
+font weight, and line height). Dynamic MMDS output includes
+`org.mmdflux.text-measurements.v1`, a measured-query sidecar that lets the
+static `render` export replay graph-family dynamic MMDS to SVG provider-free
+when the sidecar is complete. Missing measured queries remain explicit replay
+errors; Text/ASCII, sequence, and relayout after changing constraints are still
+unsupported.
 
 ## Tracing and Diagnostics
 

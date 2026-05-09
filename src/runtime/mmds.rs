@@ -3,6 +3,8 @@
 //! The mmds module owns the interchange format (parse, hydrate, serialize).
 //! This module owns the render dispatch for MMDS input.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Display;
 
 use serde_json::{Map, Value};
@@ -10,16 +12,14 @@ use serde_json::{Map, Value};
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::GeometryLevel;
-#[cfg(feature = "unstable-text-metrics-provider")]
-use crate::graph::measure::TextMetricsProvider;
 use crate::graph::measure::{
     LEGACY_MMDS_TEXT_METRICS_PROFILE_ID, ResolvedTextMetrics, TextMetricsLayoutDescriptor,
-    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsStyleDescriptor,
-    resolve_text_metrics_profile,
+    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsProvider,
+    TextMetricsStyleDescriptor, resolve_text_metrics_profile,
 };
 use crate::mmds::{
-    Document, TEXT_METRICS_EXTENSION_NAMESPACE, from_document, generate_mermaid,
-    hydrate_graph_geometry_from_document_with_diagram,
+    Document, TEXT_MEASUREMENTS_EXTENSION_NAMESPACE, TEXT_METRICS_EXTENSION_NAMESPACE,
+    from_document, generate_mermaid, hydrate_graph_geometry_from_document_with_diagram,
     hydrate_routed_geometry_from_document_with_provider, parse_input, resolve_logical_diagram_id,
 };
 use crate::render::graph::{
@@ -103,9 +103,59 @@ pub(crate) fn render_document(
     }
 
     let replay_text_metrics =
-        resolve_text_metrics_for_replay(payload, requested_text_metrics_profile)?;
-    let text_metrics = &replay_text_metrics.resolved;
+        resolve_text_metrics_for_replay(payload, format, requested_text_metrics_profile)?;
+
+    match replay_text_metrics {
+        ReplayTextMetrics::Static {
+            resolved,
+            from_extension,
+        } => render_document_with_replay_provider(
+            payload,
+            format,
+            text_options,
+            svg_options,
+            svg_theme,
+            diagram_id,
+            &resolved.descriptor,
+            &resolved.metrics,
+            from_extension,
+        ),
+        ReplayTextMetrics::Dynamic {
+            descriptor,
+            measurements,
+        } => {
+            let provider = PersistedTextMeasurementsProvider::new(&descriptor, &measurements);
+            let output = render_document_with_replay_provider(
+                payload,
+                format,
+                text_options,
+                svg_options,
+                svg_theme,
+                diagram_id,
+                &descriptor,
+                &provider,
+                true,
+            )?;
+            provider.finish()?;
+            Ok(output)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_document_with_replay_provider(
+    payload: &Document,
+    format: OutputFormat,
+    text_options: &TextRenderOptions,
+    svg_options: &SvgRenderOptions,
+    svg_theme: Option<&ResolvedSvgTheme>,
+    diagram_id: &str,
+    text_metrics_descriptor: &TextMetricsProfileDescriptor,
+    text_metrics: &dyn TextMetricsProvider,
+    from_extension: bool,
+) -> Result<String, RenderError> {
     let mut diagram = from_document(payload).map_err(display_error)?;
+    let has_routed_geometry = payload.geometry_level == GeometryLevel::Routed;
 
     // MMDS replay path runs the wrap pass so the hydrated graph's edge labels
     // carry the same `wrapped_label_lines` artifact the original render would
@@ -117,16 +167,14 @@ pub(crate) fn render_document(
     // payloads fall back to the compatibility profile.
     crate::graph::label_wrap::prepare_wrapped_labels_with_provider(
         &mut diagram.edges,
-        &text_metrics.metrics,
-        text_metrics.descriptor.layout_text.edge_label_max_width,
+        text_metrics,
+        text_metrics_descriptor.layout_text.edge_label_max_width,
     );
 
     let geometry = hydrate_graph_geometry_from_document_with_diagram(payload, &diagram)
         .map_err(display_error)?;
     let routed = has_routed_geometry
-        .then(|| {
-            hydrate_routed_geometry_from_document_with_provider(payload, &text_metrics.metrics)
-        })
+        .then(|| hydrate_routed_geometry_from_document_with_provider(payload, text_metrics))
         .transpose()
         .map_err(display_error)?;
 
@@ -144,9 +192,8 @@ pub(crate) fn render_document(
             ))
         }
         OutputFormat::Svg => {
-            let replay_svg_options = replay_text_metrics
-                .from_extension
-                .then(|| svg_options_with_text_metrics(svg_options, &text_metrics.descriptor));
+            let replay_svg_options = from_extension
+                .then(|| svg_options_with_text_metrics(svg_options, text_metrics_descriptor));
             let svg_options = replay_svg_options.as_ref().unwrap_or(svg_options);
 
             Ok(match routed.as_ref() {
@@ -155,7 +202,7 @@ pub(crate) fn render_document(
                     routed,
                     svg_options,
                     svg_theme,
-                    &text_metrics.metrics,
+                    text_metrics,
                 ),
                 None => render_svg_from_geometry_with_theme_routing_and_metrics(
                     &diagram,
@@ -163,7 +210,7 @@ pub(crate) fn render_document(
                     svg_options,
                     edge_routing_from_style(svg_options.routing_style),
                     svg_theme,
-                    &text_metrics.metrics,
+                    text_metrics,
                 ),
             })
         }
@@ -196,6 +243,12 @@ fn render_document_with_dynamic_text_metrics(
         &persisted_descriptor,
         provider_descriptor,
     )?;
+    if let Some(measurements_extension) = payload
+        .extensions
+        .get(TEXT_MEASUREMENTS_EXTENSION_NAMESPACE)
+    {
+        parse_text_measurements_for_descriptor(measurements_extension, &persisted_descriptor)?;
+    }
 
     let has_routed_geometry = payload.geometry_level == GeometryLevel::Routed;
     let mut diagram = from_document(payload).map_err(display_error)?;
@@ -237,13 +290,108 @@ fn is_shared_coordinates_view(payload: &Document) -> bool {
         == Some("shared_coordinates")
 }
 
-struct ReplayTextMetrics {
-    resolved: ResolvedTextMetrics,
-    from_extension: bool,
+enum ReplayTextMetrics {
+    Static {
+        resolved: ResolvedTextMetrics,
+        from_extension: bool,
+    },
+    Dynamic {
+        descriptor: TextMetricsProfileDescriptor,
+        measurements: PersistedTextMeasurements,
+    },
+}
+
+#[derive(Debug)]
+struct PersistedTextMeasurements {
+    line_widths: HashMap<String, f64>,
+    scalar_widths: HashMap<char, f64>,
+}
+
+struct PersistedTextMeasurementsProvider<'a> {
+    descriptor: &'a TextMetricsProfileDescriptor,
+    measurements: &'a PersistedTextMeasurements,
+    first_error: RefCell<Option<RenderError>>,
+}
+
+impl<'a> PersistedTextMeasurementsProvider<'a> {
+    fn new(
+        descriptor: &'a TextMetricsProfileDescriptor,
+        measurements: &'a PersistedTextMeasurements,
+    ) -> Self {
+        Self {
+            descriptor,
+            measurements,
+            first_error: RefCell::new(None),
+        }
+    }
+
+    fn finish(&self) -> Result<(), RenderError> {
+        match self.first_error.borrow().clone() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+
+    fn record_error(&self, error: RenderError) {
+        let mut first_error = self.first_error.borrow_mut();
+        if first_error.is_none() {
+            *first_error = Some(error);
+        }
+    }
+}
+
+impl TextMetricsProvider for PersistedTextMeasurementsProvider<'_> {
+    fn measure_line_width(&self, text: &str) -> f64 {
+        match self.measurements.line_widths.get(text).copied() {
+            Some(width) => width,
+            None => {
+                self.record_error(missing_persisted_text_measurement("lineWidths", text));
+                0.0
+            }
+        }
+    }
+
+    fn measure_scalar_width(&self, ch: char) -> f64 {
+        match self.measurements.scalar_widths.get(&ch).copied() {
+            Some(width) => width,
+            None => {
+                self.record_error(missing_persisted_text_measurement(
+                    "scalarWidths",
+                    ch.encode_utf8(&mut [0_u8; 4]),
+                ));
+                0.0
+            }
+        }
+    }
+
+    fn font_size(&self) -> f64 {
+        self.descriptor.default_text_style.font_size
+    }
+
+    fn line_height(&self) -> f64 {
+        self.descriptor.default_text_style.line_height
+    }
+
+    fn node_padding_x(&self) -> f64 {
+        self.descriptor.layout_text.node_padding_x
+    }
+
+    fn node_padding_y(&self) -> f64 {
+        self.descriptor.layout_text.node_padding_y
+    }
+
+    fn label_padding_x(&self) -> f64 {
+        self.descriptor.layout_text.label_padding_x
+    }
+
+    fn label_padding_y(&self) -> f64 {
+        self.descriptor.layout_text.label_padding_y
+    }
 }
 
 fn resolve_text_metrics_for_replay(
     payload: &Document,
+    format: OutputFormat,
     requested_text_metrics_profile: Option<&str>,
 ) -> Result<ReplayTextMetrics, RenderError> {
     let Some(extension) = payload.extensions.get(TEXT_METRICS_EXTENSION_NAMESPACE) else {
@@ -255,7 +403,7 @@ fn resolve_text_metrics_for_replay(
             profile_id: Some(LEGACY_MMDS_TEXT_METRICS_PROFILE_ID),
             ..TextMetricsProfileConfig::default()
         })
-        .map(|resolved| ReplayTextMetrics {
+        .map(|resolved| ReplayTextMetrics::Static {
             resolved,
             from_extension: false,
         })
@@ -265,7 +413,22 @@ fn resolve_text_metrics_for_replay(
     let persisted_descriptor = parse_text_metrics_descriptor(extension)?;
     let profile_id = persisted_descriptor.profile_id.as_str();
     if persisted_descriptor.source == "dynamic" {
-        return Err(dynamic_text_metrics_provider_required(profile_id));
+        ensure_requested_profile_matches_replay(requested_text_metrics_profile, profile_id)?;
+        if !matches!(format, OutputFormat::Svg) {
+            return Err(dynamic_text_metrics_provider_required(profile_id));
+        }
+        let Some(measurements_extension) = payload
+            .extensions
+            .get(TEXT_MEASUREMENTS_EXTENSION_NAMESPACE)
+        else {
+            return Err(dynamic_text_metrics_provider_required(profile_id));
+        };
+        let measurements =
+            parse_text_measurements_for_descriptor(measurements_extension, &persisted_descriptor)?;
+        return Ok(ReplayTextMetrics::Dynamic {
+            descriptor: persisted_descriptor,
+            measurements,
+        });
     }
     ensure_requested_profile_matches_replay(requested_text_metrics_profile, profile_id)?;
 
@@ -282,15 +445,31 @@ fn resolve_text_metrics_for_replay(
         &resolved.descriptor,
     )?;
 
-    Ok(ReplayTextMetrics {
+    Ok(ReplayTextMetrics::Static {
         resolved,
         from_extension: true,
     })
 }
 
 fn validate_text_metrics_extension_shape(payload: &Document) -> Result<(), RenderError> {
-    if let Some(extension) = payload.extensions.get(TEXT_METRICS_EXTENSION_NAMESPACE) {
-        parse_text_metrics_descriptor(extension)?;
+    let Some(extension) = payload.extensions.get(TEXT_METRICS_EXTENSION_NAMESPACE) else {
+        if payload
+            .extensions
+            .contains_key(TEXT_MEASUREMENTS_EXTENSION_NAMESPACE)
+        {
+            return Err(invalid_text_measurements_extension(format!(
+                "requires sibling {TEXT_METRICS_EXTENSION_NAMESPACE}"
+            )));
+        }
+        return Ok(());
+    };
+
+    let descriptor = parse_text_metrics_descriptor(extension)?;
+    if let Some(measurements) = payload
+        .extensions
+        .get(TEXT_MEASUREMENTS_EXTENSION_NAMESPACE)
+    {
+        parse_text_measurements_for_descriptor(measurements, &descriptor)?;
     }
     Ok(())
 }
@@ -379,6 +558,189 @@ fn parse_text_metrics_descriptor(
             )?,
         },
     })
+}
+
+fn parse_text_measurements_for_descriptor(
+    extension: &Map<String, Value>,
+    descriptor: &TextMetricsProfileDescriptor,
+) -> Result<PersistedTextMeasurements, RenderError> {
+    if descriptor.source != "dynamic" {
+        return Err(invalid_text_measurements_extension(format!(
+            "profileRef.source \"dynamic\" does not match sibling text metrics source {:?}",
+            descriptor.source
+        )));
+    }
+
+    let profile_ref = required_measurements_object(extension, "profileRef")?;
+    let profile_id = required_measurements_string_field(profile_ref, "profileRef", "id")?;
+    ensure_text_measurements_string_ref(
+        "profileRef.id",
+        profile_id,
+        descriptor.profile_id.as_str(),
+    )?;
+    let source = required_measurements_string_field(profile_ref, "profileRef", "source")?;
+    ensure_text_measurements_string_ref("profileRef.source", source, descriptor.source.as_str())?;
+    let version = required_measurements_integer_field(profile_ref, "profileRef", "version")?;
+    if version != descriptor.version {
+        return Err(invalid_text_measurements_extension(format!(
+            "profileRef.version {version} does not match sibling text metrics profile version {}",
+            descriptor.version
+        )));
+    }
+
+    let line_widths = parse_line_width_entries(extension)?;
+    let scalar_widths = parse_scalar_width_entries(extension)?;
+
+    Ok(PersistedTextMeasurements {
+        line_widths,
+        scalar_widths,
+    })
+}
+
+fn parse_line_width_entries(
+    extension: &Map<String, Value>,
+) -> Result<HashMap<String, f64>, RenderError> {
+    let entries = required_measurements_array(extension, "lineWidths")?;
+    let mut widths = HashMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let object = entry.as_object().ok_or_else(|| {
+            invalid_text_measurements_extension(format!("lineWidths[{index}] must be an object"))
+        })?;
+        ensure_measurement_entry_fields(object, "lineWidths", index)?;
+        let text = required_measurements_string_field(object, "lineWidths", "text")?;
+        let width = required_measurements_width(object, "lineWidths", index)?;
+        if widths.insert(text.to_string(), width).is_some() {
+            return Err(invalid_text_measurements_extension(format!(
+                "duplicate lineWidths text {text:?}"
+            )));
+        }
+    }
+    Ok(widths)
+}
+
+fn parse_scalar_width_entries(
+    extension: &Map<String, Value>,
+) -> Result<HashMap<char, f64>, RenderError> {
+    let entries = required_measurements_array(extension, "scalarWidths")?;
+    let mut widths = HashMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let object = entry.as_object().ok_or_else(|| {
+            invalid_text_measurements_extension(format!("scalarWidths[{index}] must be an object"))
+        })?;
+        ensure_measurement_entry_fields(object, "scalarWidths", index)?;
+        let text = required_measurements_string_field(object, "scalarWidths", "text")?;
+        let mut chars = text.chars();
+        let Some(ch) = chars.next() else {
+            return Err(invalid_text_measurements_extension(format!(
+                "scalarWidths[{index}].text must contain exactly one Unicode scalar"
+            )));
+        };
+        if chars.next().is_some() {
+            return Err(invalid_text_measurements_extension(format!(
+                "scalarWidths[{index}].text must contain exactly one Unicode scalar"
+            )));
+        }
+        let width = required_measurements_width(object, "scalarWidths", index)?;
+        if widths.insert(ch, width).is_some() {
+            return Err(invalid_text_measurements_extension(format!(
+                "duplicate scalarWidths text {text:?}"
+            )));
+        }
+    }
+    Ok(widths)
+}
+
+fn ensure_measurement_entry_fields(
+    object: &Map<String, Value>,
+    array_name: &str,
+    index: usize,
+) -> Result<(), RenderError> {
+    for field in object.keys() {
+        if field != "text" && field != "width" {
+            return Err(invalid_text_measurements_extension(format!(
+                "{array_name}[{index}] contains unsupported field {field:?}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn required_measurements_object<'a>(
+    extension: &'a Map<String, Value>,
+    field: &str,
+) -> Result<&'a Map<String, Value>, RenderError> {
+    extension
+        .get(field)
+        .and_then(Value::as_object)
+        .ok_or_else(|| invalid_text_measurements_extension(format!("missing {field}")))
+}
+
+fn required_measurements_array<'a>(
+    extension: &'a Map<String, Value>,
+    field: &str,
+) -> Result<&'a Vec<Value>, RenderError> {
+    extension
+        .get(field)
+        .and_then(Value::as_array)
+        .ok_or_else(|| invalid_text_measurements_extension(format!("missing {field}")))
+}
+
+fn required_measurements_string_field<'a>(
+    object: &'a Map<String, Value>,
+    object_name: &str,
+    field: &str,
+) -> Result<&'a str, RenderError> {
+    object.get(field).and_then(Value::as_str).ok_or_else(|| {
+        invalid_text_measurements_extension(format!("{object_name}.{field} must be a string"))
+    })
+}
+
+fn required_measurements_integer_field(
+    object: &Map<String, Value>,
+    object_name: &str,
+    field: &str,
+) -> Result<u32, RenderError> {
+    let Some(number) = object.get(field).and_then(Value::as_number) else {
+        return Err(invalid_text_measurements_extension(format!(
+            "{object_name}.{field} must be an integer"
+        )));
+    };
+
+    number
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| {
+            invalid_text_measurements_extension(format!("{object_name}.{field} must be an integer"))
+        })
+}
+
+fn required_measurements_width(
+    object: &Map<String, Value>,
+    array_name: &str,
+    index: usize,
+) -> Result<f64, RenderError> {
+    let width = object.get("width").and_then(Value::as_f64).ok_or_else(|| {
+        invalid_text_measurements_extension(format!("{array_name}[{index}].width must be a number"))
+    })?;
+    if width < 0.0 || !width.is_finite() {
+        return Err(invalid_text_measurements_extension(format!(
+            "{array_name}[{index}].width must be finite and non-negative"
+        )));
+    }
+    Ok(width)
+}
+
+fn ensure_text_measurements_string_ref(
+    field: &str,
+    actual: &str,
+    expected: &str,
+) -> Result<(), RenderError> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(invalid_text_measurements_extension(format!(
+        "{field} {actual:?} does not match sibling text metrics profile expected {expected:?}"
+    )))
 }
 
 fn required_object<'a>(
@@ -673,6 +1035,23 @@ fn invalid_text_metrics_extension(message: impl Into<String>) -> RenderError {
     }
 }
 
+fn invalid_text_measurements_extension(message: impl Into<String>) -> RenderError {
+    RenderError {
+        message: format!(
+            "invalid {TEXT_MEASUREMENTS_EXTENSION_NAMESPACE}: {}",
+            message.into()
+        ),
+    }
+}
+
+fn missing_persisted_text_measurement(kind: &str, text: &str) -> RenderError {
+    RenderError {
+        message: format!(
+            "missing persisted dynamic text measurement in {TEXT_MEASUREMENTS_EXTENSION_NAMESPACE}.{kind} for {text:?}"
+        ),
+    }
+}
+
 fn svg_options_with_text_metrics(
     svg_options: &SvgRenderOptions,
     descriptor: &TextMetricsProfileDescriptor,
@@ -716,6 +1095,8 @@ fn strip_routed_fields(payload: &Document) -> Document {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::graph::measure::{
         COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
@@ -761,15 +1142,23 @@ mod tests {
     #[test]
     fn replay_without_text_metrics_extension_resolves_legacy_compatibility_profile() {
         let document = parse_input(LEGACY_LAYOUT_MMDS).expect("legacy MMDS should parse");
-        let replay = resolve_text_metrics_for_replay(&document, None)
+        let replay = resolve_text_metrics_for_replay(&document, OutputFormat::Svg, None)
             .expect("legacy replay metrics should resolve");
 
+        let ReplayTextMetrics::Static {
+            resolved,
+            from_extension,
+        } = replay
+        else {
+            panic!("legacy replay should resolve static metrics");
+        };
+
         assert_eq!(
-            replay.resolved.descriptor.profile_id,
+            resolved.descriptor.profile_id,
             COMPATIBILITY_TEXT_METRICS_PROFILE_ID
         );
-        assert_eq!(replay.resolved.descriptor.source, "heuristic");
-        assert!(!replay.from_extension);
+        assert_eq!(resolved.descriptor.source, "heuristic");
+        assert!(!from_extension);
     }
 
     #[test]
@@ -777,6 +1166,7 @@ mod tests {
         let document = parse_input(LEGACY_LAYOUT_MMDS).expect("legacy MMDS should parse");
         let err = match resolve_text_metrics_for_replay(
             &document,
+            OutputFormat::Svg,
             Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID),
         ) {
             Ok(_) => panic!("legacy replay should reject recorded profile request"),
@@ -790,5 +1180,176 @@ mod tests {
             )),
             "{err}"
         );
+    }
+
+    fn dynamic_descriptor() -> TextMetricsProfileDescriptor {
+        TextMetricsProfileDescriptor {
+            profile_id: "browser-test-v1".to_string(),
+            source: "dynamic".to_string(),
+            version: 1,
+            default_text_style: TextMetricsStyleDescriptor {
+                font_family: "Inter".to_string(),
+                font_size: 16.0,
+                font_style: "normal".to_string(),
+                font_weight: "400".to_string(),
+                line_height: 24.0,
+            },
+            layout_text: TextMetricsLayoutDescriptor {
+                node_padding_x: 15.0,
+                node_padding_y: 15.0,
+                label_padding_x: 4.0,
+                label_padding_y: 2.0,
+                edge_label_max_width: Some(200.0),
+            },
+        }
+    }
+
+    fn text_measurements_extension() -> Map<String, Value> {
+        json!({
+            "profileRef": {
+                "id": "browser-test-v1",
+                "source": "dynamic",
+                "version": 1
+            },
+            "lineWidths": [
+                { "text": "Alpha", "width": 42.31415926535897 },
+                { "text": "é", "width": 12.5 }
+            ],
+            "scalarWidths": [
+                { "text": "A", "width": 10.671875 },
+                { "text": " ", "width": 4.4453125 },
+                { "text": "é", "width": 12.5 }
+            ]
+        })
+        .as_object()
+        .unwrap()
+        .clone()
+    }
+
+    #[test]
+    fn text_measurements_extension_profile_ref_must_match_text_metrics_profile() {
+        let descriptor = dynamic_descriptor();
+        let mut extension = text_measurements_extension();
+        extension
+            .get_mut("profileRef")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("id".to_string(), json!("other-provider-v1"));
+
+        let err = parse_text_measurements_for_descriptor(&extension, &descriptor)
+            .expect_err("profileRef mismatch should fail");
+
+        assert!(err.message.contains("org.mmdflux.text-measurements.v1"));
+        assert!(err.message.contains("profileRef.id"), "{err}");
+        assert!(err.message.contains("browser-test-v1"), "{err}");
+    }
+
+    #[test]
+    fn text_measurements_scalar_width_text_must_be_one_unicode_scalar() {
+        for text in ["", "AB", "e\u{0301}"] {
+            let descriptor = dynamic_descriptor();
+            let mut extension = text_measurements_extension();
+            extension
+                .get_mut("scalarWidths")
+                .unwrap()
+                .as_array_mut()
+                .unwrap()[0]["text"] = json!(text);
+
+            let err = parse_text_measurements_for_descriptor(&extension, &descriptor)
+                .expect_err("invalid scalar text should fail");
+
+            assert!(err.message.contains("scalarWidths"), "{err}");
+            assert!(err.message.contains("one Unicode scalar"), "{err}");
+        }
+    }
+
+    #[test]
+    fn text_measurements_extension_rejects_duplicate_queries() {
+        for array_name in ["lineWidths", "scalarWidths"] {
+            let descriptor = dynamic_descriptor();
+            let mut extension = text_measurements_extension();
+            let entries = extension
+                .get_mut(array_name)
+                .unwrap()
+                .as_array_mut()
+                .unwrap();
+            entries.push(entries[0].clone());
+
+            let err = parse_text_measurements_for_descriptor(&extension, &descriptor)
+                .expect_err("duplicate measurement queries should fail");
+
+            assert!(err.message.contains(array_name), "{err}");
+            assert!(err.message.contains("duplicate"), "{err}");
+        }
+    }
+
+    #[test]
+    fn text_measurements_extension_rejects_static_text_metrics_descriptor() {
+        let mut descriptor = dynamic_descriptor();
+        descriptor.source = "recorded".to_string();
+        descriptor.profile_id = RECORDED_SANS_TEXT_METRICS_PROFILE_ID.to_string();
+        let extension = text_measurements_extension();
+
+        let err = parse_text_measurements_for_descriptor(&extension, &descriptor)
+            .expect_err("measurement sidecar should be dynamic-only");
+
+        assert!(err.message.contains("org.mmdflux.text-measurements.v1"));
+        assert!(err.message.contains("profileRef.source"));
+        assert!(err.message.contains("recorded"));
+    }
+
+    #[test]
+    fn persisted_measurement_widths_round_trip_subpixel_values_exactly() {
+        let value = 42.31415926535897_f64;
+        let json = serde_json::to_string(&json!({ "width": value })).unwrap();
+        let parsed: Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["width"].as_f64().unwrap().to_bits(), value.to_bits());
+    }
+
+    #[test]
+    fn persisted_measurement_provider_does_not_normalize_query_text() {
+        let descriptor = dynamic_descriptor();
+        let extension = text_measurements_extension();
+        let measurements = parse_text_measurements_for_descriptor(&extension, &descriptor).unwrap();
+        let provider = PersistedTextMeasurementsProvider::new(&descriptor, &measurements);
+
+        assert_eq!(provider.measure_line_width("é"), 12.5);
+        assert_eq!(provider.measure_line_width("e\u{0301}"), 0.0);
+
+        let err = provider
+            .finish()
+            .expect_err("decomposed form should be a distinct missing query");
+        assert!(
+            err.message
+                .contains("missing persisted dynamic text measurement")
+        );
+        assert!(err.message.contains("e\\u{301}") || err.message.contains("e\u{301}"));
+    }
+
+    #[test]
+    fn persisted_measurement_provider_rejects_missing_query() {
+        let descriptor = dynamic_descriptor();
+        let mut extension = text_measurements_extension();
+        extension
+            .get_mut("lineWidths")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .retain(|entry| entry["text"] != "Alpha");
+        let measurements = parse_text_measurements_for_descriptor(&extension, &descriptor).unwrap();
+        let provider = PersistedTextMeasurementsProvider::new(&descriptor, &measurements);
+
+        assert_eq!(provider.measure_line_width("Alpha"), 0.0);
+        let err = provider
+            .finish()
+            .expect_err("missing persisted line width should fail");
+
+        assert!(
+            err.message
+                .contains("missing persisted dynamic text measurement")
+        );
+        assert!(err.message.contains("Alpha"), "{err}");
     }
 }

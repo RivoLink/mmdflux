@@ -221,6 +221,35 @@ fn dynamic_mmds_value_with_text_metrics_extension() -> Value {
     value
 }
 
+fn text_measurements_extension() -> Value {
+    json!({
+        "profileRef": {
+            "id": "browser-test-v1",
+            "source": "dynamic",
+            "version": 1
+        },
+        "lineWidths": [
+            { "text": "Alpha", "width": 42.31415926535897 },
+            { "text": "edge label", "width": 72.5 }
+        ],
+        "scalarWidths": [
+            { "text": "A", "width": 10.671875 },
+            { "text": " ", "width": 4.4453125 },
+            { "text": "🦀", "width": 16.25 }
+        ]
+    })
+}
+
+fn dynamic_mmds_value_with_text_measurements_extension() -> Value {
+    let mut value = dynamic_mmds_value_with_text_metrics_extension();
+    value["profiles"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("mmdflux-text-measurements-v1"));
+    value["extensions"]["org.mmdflux.text-measurements.v1"] = text_measurements_extension();
+    value
+}
+
 fn set_text_metrics_extension_field(value: &mut Value, path: &[&str], replacement: Value) {
     let mut cursor = &mut value["extensions"]["org.mmdflux.text-metrics.v1"];
     for segment in &path[..path.len() - 1] {
@@ -814,6 +843,22 @@ fn provider_free_mmds_pass_through_validates_dynamic_text_metrics_shape() {
         .expect_err("MMDS pass-through should validate text metrics extension shape");
 
     assert!(err.message.contains("layoutText"), "{err}");
+}
+
+#[test]
+fn provider_free_mmds_pass_through_rejects_measurements_without_text_metrics_extension() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("org.mmdflux.text-metrics.v1");
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Mmds, RenderConfig::default())
+        .expect_err("measurements sidecar without text metrics should fail");
+
+    assert!(err.message.contains("org.mmdflux.text-measurements.v1"));
+    assert!(err.message.contains("org.mmdflux.text-metrics.v1"));
 }
 
 #[test]
@@ -1690,8 +1735,108 @@ fn shared_mmds_profile_vocabulary_is_exported_from_contract_module() {
             "mmdflux-text-v1",
             "mmdflux-node-style-v1",
             "mmdflux-text-metrics-v1",
+            "mmdflux-text-measurements-v1",
         ]
     );
+}
+
+#[test]
+fn schema_accepts_dynamic_text_measurements_extension() {
+    assert_schema_valid(dynamic_mmds_value_with_text_measurements_extension());
+}
+
+#[test]
+fn schema_accepts_empty_text_measurement_query_arrays() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["lineWidths"] = json!([]);
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["scalarWidths"] = json!([]);
+
+    assert_schema_valid(value);
+}
+
+#[test]
+fn schema_rejects_text_measurements_missing_profile_ref() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]
+        .as_object_mut()
+        .unwrap()
+        .remove("profileRef");
+
+    assert_schema_invalid(value);
+}
+
+#[test]
+fn schema_rejects_text_measurements_static_profile_ref_source() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["profileRef"]["source"] =
+        json!("recorded");
+
+    assert_schema_invalid(value);
+}
+
+#[test]
+fn schema_rejects_text_measurements_missing_query_arrays() {
+    for field in ["lineWidths", "scalarWidths"] {
+        let mut value = dynamic_mmds_value_with_text_measurements_extension();
+        value["extensions"]["org.mmdflux.text-measurements.v1"]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+
+        assert_schema_invalid(value);
+    }
+}
+
+#[test]
+fn schema_rejects_text_measurements_invalid_width_values() {
+    for width in [json!(-0.01), json!("Infinity"), json!("NaN"), Value::Null] {
+        let mut value = dynamic_mmds_value_with_text_measurements_extension();
+        value["extensions"]["org.mmdflux.text-measurements.v1"]["lineWidths"][0]["width"] = width;
+
+        assert_schema_invalid(value);
+    }
+}
+
+#[test]
+fn schema_rejects_serde_json_non_finite_width_encoding() {
+    for width in [
+        serde_json::to_value(f64::INFINITY).unwrap(),
+        serde_json::to_value(f64::NEG_INFINITY).unwrap(),
+        serde_json::to_value(f64::NAN).unwrap(),
+    ] {
+        assert_eq!(width, Value::Null);
+
+        let mut value = dynamic_mmds_value_with_text_measurements_extension();
+        value["extensions"]["org.mmdflux.text-measurements.v1"]["lineWidths"][0]["width"] = width;
+
+        assert_schema_invalid(value);
+    }
+}
+
+#[test]
+fn schema_rejects_text_measurements_unknown_properties() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["extra"] = json!(true);
+
+    assert_schema_invalid(value);
+}
+
+#[test]
+fn schema_rejects_text_measurements_scalar_with_multiple_scalars() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["scalarWidths"][0]["text"] =
+        json!("AB");
+
+    assert_schema_invalid(value);
+}
+
+#[test]
+fn schema_accepts_text_measurements_non_bmp_scalar_prefilter() {
+    let mut value = dynamic_mmds_value_with_text_measurements_extension();
+    value["extensions"]["org.mmdflux.text-measurements.v1"]["scalarWidths"] =
+        json!([{ "text": "🦀", "width": 16.25 }]);
+
+    assert_schema_valid(value);
 }
 
 #[test]
@@ -1799,7 +1944,10 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     );
     assert!(docs.contains("source = \"dynamic\""));
     assert!(docs.contains("provider-bound"));
-    assert!(docs.contains("#308"));
+    assert!(docs.contains("org.mmdflux.text-measurements.v1"));
+    assert!(docs.contains("public `mmdflux::render_diagram` accepts graph-family dynamic MMDS"));
+    assert!(docs.contains("Missing measured queries fail"));
+    assert!(docs.contains("Measured sidecars increase MMDS document size"));
     assert!(docs.contains("Sequence-family full text-metrics parity remains deferred"));
     assert!(docs.contains("line-height"));
 
@@ -1880,10 +2028,12 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
     assert!(wasm_docs.contains("FontFaceSet"));
     assert!(wasm_docs.contains("does not fall back"));
     assert!(wasm_docs.contains("supports SVG graph-family Mermaid input"));
-    assert!(wasm_docs.contains("MMDS output and replay"));
+    assert!(wasm_docs.contains("MMDS output and provider-bound replay"));
     assert!(wasm_docs.contains("mmdflux-browser-canvas-v1"));
     assert!(wasm_docs.contains("provider-bound"));
-    assert!(wasm_docs.contains("#308"));
+    assert!(wasm_docs.contains("org.mmdflux.text-measurements.v1"));
+    assert!(wasm_docs.contains("static `render` export replay"));
+    assert!(wasm_docs.contains("Missing measured queries"));
     assert!(!wasm_docs.contains("currently accepts only"));
 
     let readme = std::fs::read_to_string("README.md").unwrap();
