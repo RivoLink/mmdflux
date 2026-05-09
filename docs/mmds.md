@@ -416,7 +416,7 @@ Rules:
   compatibility metrics for wrap preparation.
 - `metricsProfile.source` is a provenance category: `heuristic` for the
   compatibility estimates, `recorded` for generated static tables, and
-  reserved `dynamic` for future live measurement backends.
+  `dynamic` for live provider-bound measurement.
 - The recorded profile source font is provenance, not an exact Mermaid or
   browser font claim.
 - SVG font-family and metrics profile are intentionally decoupled for static
@@ -426,8 +426,14 @@ Rules:
   `fontFamily` and `fontSize` are accepted only when they normalize to the
   selected static profile descriptor. A different custom style requires the
   browser dynamic metrics export.
-- The experimental browser dynamic metrics export is SVG-only and does not emit
-  or replay MMDS; provider-bound dynamic MMDS replay remains future work.
+- Dynamic MMDS (`source = "dynamic"`) is provider-bound. Measurement-dependent
+  replay to SVG requires a matching dynamic provider descriptor; provider-free
+  SVG/Text/ASCII replay rejects it instead of falling back to static metrics.
+- Provider-free MMDS-to-MMDS pass-through may preserve a dynamic text-metrics
+  extension when no text measurement is performed, but still validates the
+  extension shape.
+- Provider-free measured dimensions are deferred to
+  [#308](https://github.com/kevinswiber/mmdflux/issues/308).
 - Replay uses `metricsProfile.id` plus `layoutText` node padding and edge-label wrap width when the extension is present.
 - Replay is document-owned: a caller-supplied `fontMetricsProfile` must match the replay profile, and the replay profile plus persisted `layoutText` values override SVG font and node-padding config.
 - Older MMDS documents without the extension replay with the `mmdflux-heuristic-proportional-v1` compatibility defaults.
@@ -463,8 +469,9 @@ parity.
 
 Browser dynamic metrics keep font identity in `metricsJson`, not `configJson`.
 `renderWithBrowserTextMetrics` rejects `configJson.fontFamily`,
-`configJson.fontSize`, and `configJson.themeVariables`; provider-bound dynamic
-MMDS replay remains future work.
+`configJson.fontSize`, and `configJson.themeVariables`. Dynamic MMDS output and
+replay use the provider identity in `metricsJson`; the browser adapter emits
+`profileId = "mmdflux-browser-canvas-v1"`.
 
 ### Node
 

@@ -6,6 +6,8 @@ export interface BrowserTextMetricsRequest {
   fontWeight?: string;
 }
 
+export const BROWSER_TEXT_METRICS_PROFILE_ID = "mmdflux-browser-canvas-v1";
+
 export interface PreparedBrowserTextMetrics {
   metricsJson: string;
   measureText: (text: string, cssFont: string) => number;
@@ -188,6 +190,10 @@ function preparedMetrics(
       fontFamily: normalizeFontFamily(input.fontFamily),
       fontSizePx: input.fontSizePx,
       lineHeightPx: input.lineHeightPx,
+      profileId: BROWSER_TEXT_METRICS_PROFILE_ID,
+      profileVersion: 1,
+      fontStyle: fontStyleFor(input),
+      fontWeight: fontWeightFor(input),
     }),
     measureText: (text: string, measuredCssFont: string): number => {
       const key = `${measuredCssFont}\0${text}`;
@@ -226,9 +232,15 @@ export function buildCssFont(input: BrowserTextMetricsRequest): string {
   validatePositiveFinite("fontSizePx", input.fontSizePx);
   validatePositiveFinite("lineHeightPx", input.lineHeightPx);
 
-  const fontStyle = input.fontStyle?.trim() || "normal";
-  const fontWeight = input.fontWeight?.trim() || "400";
-  return `${fontStyle} ${fontWeight} ${input.fontSizePx}px ${fontFamily}`;
+  return `${fontStyleFor(input)} ${fontWeightFor(input)} ${input.fontSizePx}px ${fontFamily}`;
+}
+
+function fontStyleFor(input: BrowserTextMetricsRequest): string {
+  return input.fontStyle?.trim() || "normal";
+}
+
+function fontWeightFor(input: BrowserTextMetricsRequest): string {
+  return input.fontWeight?.trim() || "400";
 }
 
 function normalizeFontFamily(fontFamily: string): string {

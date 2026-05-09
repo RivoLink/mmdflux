@@ -182,6 +182,55 @@ fn compatibility_text_metrics_extension() -> Value {
     })
 }
 
+fn recorded_routed_mmds_value() -> Value {
+    serde_json::from_str(&render_json_with_level(
+        "graph TD\nA[Alpha] -->|a labeled edge| B[Beta]",
+        GeometryLevel::Routed,
+    ))
+    .unwrap()
+}
+
+fn compat_mmds_value_with_text_metrics_extension() -> Value {
+    let mut value: Value = serde_json::from_str(&styled_mmds_layout_with_label("mmmm")).unwrap();
+    value["profiles"]
+        .as_array_mut()
+        .unwrap()
+        .push(Value::String("mmdflux-text-metrics-v1".to_string()));
+    value["extensions"]["org.mmdflux.text-metrics.v1"] = compatibility_text_metrics_extension();
+    value
+}
+
+fn dynamic_mmds_value_with_text_metrics_extension() -> Value {
+    let mut value = recorded_routed_mmds_value();
+    set_text_metrics_extension_field(
+        &mut value,
+        &["metricsProfile", "id"],
+        json!("browser-test-v1"),
+    );
+    set_text_metrics_extension_field(&mut value, &["metricsProfile", "source"], json!("dynamic"));
+    set_text_metrics_extension_field(
+        &mut value,
+        &["defaultTextStyle", "font-family"],
+        json!("Inter"),
+    );
+    set_text_metrics_extension_field(
+        &mut value,
+        &["defaultTextStyle", "line-height"],
+        json!(24.0),
+    );
+    value
+}
+
+fn set_text_metrics_extension_field(value: &mut Value, path: &[&str], replacement: Value) {
+    let mut cursor = &mut value["extensions"]["org.mmdflux.text-metrics.v1"];
+    for segment in &path[..path.len() - 1] {
+        cursor = cursor
+            .get_mut(*segment)
+            .unwrap_or_else(|| panic!("missing text metrics extension path segment {segment}"));
+    }
+    cursor[path[path.len() - 1]] = replacement;
+}
+
 fn styled_mmds_layout_with_label(label: &str) -> String {
     let mut value: Value = serde_json::from_str(STYLED_MMDS_LAYOUT).unwrap();
     value["edges"][0]["label"] = Value::String(label.to_string());
@@ -603,6 +652,168 @@ fn mmdflux_sans_replay_rejects_mismatched_caller_profile() {
         )),
         "{err}"
     );
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_recorded_source_profile_mismatch() {
+    let mut value = recorded_routed_mmds_value();
+    set_text_metrics_extension_field(
+        &mut value,
+        &["metricsProfile", "source"],
+        json!("heuristic"),
+    );
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+        .expect_err("recorded source/profile mismatch should fail");
+
+    assert!(err.message.contains("metricsProfile.source"), "{err}");
+    assert!(
+        err.message.contains(RECORDED_SANS_TEXT_METRICS_PROFILE_ID),
+        "{err}"
+    );
+    assert!(err.message.contains("recorded"), "{err}");
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_heuristic_source_profile_mismatch() {
+    let mut value = compat_mmds_value_with_text_metrics_extension();
+    set_text_metrics_extension_field(&mut value, &["metricsProfile", "source"], json!("recorded"));
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+        .expect_err("heuristic source/profile mismatch should fail");
+
+    assert!(err.message.contains("metricsProfile.source"), "{err}");
+    assert!(
+        err.message.contains(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+        "{err}"
+    );
+    assert!(err.message.contains("heuristic"), "{err}");
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_profile_id_swap_via_source_mismatch() {
+    let mut value = recorded_routed_mmds_value();
+    set_text_metrics_extension_field(
+        &mut value,
+        &["metricsProfile", "id"],
+        json!(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+    );
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+        .expect_err("known-but-wrong profile id should fail descriptor validation");
+
+    // The swapped id resolves the compatibility profile, then the persisted
+    // recorded source proves the descriptor is not internally consistent.
+    assert!(err.message.contains("metricsProfile.source"), "{err}");
+    assert!(
+        err.message.contains(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+        "{err}"
+    );
+    assert!(err.message.contains("heuristic"), "{err}");
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_profile_version_mismatch() {
+    let mut value = recorded_routed_mmds_value();
+    set_text_metrics_extension_field(&mut value, &["metricsProfile", "version"], json!(2));
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+        .expect_err("profile version mismatch should fail");
+
+    assert!(err.message.contains("metricsProfile.version"), "{err}");
+    assert!(err.message.contains("1"), "{err}");
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_default_text_style_mismatch() {
+    for (field, replacement) in [
+        ("font-family", json!("Inter, sans-serif")),
+        ("font-size", json!(18.0)),
+        ("font-style", json!("italic")),
+        ("font-weight", json!("700")),
+        ("line-height", json!(30.0)),
+    ] {
+        let mut value = recorded_routed_mmds_value();
+        set_text_metrics_extension_field(&mut value, &["defaultTextStyle", field], replacement);
+        let input = serde_json::to_string(&value).unwrap();
+
+        let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+            .expect_err("default text style mismatch should fail");
+
+        assert!(
+            err.message.contains(&format!("defaultTextStyle.{field}")),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn text_metrics_static_replay_rejects_layout_text_mismatch() {
+    for (field, replacement) in [
+        ("label-padding-x", json!(8.0)),
+        ("label-padding-y", json!(4.0)),
+    ] {
+        let mut value = recorded_routed_mmds_value();
+        set_text_metrics_extension_field(&mut value, &["layoutText", field], replacement);
+        let input = serde_json::to_string(&value).unwrap();
+
+        let err = render_mmds_input_result(&input, OutputFormat::Svg, RenderConfig::default())
+            .expect_err("layout text mismatch should fail");
+
+        assert!(
+            err.message.contains(&format!("layoutText.{field}")),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn dynamic_mmds_replay_without_provider_fails_before_remeasurement() {
+    let input = serde_json::to_string(&dynamic_mmds_value_with_text_metrics_extension()).unwrap();
+
+    for format in [OutputFormat::Svg, OutputFormat::Text, OutputFormat::Ascii] {
+        let err = render_mmds_input_result(&input, format, RenderConfig::default())
+            .expect_err("dynamic MMDS replay should require a provider");
+
+        assert!(err.message.contains("dynamic text metrics"), "{err}");
+        assert!(err.message.contains("provider"), "{err}");
+        assert!(err.message.contains("browser-test-v1"), "{err}");
+        assert!(
+            !err.message.contains("unsupported text metrics profile"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn provider_free_mmds_pass_through_preserves_dynamic_text_metrics_extension() {
+    let input = serde_json::to_string(&dynamic_mmds_value_with_text_metrics_extension()).unwrap();
+
+    let output = render_mmds_input(&input, OutputFormat::Mmds, RenderConfig::default());
+    let value: Value = serde_json::from_str(&output).unwrap();
+    let extension = &value["extensions"]["org.mmdflux.text-metrics.v1"];
+
+    assert_eq!(extension["metricsProfile"]["id"], "browser-test-v1");
+    assert_eq!(extension["metricsProfile"]["source"], "dynamic");
+}
+
+#[test]
+fn provider_free_mmds_pass_through_validates_dynamic_text_metrics_shape() {
+    let mut value = dynamic_mmds_value_with_text_metrics_extension();
+    value["extensions"]["org.mmdflux.text-metrics.v1"]
+        .as_object_mut()
+        .unwrap()
+        .remove("layoutText");
+    let input = serde_json::to_string(&value).unwrap();
+
+    let err = render_mmds_input_result(&input, OutputFormat::Mmds, RenderConfig::default())
+        .expect_err("MMDS pass-through should validate text metrics extension shape");
+
+    assert!(err.message.contains("layoutText"), "{err}");
 }
 
 #[test]
@@ -1586,9 +1797,9 @@ fn docs_and_schema_reference_text_metrics_extension_contract() {
     assert!(
         docs.contains("provider-free static profiles do not accept arbitrary custom font style")
     );
-    assert!(docs.contains("experimental browser dynamic metrics export is SVG-only"));
-    assert!(docs.contains("does not emit"));
-    assert!(docs.contains("replay MMDS"));
+    assert!(docs.contains("source = \"dynamic\""));
+    assert!(docs.contains("provider-bound"));
+    assert!(docs.contains("#308"));
     assert!(docs.contains("Sequence-family full text-metrics parity remains deferred"));
     assert!(docs.contains("line-height"));
 
@@ -1618,7 +1829,8 @@ fn docs_describe_graph_font_config_contract() {
         mmds_docs
             .contains("provider-free static profiles do not accept arbitrary custom font style")
     );
-    assert!(mmds_docs.contains("dynamic MMDS replay remains future work"));
+    assert!(mmds_docs.contains("Dynamic MMDS output and"));
+    assert!(mmds_docs.contains("mmdflux-browser-canvas-v1"));
     assert!(mmds_docs.contains("Migrating from Mermaid init"));
 }
 
@@ -1668,8 +1880,10 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
     assert!(wasm_docs.contains("FontFaceSet"));
     assert!(wasm_docs.contains("does not fall back"));
     assert!(wasm_docs.contains("supports SVG graph-family Mermaid input"));
-    assert!(wasm_docs.contains("not emit"));
-    assert!(wasm_docs.contains("replay MMDS"));
+    assert!(wasm_docs.contains("MMDS output and replay"));
+    assert!(wasm_docs.contains("mmdflux-browser-canvas-v1"));
+    assert!(wasm_docs.contains("provider-bound"));
+    assert!(wasm_docs.contains("#308"));
     assert!(!wasm_docs.contains("currently accepts only"));
 
     let readme = std::fs::read_to_string("README.md").unwrap();

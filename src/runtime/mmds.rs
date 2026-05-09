@@ -10,10 +10,12 @@ use serde_json::{Map, Value};
 use crate::errors::RenderError;
 use crate::format::OutputFormat;
 use crate::graph::GeometryLevel;
+#[cfg(feature = "unstable-text-metrics-provider")]
+use crate::graph::measure::TextMetricsProvider;
 use crate::graph::measure::{
-    DEFAULT_EDGE_LABEL_MAX_WIDTH, DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-    DEFAULT_PROPORTIONAL_NODE_PADDING_Y, LEGACY_MMDS_TEXT_METRICS_PROFILE_ID, ResolvedTextMetrics,
-    TextMetricsProfileConfig, TextMetricsProfileDescriptor, resolve_text_metrics_profile,
+    LEGACY_MMDS_TEXT_METRICS_PROFILE_ID, ResolvedTextMetrics, TextMetricsLayoutDescriptor,
+    TextMetricsProfileConfig, TextMetricsProfileDescriptor, TextMetricsStyleDescriptor,
+    resolve_text_metrics_profile,
 };
 use crate::mmds::{
     Document, TEXT_METRICS_EXTENSION_NAMESPACE, from_document, generate_mermaid,
@@ -51,6 +53,27 @@ pub(crate) fn render_input(
     )
 }
 
+#[cfg(feature = "unstable-text-metrics-provider")]
+pub(in crate::runtime) fn render_input_with_dynamic_text_metrics(
+    input: &str,
+    format: OutputFormat,
+    svg_options: &SvgRenderOptions,
+    svg_theme: Option<&ResolvedSvgTheme>,
+    provider_descriptor: &TextMetricsProfileDescriptor,
+    provider: &dyn TextMetricsProvider,
+) -> Result<String, RenderError> {
+    let payload =
+        parse_input(input).map_err(|error| prefixed_display_error("parse error", error))?;
+    render_document_with_dynamic_text_metrics(
+        &payload,
+        format,
+        svg_options,
+        svg_theme,
+        provider_descriptor,
+        provider,
+    )
+}
+
 /// Render a parsed MMDS document through the MMDS replay path.
 pub(crate) fn render_document(
     payload: &Document,
@@ -65,6 +88,7 @@ pub(crate) fn render_document(
     let has_routed_geometry = payload.geometry_level == GeometryLevel::Routed;
 
     if matches!(format, OutputFormat::Mmds) {
+        validate_text_metrics_extension_shape(payload)?;
         let output = if has_routed_geometry && geometry_level == GeometryLevel::Layout {
             strip_routed_fields(payload)
         } else {
@@ -149,6 +173,61 @@ pub(crate) fn render_document(
     }
 }
 
+#[cfg(feature = "unstable-text-metrics-provider")]
+fn render_document_with_dynamic_text_metrics(
+    payload: &Document,
+    format: OutputFormat,
+    svg_options: &SvgRenderOptions,
+    svg_theme: Option<&ResolvedSvgTheme>,
+    provider_descriptor: &TextMetricsProfileDescriptor,
+    provider: &dyn TextMetricsProvider,
+) -> Result<String, RenderError> {
+    if !matches!(format, OutputFormat::Svg) {
+        return Err(RenderError {
+            message: format!(
+                "dynamic text metrics MMDS replay only supports SVG output (requested {format})"
+            ),
+        });
+    }
+
+    let _diagram_id = resolve_logical_diagram_id(payload)?;
+    let persisted_descriptor = dynamic_text_metrics_descriptor_for_replay(payload)?;
+    ensure_persisted_descriptor_matches_dynamic_provider(
+        &persisted_descriptor,
+        provider_descriptor,
+    )?;
+
+    let has_routed_geometry = payload.geometry_level == GeometryLevel::Routed;
+    let mut diagram = from_document(payload).map_err(display_error)?;
+    crate::graph::label_wrap::prepare_wrapped_labels_with_provider(
+        &mut diagram.edges,
+        provider,
+        provider_descriptor.layout_text.edge_label_max_width,
+    );
+
+    let geometry = hydrate_graph_geometry_from_document_with_diagram(payload, &diagram)
+        .map_err(display_error)?;
+    let routed = has_routed_geometry
+        .then(|| hydrate_routed_geometry_from_document_with_provider(payload, provider))
+        .transpose()
+        .map_err(display_error)?;
+    let options = svg_options_with_text_metrics(svg_options, provider_descriptor);
+
+    Ok(match routed.as_ref() {
+        Some(routed) => render_svg_from_routed_geometry_with_theme_and_metrics(
+            &diagram, routed, &options, svg_theme, provider,
+        ),
+        None => render_svg_from_geometry_with_theme_routing_and_metrics(
+            &diagram,
+            &geometry,
+            &options,
+            edge_routing_from_style(options.routing_style),
+            svg_theme,
+            provider,
+        ),
+    })
+}
+
 fn is_shared_coordinates_view(payload: &Document) -> bool {
     payload
         .extensions
@@ -183,37 +262,122 @@ fn resolve_text_metrics_for_replay(
         .map_err(display_error);
     };
 
+    let persisted_descriptor = parse_text_metrics_descriptor(extension)?;
+    let profile_id = persisted_descriptor.profile_id.as_str();
+    if persisted_descriptor.source == "dynamic" {
+        return Err(dynamic_text_metrics_provider_required(profile_id));
+    }
+    ensure_requested_profile_matches_replay(requested_text_metrics_profile, profile_id)?;
+
+    let layout_text = &persisted_descriptor.layout_text;
+    let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig {
+        profile_id: Some(profile_id),
+        node_padding_x: layout_text.node_padding_x,
+        node_padding_y: layout_text.node_padding_y,
+        edge_label_max_width: layout_text.edge_label_max_width,
+    })
+    .map_err(display_error)?;
+    ensure_persisted_descriptor_matches_static_profile(
+        &persisted_descriptor,
+        &resolved.descriptor,
+    )?;
+
+    Ok(ReplayTextMetrics {
+        resolved,
+        from_extension: true,
+    })
+}
+
+fn validate_text_metrics_extension_shape(payload: &Document) -> Result<(), RenderError> {
+    if let Some(extension) = payload.extensions.get(TEXT_METRICS_EXTENSION_NAMESPACE) {
+        parse_text_metrics_descriptor(extension)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "unstable-text-metrics-provider")]
+fn dynamic_text_metrics_descriptor_for_replay(
+    payload: &Document,
+) -> Result<TextMetricsProfileDescriptor, RenderError> {
+    let extension = payload
+        .extensions
+        .get(TEXT_METRICS_EXTENSION_NAMESPACE)
+        .ok_or_else(|| invalid_text_metrics_extension("missing dynamic text metrics extension"))?;
+    let descriptor = parse_text_metrics_descriptor(extension)?;
+    if descriptor.source != "dynamic" {
+        return Err(invalid_text_metrics_extension(format!(
+            "metricsProfile.source {:?} is not dynamic",
+            descriptor.source
+        )));
+    }
+    Ok(descriptor)
+}
+
+fn dynamic_text_metrics_provider_required(profile_id: &str) -> RenderError {
+    RenderError {
+        message: format!(
+            "dynamic text metrics profile '{profile_id}' requires a matching provider for MMDS replay"
+        ),
+    }
+}
+
+fn parse_text_metrics_descriptor(
+    extension: &Map<String, Value>,
+) -> Result<TextMetricsProfileDescriptor, RenderError> {
     let metrics_profile = required_object(extension, "metricsProfile")?;
     let profile_id = metrics_profile
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| invalid_text_metrics_extension("missing metricsProfile.id"))?;
-    required_string_field(metrics_profile, "metricsProfile", "source")?;
-    required_integer_field(metrics_profile, "metricsProfile", "version")?;
-    validate_default_text_style(required_object(extension, "defaultTextStyle")?)?;
+    let source = required_string_field(metrics_profile, "metricsProfile", "source")?;
+    let version = required_integer_field(metrics_profile, "metricsProfile", "version")?;
+
+    let default_text_style = required_object(extension, "defaultTextStyle")?;
+    validate_default_text_style(default_text_style)?;
     let layout_text = required_object(extension, "layoutText")?;
     validate_layout_text(layout_text)?;
-    ensure_requested_profile_matches_replay(requested_text_metrics_profile, profile_id)?;
 
-    let resolved = resolve_text_metrics_profile(TextMetricsProfileConfig {
-        profile_id: Some(profile_id),
-        node_padding_x: optional_number_field(
-            Some(layout_text),
-            "node-padding-x",
-            DEFAULT_PROPORTIONAL_NODE_PADDING_X,
-        )?,
-        node_padding_y: optional_number_field(
-            Some(layout_text),
-            "node-padding-y",
-            DEFAULT_PROPORTIONAL_NODE_PADDING_Y,
-        )?,
-        edge_label_max_width: optional_edge_label_max_width(Some(layout_text))?,
-    })
-    .map_err(display_error)?;
-
-    Ok(ReplayTextMetrics {
-        resolved,
-        from_extension: true,
+    Ok(TextMetricsProfileDescriptor {
+        profile_id: profile_id.to_string(),
+        source: source.to_string(),
+        version,
+        default_text_style: TextMetricsStyleDescriptor {
+            font_family: required_string_field(
+                default_text_style,
+                "defaultTextStyle",
+                "font-family",
+            )?
+            .to_string(),
+            font_size: required_number_field(default_text_style, "defaultTextStyle", "font-size")?,
+            font_style: required_string_field(
+                default_text_style,
+                "defaultTextStyle",
+                "font-style",
+            )?
+            .to_string(),
+            font_weight: required_string_field(
+                default_text_style,
+                "defaultTextStyle",
+                "font-weight",
+            )?
+            .to_string(),
+            line_height: required_number_field(
+                default_text_style,
+                "defaultTextStyle",
+                "line-height",
+            )?,
+        },
+        layout_text: TextMetricsLayoutDescriptor {
+            node_padding_x: required_number_field(layout_text, "layoutText", "node-padding-x")?,
+            node_padding_y: required_number_field(layout_text, "layoutText", "node-padding-y")?,
+            label_padding_x: required_number_field(layout_text, "layoutText", "label-padding-x")?,
+            label_padding_y: required_number_field(layout_text, "layoutText", "label-padding-y")?,
+            edge_label_max_width: required_number_or_null_field(
+                layout_text,
+                "layoutText",
+                "edge-label-max-width",
+            )?,
+        },
     })
 }
 
@@ -241,20 +405,19 @@ fn required_integer_field(
     object: &Map<String, Value>,
     object_name: &str,
     field: &str,
-) -> Result<(), RenderError> {
+) -> Result<u32, RenderError> {
     let Some(number) = object.get(field).and_then(Value::as_number) else {
         return Err(invalid_text_metrics_extension(format!(
             "{object_name}.{field} must be an integer"
         )));
     };
 
-    if number.as_i64().is_some() || number.as_u64().is_some() {
-        Ok(())
-    } else {
-        Err(invalid_text_metrics_extension(format!(
-            "{object_name}.{field} must be an integer"
-        )))
-    }
+    number
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| {
+            invalid_text_metrics_extension(format!("{object_name}.{field} must be an integer"))
+        })
 }
 
 fn required_number_field(
@@ -320,36 +483,188 @@ fn ensure_requested_profile_matches_replay(
     Ok(())
 }
 
-fn optional_number_field(
-    layout_text: Option<&Map<String, Value>>,
-    field: &str,
-    default: f64,
-) -> Result<f64, RenderError> {
-    let Some(value) = layout_text.and_then(|layout_text| layout_text.get(field)) else {
-        return Ok(default);
-    };
-
-    value.as_f64().ok_or_else(|| {
-        invalid_text_metrics_extension(format!("layoutText.{field} must be a number"))
-    })
+fn ensure_persisted_descriptor_matches_static_profile(
+    persisted: &TextMetricsProfileDescriptor,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    ensure_persisted_descriptor_matches_profile(persisted, expected, false)
 }
 
-fn optional_edge_label_max_width(
-    layout_text: Option<&Map<String, Value>>,
-) -> Result<Option<f64>, RenderError> {
-    let Some(value) = layout_text.and_then(|layout_text| layout_text.get("edge-label-max-width"))
-    else {
-        return Ok(Some(DEFAULT_EDGE_LABEL_MAX_WIDTH));
-    };
+#[cfg(feature = "unstable-text-metrics-provider")]
+fn ensure_persisted_descriptor_matches_dynamic_provider(
+    persisted: &TextMetricsProfileDescriptor,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    ensure_persisted_descriptor_matches_profile(persisted, expected, true)
+}
 
-    match value {
-        Value::Null => Ok(None),
-        value => value.as_f64().map(Some).ok_or_else(|| {
-            invalid_text_metrics_extension(
-                "layoutText.edge-label-max-width must be a number or null",
-            )
-        }),
+fn ensure_persisted_descriptor_matches_profile(
+    persisted: &TextMetricsProfileDescriptor,
+    expected: &TextMetricsProfileDescriptor,
+    include_document_owned_layout: bool,
+) -> Result<(), RenderError> {
+    ensure_string_descriptor_field(
+        "metricsProfile.id",
+        &persisted.profile_id,
+        &expected.profile_id,
+        expected,
+    )?;
+    ensure_string_descriptor_field(
+        "metricsProfile.source",
+        &persisted.source,
+        &expected.source,
+        expected,
+    )?;
+    ensure_u32_descriptor_field(
+        "metricsProfile.version",
+        persisted.version,
+        expected.version,
+        expected,
+    )?;
+    ensure_string_descriptor_field(
+        "defaultTextStyle.font-family",
+        &persisted.default_text_style.font_family,
+        &expected.default_text_style.font_family,
+        expected,
+    )?;
+    ensure_f64_descriptor_field(
+        "defaultTextStyle.font-size",
+        persisted.default_text_style.font_size,
+        expected.default_text_style.font_size,
+        expected,
+    )?;
+    ensure_string_descriptor_field(
+        "defaultTextStyle.font-style",
+        &persisted.default_text_style.font_style,
+        &expected.default_text_style.font_style,
+        expected,
+    )?;
+    ensure_string_descriptor_field(
+        "defaultTextStyle.font-weight",
+        &persisted.default_text_style.font_weight,
+        &expected.default_text_style.font_weight,
+        expected,
+    )?;
+    ensure_f64_descriptor_field(
+        "defaultTextStyle.line-height",
+        persisted.default_text_style.line_height,
+        expected.default_text_style.line_height,
+        expected,
+    )?;
+    ensure_f64_descriptor_field(
+        "layoutText.label-padding-x",
+        persisted.layout_text.label_padding_x,
+        expected.layout_text.label_padding_x,
+        expected,
+    )?;
+    ensure_f64_descriptor_field(
+        "layoutText.label-padding-y",
+        persisted.layout_text.label_padding_y,
+        expected.layout_text.label_padding_y,
+        expected,
+    )?;
+    if include_document_owned_layout {
+        ensure_f64_descriptor_field(
+            "layoutText.node-padding-x",
+            persisted.layout_text.node_padding_x,
+            expected.layout_text.node_padding_x,
+            expected,
+        )?;
+        ensure_f64_descriptor_field(
+            "layoutText.node-padding-y",
+            persisted.layout_text.node_padding_y,
+            expected.layout_text.node_padding_y,
+            expected,
+        )?;
+        ensure_optional_f64_descriptor_field(
+            "layoutText.edge-label-max-width",
+            persisted.layout_text.edge_label_max_width,
+            expected.layout_text.edge_label_max_width,
+            expected,
+        )?;
     }
+    Ok(())
+}
+
+fn ensure_string_descriptor_field(
+    field: &str,
+    actual: &str,
+    expected_value: &str,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    if actual == expected_value {
+        return Ok(());
+    }
+    Err(descriptor_mismatch_error(
+        field,
+        format!("{actual:?}"),
+        format!("{expected_value:?}"),
+        expected,
+    ))
+}
+
+fn ensure_u32_descriptor_field(
+    field: &str,
+    actual: u32,
+    expected_value: u32,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    if actual == expected_value {
+        return Ok(());
+    }
+    Err(descriptor_mismatch_error(
+        field,
+        actual.to_string(),
+        expected_value.to_string(),
+        expected,
+    ))
+}
+
+fn ensure_f64_descriptor_field(
+    field: &str,
+    actual: f64,
+    expected_value: f64,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    if (actual - expected_value).abs() <= 1e-9 {
+        return Ok(());
+    }
+    Err(descriptor_mismatch_error(
+        field,
+        actual.to_string(),
+        expected_value.to_string(),
+        expected,
+    ))
+}
+
+fn ensure_optional_f64_descriptor_field(
+    field: &str,
+    actual: Option<f64>,
+    expected_value: Option<f64>,
+    expected: &TextMetricsProfileDescriptor,
+) -> Result<(), RenderError> {
+    match (actual, expected_value) {
+        (Some(actual), Some(expected_value)) if (actual - expected_value).abs() <= 1e-9 => Ok(()),
+        (None, None) => Ok(()),
+        _ => Err(descriptor_mismatch_error(
+            field,
+            format!("{actual:?}"),
+            format!("{expected_value:?}"),
+            expected,
+        )),
+    }
+}
+
+fn descriptor_mismatch_error(
+    field: &str,
+    actual: String,
+    expected_value: String,
+    expected: &TextMetricsProfileDescriptor,
+) -> RenderError {
+    invalid_text_metrics_extension(format!(
+        "{field} {actual} does not match text metrics profile '{}' expected {expected_value}",
+        expected.profile_id
+    ))
 }
 
 fn invalid_text_metrics_extension(message: impl Into<String>) -> RenderError {

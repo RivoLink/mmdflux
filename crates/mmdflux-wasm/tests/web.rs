@@ -33,6 +33,24 @@ fn dynamic_metrics_json_fixture() -> &'static str {
     r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24}"#
 }
 
+fn dynamic_metrics_json_with_profile_fixture() -> &'static str {
+    r#"{"cssFont":"16px Inter","fontFamily":"Inter","fontSizePx":16,"lineHeightPx":24,"profileId":"mmdflux-browser-canvas-v1"}"#
+}
+
+fn dynamic_metrics_json_with_profile_fields(
+    profile_id: &str,
+    profile_version: u32,
+    font_family: &str,
+    font_size_px: f64,
+    line_height_px: f64,
+    font_style: &str,
+    font_weight: &str,
+) -> String {
+    format!(
+        r#"{{"cssFont":"{font_size_px}px {font_family}","fontFamily":"{font_family}","fontSizePx":{font_size_px},"lineHeightPx":{line_height_px},"profileId":"{profile_id}","profileVersion":{profile_version},"fontStyle":"{font_style}","fontWeight":"{font_weight}"}}"#
+    )
+}
+
 fn callback(body: &str) -> js_sys::Function {
     js_sys::Function::new_with_args("text, cssFont", body)
 }
@@ -280,19 +298,206 @@ fn dynamic_text_metrics_callback_can_call_validate_without_corruption() {
 }
 
 #[wasm_bindgen_test]
-fn dynamic_text_metrics_rejects_mmds_output() {
+fn dynamic_text_metrics_renders_provider_bound_mmds_output() {
     let measure = callback("return text.length * 8;");
-    let err = render_with_browser_text_metrics(
+    let output = render_with_browser_text_metrics(
         "graph TD\nA-->B",
         "mmds",
         "{}",
-        dynamic_metrics_json_fixture(),
+        dynamic_metrics_json_with_profile_fixture(),
         &measure,
     )
-    .expect_err("dynamic browser metrics should remain SVG-only");
+    .expect("dynamic browser metrics should render provider-bound MMDS");
 
-    let message = error_debug(err);
-    assert!(message.contains("only supports SVG output"), "{message}");
+    assert!(output.contains("\"org.mmdflux.text-metrics.v1\""));
+    assert!(output.contains("\"source\": \"dynamic\""));
+    assert!(output.contains("\"id\": \"mmdflux-browser-canvas-v1\""));
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_replays_provider_bound_mmds_output() {
+    let measure = callback("return text.length * 8;");
+    let input = "graph TD\nA[Alpha] -->|a labeled edge| B[Beta]";
+    let config = r#"{"geometryLevel":"routed"}"#;
+    let direct_svg = render_with_browser_text_metrics(
+        input,
+        "svg",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("direct dynamic svg should render");
+    let mmds = render_with_browser_text_metrics(
+        input,
+        "mmds",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("dynamic mmds should render");
+    let replay_svg = render_with_browser_text_metrics(
+        &mmds,
+        "svg",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("dynamic mmds replay should render");
+
+    assert_eq!(replay_svg, direct_svg);
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_rejects_mismatched_mmds_provider_identity() {
+    let measure = callback("return text.length * 8;");
+    let config = r#"{"geometryLevel":"routed"}"#;
+    let mmds = render_with_browser_text_metrics(
+        "graph TD\nA-->B",
+        "mmds",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect("dynamic mmds should render");
+
+    let mismatched_metrics = [
+        (
+            "profile id",
+            dynamic_metrics_json_with_profile_fields(
+                "other-provider-v1",
+                1,
+                "Inter",
+                16.0,
+                24.0,
+                "normal",
+                "400",
+            ),
+            "metricsProfile.id",
+        ),
+        (
+            "profile version",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                2,
+                "Inter",
+                16.0,
+                24.0,
+                "normal",
+                "400",
+            ),
+            "metricsProfile.version",
+        ),
+        (
+            "font family",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                1,
+                "Arial",
+                16.0,
+                24.0,
+                "normal",
+                "400",
+            ),
+            "defaultTextStyle.font-family",
+        ),
+        (
+            "font size",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                1,
+                "Inter",
+                18.0,
+                24.0,
+                "normal",
+                "400",
+            ),
+            "defaultTextStyle.font-size",
+        ),
+        (
+            "font style",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                1,
+                "Inter",
+                16.0,
+                24.0,
+                "italic",
+                "400",
+            ),
+            "defaultTextStyle.font-style",
+        ),
+        (
+            "font weight",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                1,
+                "Inter",
+                16.0,
+                24.0,
+                "normal",
+                "700",
+            ),
+            "defaultTextStyle.font-weight",
+        ),
+        (
+            "line height",
+            dynamic_metrics_json_with_profile_fields(
+                "mmdflux-browser-canvas-v1",
+                1,
+                "Inter",
+                16.0,
+                30.0,
+                "normal",
+                "400",
+            ),
+            "defaultTextStyle.line-height",
+        ),
+    ];
+
+    for (name, metrics_json, expected_field) in mismatched_metrics {
+        let err = render_with_browser_text_metrics(&mmds, "svg", config, &metrics_json, &measure)
+            .expect_err("mismatched provider identity should fail");
+        let message = error_debug(err);
+        assert!(message.contains(expected_field), "{name}: {message}");
+    }
+
+    for (name, replay_config, expected_field) in [
+        (
+            "node padding x",
+            r#"{"geometryLevel":"routed","svgNodePaddingX":20}"#,
+            "layoutText.node-padding-x",
+        ),
+        (
+            "node padding y",
+            r#"{"geometryLevel":"routed","svgNodePaddingY":20}"#,
+            "layoutText.node-padding-y",
+        ),
+    ] {
+        let err = render_with_browser_text_metrics(
+            &mmds,
+            "svg",
+            replay_config,
+            dynamic_metrics_json_with_profile_fixture(),
+            &measure,
+        )
+        .expect_err("mismatched provider layout should fail");
+        let message = error_debug(err);
+        assert!(message.contains(expected_field), "{name}: {message}");
+    }
+
+    let mut value: serde_json::Value = serde_json::from_str(&mmds).unwrap();
+    value["extensions"]["org.mmdflux.text-metrics.v1"]["layoutText"]["label-padding-x"] =
+        serde_json::json!(8.0);
+    let mismatched_label_padding = serde_json::to_string(&value).unwrap();
+    let err = render_with_browser_text_metrics(
+        &mismatched_label_padding,
+        "svg",
+        config,
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect_err("persisted label padding mismatch should fail");
+    assert!(error_debug(err).contains("layoutText.label-padding-x"));
 }
 
 #[wasm_bindgen_test]

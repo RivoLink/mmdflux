@@ -6604,6 +6604,10 @@ mod dynamic_text_metrics_topology_smoke_tests {
             font_family: DEFAULT_GRAPH_FONT_FAMILY.to_string(),
             font_size_px: metrics.font_size(),
             line_height_px: metrics.line_height(),
+            profile_id: None,
+            profile_version: None,
+            font_style: None,
+            font_weight: None,
         };
         let text_scales = text_scales
             .iter()

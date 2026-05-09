@@ -154,9 +154,13 @@ request. Promises, objects, `NaN`, `Infinity`, negative values, and thrown error
 fail the render.
 
 The dynamic path does not fall back to `mmdflux-sans-v1` or
-`mmdflux-heuristic-proportional-v1` after a measurement failure. It also does
-not emit or replay MMDS and does not use `metricsProfile.source = "dynamic"` in
-this slice; provider-bound dynamic MMDS replay remains future work.
+`mmdflux-heuristic-proportional-v1` after a measurement failure. For dynamic
+MMDS output and replay, `metricsJson` carries provider identity
+(`profileId = "mmdflux-browser-canvas-v1"`, `profileVersion = 1`, font style,
+font weight, and line height). MMDS with `metricsProfile.source = "dynamic"` is
+provider-bound: replay succeeds only when the supplied dynamic descriptor
+matches the persisted extension. Provider-free measured dimensions remain
+deferred to [#308](https://github.com/kevinswiber/mmdflux/issues/308).
 
 ## Tracing and Diagnostics
 

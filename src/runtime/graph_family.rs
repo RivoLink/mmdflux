@@ -103,6 +103,32 @@ pub(in crate::runtime) fn render_graph_family_svg_with_provider(
     render_svg_from_solve_result(diagram, &solve, options, config, text_metrics)
 }
 
+#[cfg(feature = "unstable-text-metrics-provider")]
+pub(in crate::runtime) fn render_graph_family_mmds_with_provider(
+    diagram_id: &str,
+    diagram: &mut Graph,
+    config: &RenderConfig,
+    text_metrics_descriptor: &TextMetricsProfileDescriptor,
+    text_metrics: &dyn TextMetricsProvider,
+) -> Result<String, RenderError> {
+    let solve = solve_graph_family_with_provider(
+        diagram_id,
+        diagram,
+        OutputFormat::Mmds,
+        config,
+        text_metrics,
+    )?;
+    render_mmds_from_solve_result(
+        diagram_id,
+        diagram,
+        &solve,
+        text_metrics_descriptor,
+        text_metrics,
+        config.geometry_level,
+        config.path_simplification,
+    )
+}
+
 struct GraphFamilyRenderResult {
     solve: GraphSolveResult,
     text_metrics: ResolvedTextMetrics,

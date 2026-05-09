@@ -177,6 +177,10 @@ describe("prepareBrowserTextMetrics", () => {
       fontFamily: "Inter",
       fontSizePx: 16,
       lineHeightPx: 24,
+      profileId: "mmdflux-browser-canvas-v1",
+      profileVersion: 1,
+      fontStyle: "normal",
+      fontWeight: "400",
     });
   });
 
@@ -301,6 +305,12 @@ describe("prepareMainThreadBrowserTextMetrics", () => {
     expect(calls).toEqual(["load", "check"]);
     expect(fonts.load).toHaveBeenCalledWith('normal 400 16px "Inter"');
     expect(fonts.check).toHaveBeenCalledWith('normal 400 16px "Inter"');
+    expect(JSON.parse(prepared.metricsJson)).toMatchObject({
+      profileId: "mmdflux-browser-canvas-v1",
+      profileVersion: 1,
+      fontStyle: "normal",
+      fontWeight: "400",
+    });
     expect(prepared.measureText("Alpha", 'normal 400 16px "Inter"')).toBe(15);
     expect(context.font).toBe('normal 400 16px "Inter"');
   });
