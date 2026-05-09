@@ -33,7 +33,7 @@ describe("evaluateWasmProfileCompatibility", () => {
     );
 
     expect(result.warning).toBeNull();
-    expect(result.issue).toContain("WASM profile mismatch");
+    expect(result.issue).toContain("Wasm profile mismatch");
     expect(result.issue).toContain("baseline=dev");
     expect(result.issue).toContain("current=release");
   });
@@ -53,7 +53,7 @@ describe("evaluateWasmProfileCompatibility", () => {
 
     expect(result.issue).toBeNull();
     expect(result.warning).toContain(
-      "cannot verify WASM profile compatibility",
+      "cannot verify Wasm profile compatibility",
     );
   });
 });

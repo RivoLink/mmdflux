@@ -40,7 +40,7 @@ describe("benchmark metrics", () => {
           engines: [
             {
               engineId: "mmdflux",
-              engineLabel: "mmdflux (WASM)",
+              engineLabel: "mmdflux (Wasm)",
               samplesMs: [4, 5, 6, 7, 8],
             },
             {

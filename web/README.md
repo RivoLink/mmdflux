@@ -24,12 +24,12 @@ npm run benchmark:compare:release -- --baseline <path-to-baseline.json>
 
 `npm run benchmark:smoke` also refreshes `src/wasm-pkg`, then runs `scripts/benchmark-smoke.ts` to execute reduced benchmark scenarios against mmdflux and mermaid with conservative CI thresholds.
 
-`npm run benchmark:smoke:release` does the same smoke run but builds WASM with `--release`, which is better for representative performance comparisons.
+`npm run benchmark:smoke:release` does the same smoke run but builds Wasm with `--release`, which is better for representative performance comparisons.
 
 `benchmark:full*` commands include all scenarios (`small`, `medium`, `large`) and disable threshold enforcement by default so they act as non-gating exploratory runs.
 
 `benchmark:compare*` commands run current smoke benchmarks and compare against a baseline JSON report, including delta metrics (`ΔMean`, `ΔP95`, and speedup).
-These scripts tag reports with WASM profile metadata and fail on `dev` vs `release` mismatches (or one-sided missing metadata) to avoid apples-to-oranges deltas.
+These scripts tag reports with Wasm profile metadata and fail on `dev` vs `release` mismatches (or one-sided missing metadata) to avoid apples-to-oranges deltas.
 
 ## Deploy Runbook
 
@@ -56,7 +56,7 @@ Operator sequence:
   3. Click **Run Benchmark**
   4. Optionally click **Export JSON** for a schema-versioned report
 
-The benchmark runner uses mmdflux WASM and mermaid through a shared `warm`/`render` contract and reports `mean`, `median`, `p95`, `min`, and `max` values.
+The benchmark runner uses mmdflux Wasm and mermaid through a shared `warm`/`render` contract and reports `mean`, `median`, `p95`, `min`, and `max` values.
 
 For terminal readability, smoke and compare scripts print fixed-width tables with aligned numeric columns.
 

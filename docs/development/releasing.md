@@ -25,7 +25,7 @@ All tags follow the pattern `{package}-v{version}`:
 
 | Package              | Tag example              | CI workflow                                                |
 | -------------------- | ------------------------ | ---------------------------------------------------------- |
-| mmdflux (root crate) | `mmdflux-v2.1.0`         | Release + Crate Release + WASM Release + Playground Deploy |
+| mmdflux (root crate) | `mmdflux-v2.1.0`         | Release + Crate Release + Wasm Release + Playground Deploy |
 | @mmds/core           | `mmds-core-v0.2.0`       | Packages Release                                           |
 | @mmds/excalidraw     | `mmds-excalidraw-v0.2.0` | Packages Release                                           |
 | @mmds/tldraw         | `mmds-tldraw-v0.2.0`     | Packages Release                                           |
@@ -120,7 +120,7 @@ gh run watch
 
 - **Release** — builds binaries and publishes GitHub Release assets
 - **Crate Release** — publishes `mmdflux` to crates.io
-- **WASM Release** — publishes `@mmds/wasm` to npm
+- **Wasm Release** — publishes `@mmds/wasm` to npm
 - **Playground Deploy** — deploys web playground to Cloudflare Pages
 
 7. The Homebrew formula is updated automatically by the Release workflow (see below).

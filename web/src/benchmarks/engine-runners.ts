@@ -95,7 +95,7 @@ export async function createBenchmarkEngineRunners(
 
   await mmdfluxModule.default();
 
-  const mmdfluxRunner = wrapRunner("mmdflux", "mmdflux (WASM)", async (input) =>
+  const mmdfluxRunner = wrapRunner("mmdflux", "mmdflux (Wasm)", async (input) =>
     mmdfluxModule.render(input, "svg", "{}"),
   );
 

@@ -423,7 +423,7 @@ async function main(
       `Threshold checks: ${cliOptions.enforceThresholds ? "enabled" : "disabled"}`,
     );
     if (reportMetadata?.wasmProfile) {
-      console.log(`WASM profile: ${reportMetadata.wasmProfile}`);
+      console.log(`Wasm profile: ${reportMetadata.wasmProfile}`);
     }
 
     const result = await runBenchmarkSmoke({ policy, reportMetadata });

@@ -175,7 +175,7 @@ export function evaluateWasmProfileCompatibility(
   if (baselineProfile && currentProfile) {
     if (baselineProfile !== currentProfile) {
       return {
-        issue: `WASM profile mismatch: baseline=${baselineProfile}, current=${currentProfile}. Compare reports generated from the same WASM profile.`,
+        issue: `Wasm profile mismatch: baseline=${baselineProfile}, current=${currentProfile}. Compare reports generated from the same Wasm profile.`,
         warning: null,
       };
     }
@@ -197,7 +197,7 @@ export function evaluateWasmProfileCompatibility(
   return {
     issue: null,
     warning:
-      "cannot verify WASM profile compatibility because both reports are missing wasm profile metadata.",
+      "cannot verify Wasm profile compatibility because both reports are missing wasm profile metadata.",
   };
 }
 

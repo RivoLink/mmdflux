@@ -157,7 +157,7 @@ report_target() {
   fi
 }
 
-echo "WASM Size Report"
+echo "Wasm Size Report"
 echo
 echo "Budget: raw <= $(format_int "${WASM_MAX_BYTES}") bytes, gzip <= $(format_int "${WASM_GZIP_MAX_BYTES}") bytes."
 echo
@@ -167,7 +167,7 @@ echo "+----------+----------------+-----------+----------------+-----------+----
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
-    echo "## WASM Size Report"
+    echo "## Wasm Size Report"
     echo
     echo "Budget: raw <= $(format_int "${WASM_MAX_BYTES}") bytes, gzip <= $(format_int "${WASM_GZIP_MAX_BYTES}") bytes."
     echo
@@ -182,8 +182,8 @@ echo "+----------+----------------+-----------+----------------+-----------+----
 
 echo
 if (( overall_failed )); then
-  echo "WASM size budget check failed." >&2
+  echo "Wasm size budget check failed." >&2
   exit 1
 fi
 
-echo "WASM size budget check passed."
+echo "Wasm size budget check passed."

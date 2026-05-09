@@ -64,7 +64,7 @@ TestB --> Lint
 TestC --> Lint
 Lint --> Package[Package]
 Package --> PublishA[Publish CLI]
-Package --> PublishB[Publish WASM]
+Package --> PublishB[Publish Wasm]
 PublishA --> SmokeA[Smoke CLI]
 PublishB --> SmokeB[Smoke Web]
 SmokeA --> Verify{Release Gate}

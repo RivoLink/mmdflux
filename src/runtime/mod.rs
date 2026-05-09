@@ -1,4 +1,4 @@
-//! Shared runtime facade for CLI, WASM, and library consumers.
+//! Shared runtime facade for CLI, Wasm, and library consumers.
 //!
 //! This module provides the single orchestration contract that all adapters
 //! delegate to, plus serde-friendly config input types for JSON consumers.

@@ -1,6 +1,6 @@
 //! CLI-only SVG auto-theme parsing and selection helpers.
 //!
-//! This stays in the binary so runtime/WASM/library consumers keep a concrete
+//! This stays in the binary so runtime/Wasm/library consumers keep a concrete
 //! `SvgThemeConfig` contract without inheriting terminal-specific behavior.
 
 use std::str::FromStr;

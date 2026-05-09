@@ -37,7 +37,7 @@ windows-sys = { version = "0.52", features = [
 ], optional = true }
 
 [features]
-# Keep CLI behavior by default while allowing library/WASM users to opt out.
+# Keep CLI behavior by default while allowing library/Wasm users to opt out.
 default = ["cli"]
 # CLI-only dependency surface.
 cli = ["dep:clap", "dep:libc", "dep:tracing-subscriber", "dep:windows-sys"]
