@@ -186,6 +186,46 @@ fn dynamic_text_metrics_callback_throw_errors() {
 }
 
 #[wasm_bindgen_test]
+fn dynamic_text_metrics_rejects_terminal_formats_before_measurement() {
+    for format in ["text", "ascii"] {
+        let measure = callback("throw new Error('callback should not run');");
+        let err = render_with_browser_text_metrics(
+            "graph TD\nA[Alpha] --> B[Beta]",
+            format,
+            "{}",
+            dynamic_metrics_json_with_profile_fixture(),
+            &measure,
+        )
+        .expect_err("terminal dynamic output should reject");
+
+        let message = error_debug(err);
+        assert!(message.contains(format), "{message}");
+        assert!(message.contains("terminal"), "{message}");
+        assert!(message.contains("unsupported"), "{message}");
+        assert!(!message.contains("callback should not run"), "{message}");
+    }
+}
+
+#[wasm_bindgen_test]
+fn dynamic_text_metrics_rejects_sequence_before_measurement() {
+    let measure = callback("throw new Error('callback should not run');");
+    let err = render_with_browser_text_metrics(
+        "sequenceDiagram\nAlice->>Bob: Hi",
+        "svg",
+        "{}",
+        dynamic_metrics_json_with_profile_fixture(),
+        &measure,
+    )
+    .expect_err("sequence dynamic output should reject");
+
+    let message = error_debug(err);
+    assert!(message.contains("sequence"), "{message}");
+    assert!(message.contains("timeline"), "{message}");
+    assert!(message.contains("unsupported"), "{message}");
+    assert!(!message.contains("callback should not run"), "{message}");
+}
+
+#[wasm_bindgen_test]
 fn dynamic_text_metrics_callback_rejects_non_number_returns() {
     for (body, expected) in [
         ("return Promise.resolve(12);", "synchronous"),

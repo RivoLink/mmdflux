@@ -32,6 +32,9 @@ pub(in crate::runtime) fn render_payload(
         }
         Diagram::Sequence(model) => match format {
             OutputFormat::Svg => {
+                // Sequence uses the timeline-family compatibility metrics path.
+                // Browser dynamic metrics remain graph-family-only until a
+                // dedicated timeline provider seam exists.
                 let metrics = measure::default_proportional_text_metrics();
                 let font_family = "\"trebuchet ms\", verdana, arial, sans-serif";
                 let theme = super::resolve_configured_svg_theme(config)?;
@@ -43,6 +46,8 @@ pub(in crate::runtime) fn render_payload(
                 ))
             }
             OutputFormat::Mmds => {
+                // Keep sequence MMDS on the same timeline-family compatibility
+                // metrics path as sequence SVG.
                 let metrics = measure::default_proportional_text_metrics();
                 Ok(super::timeline_family::to_json(&model, &metrics))
             }

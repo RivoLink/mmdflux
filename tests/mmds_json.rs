@@ -2042,6 +2042,19 @@ fn docs_cover_live_style_scope_and_wasm_color_config() {
 }
 
 #[test]
+fn docs_describe_dynamic_metrics_unsupported_surfaces() {
+    let wasm_docs = std::fs::read_to_string("docs/development/wasm.md").unwrap();
+    assert!(wasm_docs.contains("Text and ASCII reject dynamic metrics"));
+    assert!(wasm_docs.contains("terminal grid"));
+    assert!(wasm_docs.contains("sequence"));
+    assert!(wasm_docs.contains("timeline-family"));
+
+    let mmds_docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert!(mmds_docs.contains("provider-free dynamic MMDS replay remains graph-family SVG only"));
+    assert!(mmds_docs.contains("provider-bound dynamic MMDS replay rejects Text/ASCII output"));
+}
+
+#[test]
 fn mmds_docs_point_to_fixture_backed_examples_and_rust_replay_example() {
     let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
 

@@ -431,6 +431,11 @@ Rules:
   a complete `org.mmdflux.text-measurements.v1` sidecar. With that sidecar,
   public `mmdflux::render_diagram` accepts graph-family dynamic MMDS for
   provider-free SVG replay. Text/ASCII replay remains unsupported.
+- provider-free dynamic MMDS replay remains graph-family SVG only. It rejects
+  Text/ASCII output because terminal renderers use a monospaced grid, and it
+  rejects sequence because sequence diagrams use the timeline-family path.
+- provider-bound dynamic MMDS replay rejects Text/ASCII output for the same
+  terminal-grid reason.
 - `org.mmdflux.text-measurements.v1` stores the exact line and scalar width
   queries observed during dynamic rendering. Missing measured queries fail
   replay instead of falling back to `mmdflux-sans-v1`, the compatibility

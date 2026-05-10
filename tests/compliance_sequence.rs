@@ -9,6 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use mmdflux::builtins::default_registry;
+use mmdflux::graph::measure::{
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+};
 use mmdflux::{OutputFormat, RenderConfig};
 
 fn sequence_fixture_dir() -> PathBuf {
@@ -42,12 +45,19 @@ fn list_sequence_fixtures() -> Vec<String> {
     fixtures
 }
 
-fn render_sequence_text(fixture: &str) -> String {
+fn read_sequence_fixture(fixture: &str) -> String {
     let path = sequence_fixture_dir().join(fixture);
-    let input = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("Failed to read fixture {fixture}: {e}"));
-    mmdflux::render_diagram(&input, OutputFormat::Text, &RenderConfig::default())
-        .expect("Failed to render sequence fixture")
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {fixture}: {e}"))
+}
+
+fn render_sequence_text(fixture: &str) -> String {
+    render_sequence_text_with_config(fixture, &RenderConfig::default())
+}
+
+fn render_sequence_text_with_config(fixture: &str, config: &RenderConfig) -> String {
+    let input = read_sequence_fixture(fixture);
+    mmdflux::render_diagram(&input, OutputFormat::Text, config)
+        .expect("Failed to render sequence text fixture")
 }
 
 // --- Text snapshots ---
@@ -114,8 +124,7 @@ fn sequence_all_fixtures_render_text() {
 #[test]
 fn sequence_all_fixtures_render_ascii() {
     for fixture in list_sequence_fixtures() {
-        let path = sequence_fixture_dir().join(&fixture);
-        let input = fs::read_to_string(&path).unwrap();
+        let input = read_sequence_fixture(&fixture);
         let output = mmdflux::render_diagram(&input, OutputFormat::Ascii, &RenderConfig::default())
             .expect("render failed");
         assert!(
@@ -126,11 +135,19 @@ fn sequence_all_fixtures_render_ascii() {
 }
 
 fn render_sequence_svg(fixture: &str) -> String {
-    let path = sequence_fixture_dir().join(fixture);
-    let input = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("Failed to read fixture {fixture}: {e}"));
-    mmdflux::render_diagram(&input, OutputFormat::Svg, &RenderConfig::default())
+    render_sequence_svg_with_config(fixture, &RenderConfig::default())
+}
+
+fn render_sequence_svg_with_config(fixture: &str, config: &RenderConfig) -> String {
+    let input = read_sequence_fixture(fixture);
+    mmdflux::render_diagram(&input, OutputFormat::Svg, config)
         .expect("Failed to render sequence SVG")
+}
+
+fn render_sequence_mmds_with_config(fixture: &str, config: &RenderConfig) -> String {
+    let input = read_sequence_fixture(fixture);
+    mmdflux::render_diagram(&input, OutputFormat::Mmds, config)
+        .expect("Failed to render sequence MMDS")
 }
 
 fn sequence_svg_snapshot_dir() -> PathBuf {
@@ -182,6 +199,40 @@ fn sequence_all_fixtures_render_svg() {
         assert!(
             output.contains("</svg>"),
             "SVG output should contain closing tag for {fixture}"
+        );
+    }
+}
+
+#[test]
+fn sequence_rendering_ignores_graph_family_font_metrics_profile_contract() {
+    let fixture = "simple.mmd";
+    let default_text = render_sequence_text(fixture);
+    let default_svg = render_sequence_svg(fixture);
+    let default_mmds = render_sequence_mmds_with_config(fixture, &RenderConfig::default());
+
+    for profile in [
+        RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+        COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+    ] {
+        let config = RenderConfig {
+            font_metrics_profile: Some(profile.to_string()),
+            ..RenderConfig::default()
+        };
+
+        assert_eq!(
+            render_sequence_text_with_config(fixture, &config),
+            default_text,
+            "sequence Text changed for graph-family profile {profile}"
+        );
+        assert_eq!(
+            render_sequence_svg_with_config(fixture, &config),
+            default_svg,
+            "sequence SVG changed for graph-family profile {profile}"
+        );
+        assert_eq!(
+            render_sequence_mmds_with_config(fixture, &config),
+            default_mmds,
+            "sequence MMDS changed for graph-family profile {profile}"
         );
     }
 }

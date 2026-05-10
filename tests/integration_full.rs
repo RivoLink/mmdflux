@@ -9,7 +9,9 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::builtins::default_registry;
-use mmdflux::graph::measure::COMPATIBILITY_TEXT_METRICS_PROFILE_ID;
+use mmdflux::graph::measure::{
+    COMPATIBILITY_TEXT_METRICS_PROFILE_ID, RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+};
 use mmdflux::mmds::generate_mermaid_from_str;
 use mmdflux::{OutputFormat, RenderConfig, render_diagram};
 
@@ -53,6 +55,32 @@ fn font_metrics_explicit_compatibility_profile_matches_default_text_output() {
     .expect("explicit compatibility profile text render should succeed");
 
     assert_eq!(explicit, default);
+}
+
+#[test]
+fn font_metrics_profiles_do_not_change_terminal_output() {
+    let input = "graph TD\nA[Collect metrics] -->|edge label| B[Render output]";
+    let default_text = render_diagram(input, OutputFormat::Text, &RenderConfig::default())
+        .expect("default text render should succeed");
+    let default_ascii = render_diagram(input, OutputFormat::Ascii, &RenderConfig::default())
+        .expect("default ascii render should succeed");
+
+    for profile in [
+        COMPATIBILITY_TEXT_METRICS_PROFILE_ID,
+        RECORDED_SANS_TEXT_METRICS_PROFILE_ID,
+    ] {
+        let config = RenderConfig {
+            font_metrics_profile: Some(profile.to_string()),
+            ..RenderConfig::default()
+        };
+        let text = render_diagram(input, OutputFormat::Text, &config)
+            .expect("profile-selected text render should succeed");
+        let ascii = render_diagram(input, OutputFormat::Ascii, &config)
+            .expect("profile-selected ascii render should succeed");
+
+        assert_eq!(text, default_text, "Text output changed for {profile}");
+        assert_eq!(ascii, default_ascii, "ASCII output changed for {profile}");
+    }
 }
 
 fn render_flowchart_svg(input: &str) -> String {

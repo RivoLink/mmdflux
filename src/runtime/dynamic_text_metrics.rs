@@ -353,6 +353,36 @@ fn validate_positive_finite(field: &str, value: f64) -> Result<(), RenderError> 
     Ok(())
 }
 
+fn unsupported_dynamic_output_format(format: OutputFormat) -> RenderError {
+    let message = match format {
+        OutputFormat::Text | OutputFormat::Ascii => format!(
+            "dynamic text metrics unsupported for {format} output; Text and ASCII are terminal grid outputs and remain static-profile based"
+        ),
+        _ => format!(
+            "dynamic text metrics supports SVG and provider-bound MMDS output (requested {format})"
+        ),
+    };
+
+    RenderError { message }
+}
+
+fn unsupported_dynamic_diagram_family(diagram_id: &str) -> RenderError {
+    RenderError {
+        message: format!(
+            "dynamic text metrics unsupported for {diagram_id}/timeline-family diagrams; sequence requires a separate timeline metrics plan"
+        ),
+    }
+}
+
+fn mmds_input_diagram_type(input: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(input).ok()?;
+    value
+        .get("metadata")
+        .and_then(|metadata| metadata.get("diagram_type"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
 pub fn render_graph_family_svg_with_dynamic_text_metrics<F>(
     input: &str,
     config: &RenderConfig,
@@ -382,11 +412,7 @@ where
     F: FnMut(&str, &str) -> Result<f64, DynamicTextMetricsError>,
 {
     if !matches!(format, OutputFormat::Svg | OutputFormat::Mmds) {
-        return Err(RenderError {
-            message: format!(
-                "dynamic text metrics supports SVG and provider-bound MMDS output (requested {format})"
-            ),
-        });
+        return Err(unsupported_dynamic_output_format(format));
     }
     if config.layout_engine.is_some() {
         return Err(RenderError {
@@ -430,6 +456,9 @@ where
                 node_padding_y,
                 effective_config.layout.edge_label_max_width,
             )?;
+            if mmds_input_diagram_type(input).as_deref() == Some("sequence") {
+                return Err(unsupported_dynamic_diagram_family("sequence"));
+            }
             let provider = CallbackTextMetricsProvider::with_node_padding(
                 dynamic_input,
                 node_padding_x,
@@ -464,12 +493,7 @@ where
         message: "unknown diagram type".to_string(),
     })?;
     if !matches!(resolved.family(), DiagramFamily::Graph) {
-        return Err(RenderError {
-            message: format!(
-                "dynamic text metrics only supports graph-family Mermaid diagrams (detected {})",
-                resolved.diagram_id()
-            ),
-        });
+        return Err(unsupported_dynamic_diagram_family(resolved.diagram_id()));
     }
     if !resolved.supported_formats().contains(&format) {
         return Err(RenderError {
@@ -548,9 +572,7 @@ where
         Diagram::State(mut graph) => {
             render_graph_family_payload_with_dynamic_metrics("state", &mut graph, &render_context)
         }
-        Diagram::Sequence(_) => Err(RenderError {
-            message: "dynamic text metrics only supports graph-family Mermaid diagrams".to_string(),
-        }),
+        Diagram::Sequence(_) => Err(unsupported_dynamic_diagram_family("sequence")),
     }?;
 
     provider.finish()?;
@@ -612,7 +634,8 @@ mod tests {
     use crate::format::OutputFormat;
     use crate::graph::GeometryLevel;
     use crate::graph::measure::{
-        DEFAULT_GRAPH_FONT_FAMILY, TextMetricsProfileConfig, TextMetricsProvider,
+        COMPATIBILITY_TEXT_METRICS_PROFILE_ID, DEFAULT_GRAPH_FONT_FAMILY,
+        RECORDED_SANS_TEXT_METRICS_PROFILE_ID, TextMetricsProfileConfig, TextMetricsProvider,
         resolve_text_metrics_profile,
     };
     use crate::runtime::config::{GraphTextStyleConfig, RenderConfig};
@@ -1055,23 +1078,79 @@ mod tests {
 
     #[test]
     fn dynamic_svg_bridge_rejects_unsupported_output_formats() {
-        for format in [
-            OutputFormat::Text,
-            OutputFormat::Ascii,
+        let err = render_graph_family_with_dynamic_text_metrics(
+            "graph TD\nA-->B",
             OutputFormat::Mermaid,
-        ] {
+            &RenderConfig::default(),
+            profiled_input("browser-test-v1"),
+            |_text, _css_font| Ok(8.0),
+        )
+        .expect_err("unsupported output format should fail");
+        assert!(
+            err.message
+                .contains("supports SVG and provider-bound MMDS output"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn dynamic_text_metrics_rejects_terminal_formats_before_measurement() {
+        for format in [OutputFormat::Text, OutputFormat::Ascii] {
+            let mut calls = 0;
             let err = render_graph_family_with_dynamic_text_metrics(
-                "graph TD\nA-->B",
+                "graph TD\nA[Alpha] --> B[Beta]",
                 format,
                 &RenderConfig::default(),
                 profiled_input("browser-test-v1"),
-                |_text, _css_font| Ok(8.0),
+                |_text, _css_font| {
+                    calls += 1;
+                    Ok(8.0)
+                },
             )
-            .expect_err("unsupported output format should fail");
-            assert!(
-                err.message
-                    .contains("supports SVG and provider-bound MMDS output"),
-                "{err}"
+            .expect_err("terminal dynamic output should reject");
+
+            assert_eq!(calls, 0, "dynamic callback must not run for {format}");
+            assert!(err.message.contains(&format.to_string()), "{err}");
+            assert!(err.message.contains("terminal"), "{err}");
+            assert!(err.message.contains("unsupported"), "{err}");
+        }
+    }
+
+    #[test]
+    fn static_terminal_output_stays_byte_stable_after_dynamic_render() {
+        let input = "graph TD\nA[Alpha] -->|edge label| B[Beta]";
+
+        for profile in [
+            None,
+            Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID),
+            Some(COMPATIBILITY_TEXT_METRICS_PROFILE_ID),
+        ] {
+            let config = RenderConfig {
+                font_metrics_profile: profile.map(str::to_string),
+                ..RenderConfig::default()
+            };
+            let text_before =
+                render_diagram(input, OutputFormat::Text, &config).expect("text render before");
+            let ascii_before =
+                render_diagram(input, OutputFormat::Ascii, &config).expect("ascii render before");
+
+            let dynamic_svg = render_graph_family_with_dynamic_text_metrics(
+                input,
+                OutputFormat::Svg,
+                &RenderConfig::default(),
+                profiled_input("browser-test-v1"),
+                |text, _css_font| Ok(text.len() as f64 * 11.0),
+            )
+            .expect("dynamic SVG render should succeed");
+            assert!(dynamic_svg.contains("<svg"), "{dynamic_svg}");
+
+            assert_eq!(
+                render_diagram(input, OutputFormat::Text, &config).expect("text render after"),
+                text_before
+            );
+            assert_eq!(
+                render_diagram(input, OutputFormat::Ascii, &config).expect("ascii render after"),
+                ascii_before
             );
         }
     }
@@ -1372,18 +1451,24 @@ mod tests {
 
     #[test]
     fn dynamic_mmds_output_rejects_sequence_input() {
+        let mut calls = 0;
         let err = render_graph_family_with_dynamic_text_metrics(
             "sequenceDiagram\nAlice->>Bob: Hi",
             OutputFormat::Mmds,
             &RenderConfig::default(),
             profiled_input("browser-test-v1"),
-            |_text, _css_font| Ok(8.0),
+            |_text, _css_font| {
+                calls += 1;
+                Ok(8.0)
+            },
         )
         .expect_err("sequence input should fail");
 
+        assert_eq!(calls, 0, "dynamic callback must not run for sequence");
         assert!(
-            err.message
-                .contains("only supports graph-family Mermaid diagrams"),
+            err.message.contains("sequence")
+                && err.message.contains("timeline")
+                && err.message.contains("unsupported"),
             "{err}"
         );
     }
@@ -1553,17 +1638,54 @@ mod tests {
 
     #[test]
     fn dynamic_svg_bridge_rejects_sequence_input() {
+        let mut calls = 0;
         let err = render_graph_family_svg_with_dynamic_text_metrics(
             "sequenceDiagram\nAlice->>Bob: Hi",
             &RenderConfig::default(),
             valid_input(),
-            |_text, _css_font| Ok(8.0),
+            |_text, _css_font| {
+                calls += 1;
+                Ok(8.0)
+            },
         )
         .expect_err("sequence input should fail");
 
+        assert_eq!(calls, 0, "dynamic callback must not run for sequence");
         assert!(
-            err.message
-                .contains("only supports graph-family Mermaid diagrams"),
+            err.message.contains("sequence")
+                && err.message.contains("timeline")
+                && err.message.contains("unsupported"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn dynamic_mmds_replay_rejects_sequence_input_before_measurement() {
+        let sequence_mmds = render_diagram(
+            "sequenceDiagram\nAlice->>Bob: Hi",
+            OutputFormat::Mmds,
+            &RenderConfig::default(),
+        )
+        .expect("sequence MMDS should render");
+
+        let mut calls = 0;
+        let err = render_graph_family_with_dynamic_text_metrics(
+            &sequence_mmds,
+            OutputFormat::Svg,
+            &RenderConfig::default(),
+            profiled_input("browser-test-v1"),
+            |_text, _css_font| {
+                calls += 1;
+                Ok(8.0)
+            },
+        )
+        .expect_err("sequence MMDS should fail on dynamic replay path");
+
+        assert_eq!(calls, 0, "dynamic callback must not run for sequence MMDS");
+        assert!(
+            err.message.contains("sequence")
+                && err.message.contains("timeline")
+                && err.message.contains("unsupported"),
             "{err}"
         );
     }
@@ -1592,7 +1714,7 @@ mod tests {
         let err = render_graph_family_svg_with_dynamic_text_metrics(
             "graph TD\nA-->B",
             &RenderConfig {
-                font_metrics_profile: Some("mmdflux-sans-v1".to_string()),
+                font_metrics_profile: Some(RECORDED_SANS_TEXT_METRICS_PROFILE_ID.to_string()),
                 ..RenderConfig::default()
             },
             valid_input(),

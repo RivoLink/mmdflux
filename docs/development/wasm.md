@@ -164,6 +164,12 @@ when the sidecar is complete. Missing measured queries remain explicit replay
 errors; Text/ASCII, sequence, and relayout after changing constraints are still
 unsupported.
 
+Text and ASCII reject dynamic metrics because browser pixel widths do not map to
+the monospaced terminal grid used by those outputs. Sequence diagrams also
+reject dynamic metrics: they use a separate timeline-family layout path and
+would need a dedicated timeline metrics plan before browser measurement could be
+honestly applied.
+
 ## Tracing and Diagnostics
 
 The wasm adapter depends on the root `mmdflux` crate with
