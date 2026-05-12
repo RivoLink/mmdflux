@@ -102,7 +102,7 @@ pub fn spread_points_on_face(
     };
 
     if count == 1 {
-        return vec![to_point(start + range / 2)];
+        return vec![to_point(start + (range + 1) / 2)];
     }
 
     // Endpoint-maximizing: place edges at extremes of range for maximum separation
@@ -281,10 +281,51 @@ pub fn intersect_node(bounds: &NodeBounds, point: (usize, usize), shape: Shape) 
 
     let result = match shape {
         Shape::Diamond | Shape::Hexagon => intersect_diamond(bounds, float_point),
+        Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle => {
+            intersect_circle(bounds, float_point)
+        }
         _ => intersect_rect(bounds, float_point),
     };
 
     result.to_usize()
+}
+
+fn intersect_circle(bounds: &NodeBounds, point: FloatPoint) -> FloatPoint {
+    let center = FloatPoint::new(bounds.center_x() as f64, bounds.center_y() as f64);
+    let dx = point.x - center.x;
+    let dy = point.y - center.y;
+    let radius = (bounds.width.min(bounds.height) as f64) / 2.0;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return FloatPoint::new(center.x, center.y - radius);
+    }
+
+    // Prefer cardinal face extremities for circle-shaped nodes, so top/bottom
+    // attachments remain aligned with the visual circle center instead of
+    // shifting off-center based on the exact incoming ray.
+    if dx.abs() <= dy.abs() {
+        if dy < 0.0 {
+            return FloatPoint::new(center.x, center.y - radius);
+        }
+        return FloatPoint::new(center.x, center.y + radius);
+    }
+
+    if dx < 0.0 {
+        FloatPoint::new(center.x - radius, center.y)
+    } else {
+        FloatPoint::new(center.x + radius, center.y)
+    }
+}
+
+/// Calculate attachment points for a single node face midpoint.
+fn midpoint_attachment_point(bounds: &NodeBounds, face: NodeFace) -> (usize, usize) {
+    let (start, end) = face_extent(bounds, &face);
+    let fixed = face_fixed_coord(bounds, &face);
+    let midpoint = start + (end.saturating_sub(start) + 1) / 2;
+    match face {
+        NodeFace::Top | NodeFace::Bottom => (midpoint, fixed),
+        NodeFace::Left | NodeFace::Right => (fixed, midpoint),
+    }
 }
 
 /// Calculate intersection points for both ends of an edge, given waypoints.
@@ -312,7 +353,14 @@ pub fn calculate_attachment_points(
     let source_attach = if let Some(&first_wp) = waypoints.first() {
         intersect_node(source_bounds, first_wp, source_shape)
     } else {
-        intersect_node(source_bounds, target_center, source_shape)
+        let attach = intersect_node(source_bounds, target_center, source_shape);
+        if matches!(target_shape, Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle)
+        {
+            let face = classify_face(source_bounds, target_center, source_shape);
+            midpoint_attachment_point(source_bounds, face)
+        } else {
+            attach
+        }
     };
 
     // Target attachment: intersect towards last waypoint or source center
@@ -364,6 +412,22 @@ mod tests {
         // Should hit top edge
         assert_eq!(result.x.round() as usize, 15);
         assert!(result.y < bounds.center_y() as f64);
+    }
+
+    #[test]
+    fn test_intersect_circle_from_above() {
+        let bounds = NodeBounds {
+            x: 5,
+            y: 10,
+            width: 4,
+            height: 2,
+            layout_center_x: None,
+            layout_center_y: None,
+        };
+        let point = FloatPoint::new(7.0, 0.0);
+        let result = intersect_node(&bounds, (point.x as usize, point.y as usize), Shape::FramedCircle);
+
+        assert_eq!(result, (7, 10));
     }
 
     #[test]
@@ -476,6 +540,36 @@ mod tests {
         assert!(src_attach.1 > source.y);
         // Target should attach at top
         assert!(tgt_attach.1 < target.y + target.height);
+    }
+
+    #[test]
+    fn test_calculate_attachment_points_terminal_circle_uses_face_midpoint() {
+        let source = NodeBounds {
+            x: 0,
+            y: 0,
+            width: 8,
+            height: 3,
+            layout_center_x: None,
+            layout_center_y: None,
+        };
+        let target = NodeBounds {
+            x: 7,
+            y: 6,
+            width: 2,
+            height: 2,
+            layout_center_x: None,
+            layout_center_y: None,
+        };
+
+        let (src_attach, _) = calculate_attachment_points(
+            &source,
+            Shape::Rectangle,
+            &target,
+            Shape::FramedCircle,
+            &[],
+        );
+
+        assert_eq!(src_attach, (4, 2));
     }
 
     #[test]
@@ -701,6 +795,13 @@ mod tests {
         // N=1 on range (2, 10) => mid = 2 + (10-2)/2 = 6
         let result = spread_points_on_face(NodeFace::Bottom, 5, (2, 10), 1);
         assert_eq!(result, vec![(6, 5)]);
+    }
+
+    #[test]
+    fn test_spread_points_count_one_narrow_range_rounds_right() {
+        // N=1 on range (1, 2) => choose the rightmost center position for even-width faces.
+        let result = spread_points_on_face(NodeFace::Top, 5, (1, 2), 1);
+        assert_eq!(result, vec![(2, 5)]);
     }
 
     #[test]

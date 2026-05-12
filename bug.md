@@ -1,0 +1,9 @@
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : start
+    Processing --> Done : complete
+    Processing --> Error : fail
+    Error --> Idle : reset
+    Done --> [*]
+```
