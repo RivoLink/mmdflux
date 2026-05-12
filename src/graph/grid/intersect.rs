@@ -292,7 +292,10 @@ pub fn intersect_node(bounds: &NodeBounds, point: (usize, usize), shape: Shape) 
 
 /// Whether a shape should use face-midpoint attachment logic.
 fn is_circular_shape(shape: Shape) -> bool {
-    matches!(shape, Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle)
+    matches!(
+        shape,
+        Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle
+    )
 }
 
 fn intersect_circle(bounds: &NodeBounds, point: FloatPoint) -> FloatPoint {
@@ -329,7 +332,10 @@ fn intersect_circle(bounds: &NodeBounds, point: FloatPoint) -> FloatPoint {
 fn midpoint_attachment_point(bounds: &NodeBounds, face: NodeFace) -> (usize, usize) {
     match face {
         NodeFace::Top => (bounds.center_x(), bounds.y),
-        NodeFace::Bottom => (bounds.center_x(), bounds.y + bounds.height.saturating_sub(1)),
+        NodeFace::Bottom => (
+            bounds.center_x(),
+            bounds.y + bounds.height.saturating_sub(1),
+        ),
         NodeFace::Left => (bounds.x, bounds.center_y()),
         NodeFace::Right => (bounds.x + bounds.width.saturating_sub(1), bounds.center_y()),
     }
@@ -433,7 +439,11 @@ mod tests {
             layout_center_y: None,
         };
         let point = FloatPoint::new(7.0, 0.0);
-        let result = intersect_node(&bounds, (point.x as usize, point.y as usize), Shape::FramedCircle);
+        let result = intersect_node(
+            &bounds,
+            (point.x as usize, point.y as usize),
+            Shape::FramedCircle,
+        );
 
         assert_eq!(result, (7, 10));
     }
